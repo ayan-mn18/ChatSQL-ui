@@ -1,6 +1,5 @@
 import { Message } from '../types';
 import { User, Bot } from 'lucide-react';
-import DataTable from './DataTable';
 import DataVisualization from './DataVisualization';
 
 interface ChatMessageProps {

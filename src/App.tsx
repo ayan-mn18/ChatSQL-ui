@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Message, QueryRequest } from './types';
 import ChatMessage from './components/ChatMessage';
 import { Send } from 'lucide-react';
+import LoadingMessage from './components/LoadingMessage';
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -97,6 +98,8 @@ function App() {
               <ChatMessage key={message.id} message={message} />
             ))
           )}
+          {isLoading && <LoadingMessage />}
+
           <div ref={messagesEndRef} />
         </div>
       </main>
