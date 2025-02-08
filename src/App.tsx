@@ -44,6 +44,10 @@ function App() {
         } as QueryRequest),
       });
 
+      if (response.status !== 200) {
+        throw new Error("Cannot procss the query")
+      }
+
       const result = await response.json();
 
       console.log("Response from BE: ", result)
