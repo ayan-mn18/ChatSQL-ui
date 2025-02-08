@@ -58,14 +58,15 @@ function App() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8080/api/getResult', {
+      const response = await fetch('https://api.chatsql.ayanmn18.live/api/getResult', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           query: input,
-          uri: 'postgresql://postgres:Ayan@2001@db.ewaasuzfvkbievcclxkh.supabase.co:5432/pagila', // Replace with actual URI
+          // uri: 'postgresql://postgres:Ayan@2001@db.ewaasuzfvkbievcclxkh.supabase.co:5432/pagila', // Replace with actual URI
+          uri: dbSettings.dbUri, // Replace with actual URI
         } as QueryRequest),
       });
 
