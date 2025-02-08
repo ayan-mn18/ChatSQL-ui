@@ -1,102 +1,160 @@
-
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  ArcElement,
+	Chart as ChartJS,
+	CategoryScale,
+	LinearScale,
+	BarElement,
+	PointElement,
+	LineElement,
+	Title,
+	Tooltip,
+	Legend,
+	ArcElement,
 } from 'chart.js';
 import { Bar, Line, Pie } from 'react-chartjs-2';
 
 ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  ArcElement
+	CategoryScale,
+	LinearScale,
+	BarElement,
+	PointElement,
+	LineElement,
+	Title,
+	Tooltip,
+	Legend,
+	ArcElement
 );
 
 interface DataVisualizationProps {
-  data: any[];
+	data: any[];
 }
 
 export default function DataVisualization({ data }: DataVisualizationProps) {
-  if (!data.length) return null;
+	// Basic validation
+	if (!data?.length || !Array.isArray(data))
+		return (
+			<div className='text-red-500 p-4 bg-red-50 rounded'>
+				Sorry no relevant data found for visualization
+			</div>
+		);
 
-  const fields = Object.keys(data[0]);
-  const numericFields = fields.filter(field =>
-    !isNaN(Number(data[0][field].replace(/,/g, '')))
-  );
-  const categoryFields = fields.filter(field =>
-    isNaN(Number(data[0][field].replace(/,/g, '')))
-  );
+	try {
+		const fields = Object.keys(data[0] || {});
+		if (!fields.length) return null;
 
-  if (numericFields.length === 0 || categoryFields.length === 0) {
-    return null;
-  }
+		// Improved type detection and cleaning
+		const fieldTypes = fields.reduce((acc, field) => {
+			const values = data.map((item) => item[field]).filter((v) => v != null);
+			const isNumeric = values.every(
+				(v) => !isNaN(Number(String(v).replace(/[,$]/g, '')))
+			);
+			const isDate = values.every((v) => !isNaN(Date.parse(String(v))));
 
-  const categoryField = categoryFields[0];
-  const labels = data.map(item => item[categoryField]);
+			acc[field] = {
+				isNumeric,
+				isDate,
+				isCategory: !isNumeric && !isDate,
+			};
+			return acc;
+		}, {} as Record<string, { isNumeric: boolean; isDate: boolean; isCategory: boolean }>);
 
-  const chartData = {
-    labels,
-    datasets: numericFields.map((field, index) => ({
-      label: field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-      data: data.map(item => Number(item[field].replace(/,/g, ''))),
-      backgroundColor: [
-        'rgba(255, 99, 132, 0.5)',
-        'rgba(54, 162, 235, 0.5)',
-        'rgba(255, 206, 86, 0.5)',
-        'rgba(75, 192, 192, 0.5)',
-        'rgba(153, 102, 255, 0.5)',
-      ][index % 5],
-      borderColor: [
-        'rgba(255, 99, 132, 1)',
-        'rgba(54, 162, 235, 1)',
-        'rgba(255, 206, 86, 1)',
-        'rgba(75, 192, 192, 1)',
-        'rgba(153, 102, 255, 1)',
-      ][index % 5],
-      borderWidth: 1,
-    })),
-  };
+		const numericFields = fields.filter((field) => fieldTypes[field].isNumeric);
+		const dateFields = fields.filter((field) => fieldTypes[field].isDate);
+		const categoryFields = fields.filter(
+			(field) => fieldTypes[field].isCategory
+		);
 
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: 'top' as const,
-      },
-      title: {
-        display: true,
-        text: `${categoryField.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} Analysis`,
-      },
-    },
-  };
+		// Fall back to first field if no proper category field found
+		const categoryField = categoryFields[0] || dateFields[0] || fields[0];
 
-  // Choose chart type based on data characteristics
-  const shouldUsePie = data.length <= 10 && numericFields.length === 1;
-  const shouldUseLine = data.length > 10 || labels.every(label => !isNaN(Date.parse(label)));
+		// Clean and prepare labels
+		const labels = data.map((item) => {
+			const value = item[categoryField];
+			if (!value) return 'N/A';
+			if (fieldTypes[categoryField].isDate) {
+				return new Date(value).toLocaleDateString();
+			}
+			return String(value);
+		});
 
-  return (
-    <div className="h-[400px] mt-4">
-      {shouldUsePie ? (
-        <Pie data={chartData} options={options} />
-      ) : shouldUseLine ? (
-        <Line data={chartData} options={options} />
-      ) : (
-        <Bar data={chartData} options={options} />
-      )}
-    </div>
-  );
+		// Prepare datasets with error handling
+		const chartData = {
+			labels,
+			datasets: numericFields.map((field, index) => ({
+				label: field
+					.replace(/_/g, ' ')
+					.replace(/\b\w/g, (l) => l.toUpperCase()),
+				data: data.map((item) => {
+					const value = item[field];
+					if (value == null) return 0;
+					return Number(String(value).replace(/[,$]/g, '')) || 0;
+				}),
+				backgroundColor: [
+					'rgba(255, 99, 132, 0.5)',
+					'rgba(54, 162, 235, 0.5)',
+					'rgba(255, 206, 86, 0.5)',
+					'rgba(75, 192, 192, 0.5)',
+					'rgba(153, 102, 255, 0.5)',
+				][index % 5],
+				borderColor: [
+					'rgba(255, 99, 132, 1)',
+					'rgba(54, 162, 235, 1)',
+					'rgba(255, 206, 86, 1)',
+					'rgba(75, 192, 192, 1)',
+					'rgba(153, 102, 255, 1)',
+				][index % 5],
+				borderWidth: 1,
+			})),
+		};
+
+		const options = {
+			responsive: true,
+			maintainAspectRatio: false,
+			plugins: {
+				legend: {
+					position: 'top' as const,
+				},
+				title: {
+					display: true,
+					text: `${categoryField
+						.replace(/_/g, ' ')
+						.replace(/\b\w/g, (l) => l.toUpperCase())} Analysis`,
+				},
+			},
+			scales: {
+				y: {
+					beginAtZero: true,
+				},
+			},
+		};
+
+		// Enhanced chart type selection
+		const shouldUsePie =
+			data.length <= 10 &&
+			numericFields.length === 1 &&
+			!fieldTypes[categoryField].isDate;
+		const shouldUseLine = data.length > 10 || fieldTypes[categoryField].isDate;
+
+		return (
+			<div className='h-[400px] mt-4'>
+				{chartData.datasets.length === 0 ? (
+					<div className='flex items-center justify-center h-full text-gray-500'>
+						No numeric data available for visualization
+					</div>
+				) : shouldUsePie ? (
+					<Pie data={chartData} options={options} />
+				) : shouldUseLine ? (
+					<Line data={chartData} options={options} />
+				) : (
+					<Bar data={chartData} options={options} />
+				)}
+			</div>
+		);
+	} catch (error) {
+		console.error('Visualization error:', error);
+		return (
+			<div className='text-red-500 p-4 bg-red-50 rounded'>
+				Unable to visualize data: Invalid or unsupported data format
+			</div>
+		);
+	}
 }
