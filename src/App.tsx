@@ -58,7 +58,9 @@ function App() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('https://api.chatsql.ayanmn18.live/api/getResult', {
+      // const getResultsApiUrl = 'http://localhost:8080/api/getResult';
+      const getResultsApiUrl = 'https://api.chatsql.ayanmn18.live/api/getResult';
+      const response = await fetch(getResultsApiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1,5 +1,5 @@
-import React from 'react';
-import { X, Database } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Database, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
 interface DBSettingsModalProps {
   isOpen: boolean;
@@ -9,15 +9,54 @@ interface DBSettingsModalProps {
 }
 
 export default function DBSettingsModal({ isOpen, onClose, onSave, initialSettings }: DBSettingsModalProps) {
-  const [dbName, setDbName] = React.useState(initialSettings?.dbName || '');
-  const [dbUri, setDbUri] = React.useState(initialSettings?.dbUri || '');
+  const [dbName, setDbName] = useState(initialSettings?.dbName || '');
+  const [dbUri, setDbUri] = useState(initialSettings?.dbUri || '');
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'none' | 'success' | 'error'>('none');
+  const [errorMessage, setErrorMessage] = useState('');
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({ dbName, dbUri });
-    onClose();
+    if (connectionStatus === 'success') {
+      onSave({ dbName, dbUri });
+      onClose();
+    }
+  };
+
+  const testConnection = async () => {
+    if (!dbUri.trim()) return;
+
+    setIsTestingConnection(true);
+    setConnectionStatus('none');
+    setErrorMessage('');
+
+    try {
+      // const connApiUrl = 'http://localhost:8080/api/testConnection';
+      const connApiUrl = 'https://api.chatsql.ayanmn18.live/api/testConnection';
+      const response = await fetch(connApiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ uri: dbUri }),
+      });
+
+      const result = await response.json();
+
+      if (result.connection) {
+        setConnectionStatus('success');
+      } else {
+        setConnectionStatus('error');
+        setErrorMessage(result.error || 'Failed to connect to database');
+      }
+    } catch (error) {
+      setConnectionStatus('error');
+      setErrorMessage('Network error: Could not test connection');
+    } finally {
+      setIsTestingConnection(false);
+    }
   };
 
   return (
@@ -57,15 +96,55 @@ export default function DBSettingsModal({ isOpen, onClose, onSave, initialSettin
               <label htmlFor="dbUri" className="block text-sm font-medium text-gray-700 mb-1">
                 Database URI
               </label>
-              <input
-                type="text"
-                id="dbUri"
-                value={dbUri}
-                onChange={(e) => setDbUri(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter connection URI"
-                required
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  id="dbUri"
+                  value={dbUri}
+                  onChange={(e) => {
+                    setDbUri(e.target.value);
+                    setConnectionStatus('none');
+                  }}
+                  disabled={isTestingConnection}
+                  className={`w-full px-3 py-2 pr-24 border rounded-md shadow-sm focus:ring-2 focus:ring-opacity-50 ${connectionStatus === 'success'
+                    ? 'border-green-500 focus:border-green-500 focus:ring-green-200'
+                    : connectionStatus === 'error'
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-200'
+                      : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
+                    }`}
+                  placeholder="Enter connection URI"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={testConnection}
+                  disabled={isTestingConnection || !dbUri.trim()}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs font-medium rounded-md 
+                    focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-blue-500
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                    bg-gray-100 text-gray-700 hover:bg-gray-200"
+                >
+                  {isTestingConnection ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : connectionStatus === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  ) : connectionStatus === 'error' ? (
+                    <XCircle className="w-4 h-4 text-red-500" />
+                  ) : (
+                    'Test'
+                  )}
+                </button>
+              </div>
+              {connectionStatus === 'error' && (
+                <div className="mt-1 text-sm text-red-600">
+                  {errorMessage}
+                </div>
+              )}
+              {connectionStatus === 'success' && (
+                <div className="mt-1 text-sm text-green-600">
+                  Connection successful!
+                </div>
+              )}
             </div>
           </div>
 
@@ -79,7 +158,11 @@ export default function DBSettingsModal({ isOpen, onClose, onSave, initialSettin
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              disabled={connectionStatus !== 'success'}
+              className={`px-4 py-2 text-sm font-medium text-white border border-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${connectionStatus === 'success'
+                ? 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
+                : 'bg-gray-400 cursor-not-allowed'
+                }`}
             >
               Save Changes
             </button>
