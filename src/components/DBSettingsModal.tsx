@@ -8,20 +8,42 @@ interface DBSettingsModalProps {
   initialSettings?: { dbName: string; dbUri: string };
 }
 
+const DEFAULT_DB_URI = 'postgresql://postgres.ewaasuzfvkbievcclxkh:Ayan@2001@aws-0-ap-south-1.pooler.supabase.com:6543/pagila';
+const DEFAULT_DB_NAME = 'Dummy Database';
+const MASKED_DB_URI = '********************';
+
 export default function DBSettingsModal({ isOpen, onClose, onSave, initialSettings }: DBSettingsModalProps) {
   const [dbName, setDbName] = useState(initialSettings?.dbName || '');
   const [dbUri, setDbUri] = useState(initialSettings?.dbUri || '');
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'none' | 'success' | 'error'>('none');
   const [errorMessage, setErrorMessage] = useState('');
+  const [useDefaultDb, setUseDefaultDb] = useState(false);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (connectionStatus === 'success') {
-      onSave({ dbName, dbUri });
+    if (useDefaultDb || connectionStatus === 'success') {
+      onSave({
+        dbName: useDefaultDb ? DEFAULT_DB_NAME : dbName,
+        dbUri: useDefaultDb ? DEFAULT_DB_URI : dbUri,
+      });
       onClose();
+    }
+  };
+
+  const handleUseDefaultDb = (checked: boolean) => {
+    setUseDefaultDb(checked);
+    if (checked) {
+      setDbName(DEFAULT_DB_NAME);
+      setDbUri(DEFAULT_DB_URI);
+      setConnectionStatus('success');
+      setErrorMessage('');
+    } else {
+      setDbName('');
+      setDbUri('');
+      setConnectionStatus('none');
     }
   };
 
@@ -33,9 +55,7 @@ export default function DBSettingsModal({ isOpen, onClose, onSave, initialSettin
     setErrorMessage('');
 
     try {
-      // const connApiUrl = 'http://localhost:8080/api/testConnection';
-      const connApiUrl = 'https://api.chatsql.ayanmn18.live/api/testConnection';
-      const response = await fetch(connApiUrl, {
+      const response = await fetch('http://localhost:8080/api/testConnection', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -45,7 +65,7 @@ export default function DBSettingsModal({ isOpen, onClose, onSave, initialSettin
 
       const result = await response.json();
 
-      if (result.connection) {
+      if (response.ok) {
         setConnectionStatus('success');
       } else {
         setConnectionStatus('error');
@@ -77,6 +97,19 @@ export default function DBSettingsModal({ isOpen, onClose, onSave, initialSettin
 
         <form onSubmit={handleSubmit} className="p-4">
           <div className="space-y-4">
+            <div className="flex items-center mb-4">
+              <input
+                type="checkbox"
+                id="useDefaultDb"
+                checked={useDefaultDb}
+                onChange={(e) => handleUseDefaultDb(e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="useDefaultDb" className="ml-2 block text-sm text-gray-900">
+                Use default database
+              </label>
+            </div>
+
             <div>
               <label htmlFor="dbName" className="block text-sm font-medium text-gray-700 mb-1">
                 Database Name
@@ -84,11 +117,12 @@ export default function DBSettingsModal({ isOpen, onClose, onSave, initialSettin
               <input
                 type="text"
                 id="dbName"
-                value={dbName}
+                value={useDefaultDb ? DEFAULT_DB_NAME : dbName}
                 onChange={(e) => setDbName(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
                 placeholder="Enter database name"
                 required
+                disabled={useDefaultDb}
               />
             </div>
 
@@ -100,47 +134,51 @@ export default function DBSettingsModal({ isOpen, onClose, onSave, initialSettin
                 <input
                   type="text"
                   id="dbUri"
-                  value={dbUri}
+                  value={useDefaultDb ? MASKED_DB_URI : dbUri}
                   onChange={(e) => {
                     setDbUri(e.target.value);
                     setConnectionStatus('none');
                   }}
-                  disabled={isTestingConnection}
-                  className={`w-full px-3 py-2 pr-24 border rounded-md shadow-sm focus:ring-2 focus:ring-opacity-50 ${connectionStatus === 'success'
-                    ? 'border-green-500 focus:border-green-500 focus:ring-green-200'
-                    : connectionStatus === 'error'
-                      ? 'border-red-500 focus:border-red-500 focus:ring-red-200'
-                      : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
+                  disabled={isTestingConnection || useDefaultDb}
+                  className={`w-full px-3 py-2 pr-24 border rounded-md shadow-sm focus:ring-2 focus:ring-opacity-50 disabled:bg-gray-100 disabled:text-gray-500 ${useDefaultDb
+                    ? 'border-green-500'
+                    : connectionStatus === 'success'
+                      ? 'border-green-500 focus:border-green-500 focus:ring-green-200'
+                      : connectionStatus === 'error'
+                        ? 'border-red-500 focus:border-red-500 focus:ring-red-200'
+                        : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
                     }`}
                   placeholder="Enter connection URI"
                   required
                 />
-                <button
-                  type="button"
-                  onClick={testConnection}
-                  disabled={isTestingConnection || !dbUri.trim()}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs font-medium rounded-md 
-                    focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-blue-500
-                    disabled:opacity-50 disabled:cursor-not-allowed
-                    bg-gray-100 text-gray-700 hover:bg-gray-200"
-                >
-                  {isTestingConnection ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : connectionStatus === 'success' ? (
-                    <CheckCircle2 className="w-4 h-4 text-green-500" />
-                  ) : connectionStatus === 'error' ? (
-                    <XCircle className="w-4 h-4 text-red-500" />
-                  ) : (
-                    'Test'
-                  )}
-                </button>
+                {!useDefaultDb && (
+                  <button
+                    type="button"
+                    onClick={testConnection}
+                    disabled={isTestingConnection || !dbUri.trim()}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs font-medium rounded-md 
+                      focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-blue-500
+                      disabled:opacity-50 disabled:cursor-not-allowed
+                      bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  >
+                    {isTestingConnection ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : connectionStatus === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                    ) : connectionStatus === 'error' ? (
+                      <XCircle className="w-4 h-4 text-red-500" />
+                    ) : (
+                      'Test'
+                    )}
+                  </button>
+                )}
               </div>
-              {connectionStatus === 'error' && (
+              {connectionStatus === 'error' && !useDefaultDb && (
                 <div className="mt-1 text-sm text-red-600">
                   {errorMessage}
                 </div>
               )}
-              {connectionStatus === 'success' && (
+              {(connectionStatus === 'success' || useDefaultDb) && (
                 <div className="mt-1 text-sm text-green-600">
                   Connection successful!
                 </div>
@@ -158,8 +196,8 @@ export default function DBSettingsModal({ isOpen, onClose, onSave, initialSettin
             </button>
             <button
               type="submit"
-              disabled={connectionStatus !== 'success'}
-              className={`px-4 py-2 text-sm font-medium text-white border border-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${connectionStatus === 'success'
+              disabled={!useDefaultDb && connectionStatus !== 'success'}
+              className={`px-4 py-2 text-sm font-medium text-white border border-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${useDefaultDb || connectionStatus === 'success'
                 ? 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
                 : 'bg-gray-400 cursor-not-allowed'
                 }`}
