@@ -129,7 +129,7 @@ function App() {
               }`}
           >
             <Settings className="w-4 h-4" />
-            Database Settings
+            Settings
           </button>
 
           {showTooltip && !dbSettings.dbUri && (
