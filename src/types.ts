@@ -16,3 +16,10 @@ export interface QueryRequest {
   query: string;
   uri: string;
 }
+
+
+export interface Settings {
+  dbName: string;
+  dbUri: string;
+  aiModel: 'openai' | 'claude';
+}
