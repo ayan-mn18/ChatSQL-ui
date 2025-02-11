@@ -38,8 +38,10 @@ function App() {
         timestamp: new Date(),
         result: {
           data: [],
-          columns: [],
-          error: 'Database not configured',
+          info: {
+            error: 'Database not configured',
+            columns: []
+          }
         },
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -58,8 +60,8 @@ function App() {
     setIsLoading(true);
 
     try {
-      // const getResultsApiUrl = 'http://localhost:8080/api/getResult';
-      const getResultsApiUrl = 'https://api.chatsql.ayanmn18.live/api/getResult';
+      const getResultsApiUrl = 'http://localhost:8080/api/getResult';
+      // const getResultsApiUrl = 'https://api.chatsql.ayanmn18.live/api/getResult';
       const response = await fetch(getResultsApiUrl, {
         method: 'POST',
         headers: {
@@ -67,8 +69,7 @@ function App() {
         },
         body: JSON.stringify({
           query: input,
-          // uri: 'postgresql://postgres:Ayan@2001@db.ewaasuzfvkbievcclxkh.supabase.co:5432/pagila', // Replace with actual URI
-          uri: dbSettings.dbUri, // Replace with actual URI
+          uri: dbSettings.dbUri,
         } as QueryRequest),
       });
 
@@ -97,8 +98,10 @@ function App() {
         timestamp: new Date(),
         result: {
           data: [],
-          columns: [],
-          error: error instanceof Error ? error.message : 'Unknown error',
+          info: {
+            error: error instanceof Error ? error.message : 'Unknown error',
+            columns: []
+          }
         },
       };
 
