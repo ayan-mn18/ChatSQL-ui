@@ -2,12 +2,46 @@
 import { Message } from '../types';
 import { User, Bot, Database, ArrowRight, Lightbulb, Table2, Columns } from 'lucide-react';
 import DataVisualization from './DataVisualization';
+import React from 'react';
 
 interface ChatMessageProps {
   message: Message;
 }
 
 export default function ChatMessage({ message }: ChatMessageProps) {
+  const [copied, setCopied] = React.useState(false);
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+    }
+  };
+
+  const downloadData = (data: any[], filename: string) => {
+    // Convert data to CSV
+    const headers = Object.keys(data[0]);
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row => headers.map(header => {
+        const cell = row[header]?.toString() || '';
+        return cell.includes(',') ? `"${cell}"` : cell;
+      }).join(','))
+    ].join('\n');
+
+    // Create and trigger download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${filename}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
   return (
     <div className={`flex gap-4 p-4 ${message.role === 'assistant' ? 'bg-gray-50' : ''}`}>
       <div className="flex-shrink-0">
