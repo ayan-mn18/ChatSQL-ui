@@ -9,7 +9,7 @@ interface SettingsModalProps {
   initialSettings?: Settings;
 }
 
-const DEFAULT_DB_URI = 'postgresql://default:default@localhost:5432/defaultdb';
+const DEFAULT_DB_URI = 'postgresql://postgres.ewaasuzfvkbievcclxkh:Ayan@2001@aws-0-ap-south-1.pooler.supabase.com:6543/pagila';
 const DEFAULT_DB_NAME = 'Dummy Database';
 const MASKED_DB_URI = '********************';
 
@@ -144,7 +144,7 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                 />
                 <label htmlFor="useDefaultDb" className="ml-2 block text-sm text-gray-900">
-                  Use default database
+                  Use Dummy database for testing
                 </label>
               </div>
 
