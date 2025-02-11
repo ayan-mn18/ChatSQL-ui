@@ -130,7 +130,8 @@ function App() {
   return (
     <div className="flex flex-col h-screen bg-white">
       <header className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-        <h1 className="text-xl font-semibold text-gray-900">ChatSQL</h1>
+        <h1 className="text-xl font-semibold text-gray-900">
+          ChatSQL</h1>
         <div className="relative">
           <button
             onClick={() => setIsSettingsOpen(true)}
