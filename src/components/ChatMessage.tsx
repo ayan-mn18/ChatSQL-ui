@@ -1,8 +1,7 @@
-
-import { Message } from '../types';
-import { User, Bot, Database, ArrowRight, Lightbulb, Table2, Columns } from 'lucide-react';
-import DataVisualization from './DataVisualization';
 import React from 'react';
+import { Message } from '../types';
+import { User, Bot, Database, ArrowRight, Lightbulb, Table2, Columns, Copy, Download, Check } from 'lucide-react';
+import DataVisualization from './DataVisualization';
 
 interface ChatMessageProps {
   message: Message;
@@ -10,6 +9,8 @@ interface ChatMessageProps {
 
 export default function ChatMessage({ message }: ChatMessageProps) {
   const [copied, setCopied] = React.useState(false);
+
+  console.log("message: ", message.result)
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -42,6 +43,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
     link.click();
     document.body.removeChild(link);
   };
+
   return (
     <div className={`flex gap-4 p-4 ${message.role === 'assistant' ? 'bg-gray-50' : ''}`}>
       <div className="flex-shrink-0">
@@ -82,9 +84,27 @@ export default function ChatMessage({ message }: ChatMessageProps) {
 
                 {message.result.info.query && (
                   <div className="bg-gray-900 p-4 rounded-lg overflow-x-auto">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Database className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-400 text-sm font-medium">SQL Query</span>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Database className="w-4 h-4 text-gray-400" />
+                        <span className="text-gray-400 text-sm font-medium">SQL Query</span>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard(message.result?.info.query!)}
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-400 hover:text-white bg-gray-800 rounded transition-colors"
+                      >
+                        {copied ? (
+                          <>
+                            <Check className="w-3 h-3" />
+                            Copied!
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3" />
+                            Copy SQL
+                          </>
+                        )}
+                      </button>
                     </div>
                     <pre className="text-green-400 font-mono text-sm whitespace-pre-wrap">{message.result.info.query}</pre>
                   </div>
@@ -156,8 +176,22 @@ export default function ChatMessage({ message }: ChatMessageProps) {
                   </div>
                 )}
 
-                {/* <DataTable data={message.result.data} columns={message.result.columns} /> */}
-                <DataVisualization data={message.result.data} />
+                {message.result.data.length > 0 && (
+                  <div className="space-y-4">
+                    <div className="flex justify-end">
+                      <button
+                        // 
+                        onClick={() => downloadData(message.result?.data || [], 'query_results')}
+                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      >
+                        <Download className="w-4 h-4" />
+                        Download CSV
+                      </button>
+                    </div>
+                    {/* <DataTable data={message.result.data} columns={message.result.info.columns} /> */}
+                    <DataVisualization data={message.result.data} />
+                  </div>
+                )}
               </>
             )}
           </div>
