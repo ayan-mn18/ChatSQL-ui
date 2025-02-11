@@ -4,6 +4,7 @@ import ChatMessage from './components/ChatMessage';
 import { Send, Settings } from 'lucide-react';
 import LoadingMessage from './components/LoadingMessage';
 import DBSettingsModal from './components/DBSettingsModal';
+import SampleQueries from './components/SampleQueries';
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -15,6 +16,7 @@ function App() {
     return savedSettings ? JSON.parse(savedSettings) : { dbName: '', dbUri: '' };
   });
   const [showTooltip, setShowTooltip] = useState(false);
+  const [showSampleQueries, setShowSampleQueries] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -28,6 +30,8 @@ function App() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
+
+    setShowSampleQueries(false);
 
     if (!dbSettings.dbUri) {
       setIsSettingsOpen(true);
@@ -117,6 +121,12 @@ function App() {
     setShowTooltip(false);
   };
 
+  const handleSampleQueryClick = (query: string) => {
+    setInput(query);
+    setShowSampleQueries(false);
+  };
+
+
   return (
     <div className="flex flex-col h-screen bg-white">
       <header className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
@@ -168,6 +178,9 @@ function App() {
 
       <footer className="border-t border-gray-200 bg-white">
         <div className="max-w-4xl mx-auto p-4">
+          {dbSettings.dbUri && messages.length === 0 && showSampleQueries && (
+            <SampleQueries onQueryClick={handleSampleQueryClick} />
+          )}
           <form onSubmit={handleSubmit} className="flex gap-4">
             <input
               type="text"
