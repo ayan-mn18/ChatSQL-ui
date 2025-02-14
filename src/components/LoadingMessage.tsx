@@ -19,7 +19,7 @@ export default function LoadingMessage() {
             <div className="w-2 h-2 bg-green-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
             <div className="w-2 h-2 bg-green-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
           </div>
-          <span className="text-gray-600">Analyzing your query</span>
+          <span className="text-gray-600">Please wait a few seconds</span>
         </div>
       </div>
     </div>

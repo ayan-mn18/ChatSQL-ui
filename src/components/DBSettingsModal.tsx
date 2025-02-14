@@ -71,8 +71,6 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
 
       const result = await response.json();
 
-      console.log("Connection: ", result)
-
       if (result.connection) {
         setConnectionStatus('success');
       } else {

@@ -10,8 +10,6 @@ interface ChatMessageProps {
 export default function ChatMessage({ message }: ChatMessageProps) {
   const [copied, setCopied] = React.useState(false);
 
-  console.log("message: ", message.result)
-
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);

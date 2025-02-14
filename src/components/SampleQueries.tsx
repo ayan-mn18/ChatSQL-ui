@@ -6,11 +6,9 @@ interface SampleQueriesProps {
 }
 
 const sampleQueries = [
-  { emoji: '🕵️‍♂️', query: "Which dataset is hiding the juiciest insights?" },
-  { emoji: '🔥', query: "Show me the trendiest data points before they go mainstream" },
-  { emoji: '🗑️', query: "Find the most neglected datasets—data graveyard edition" },
-  { emoji: '🤖', query: "Which AI model is working overtime with the most queries?" },
-  { emoji: '💸', query: "Show me the most expensive queries—who's making it rain on compute costs?" }
+  { emoji: '🔥', query: "Which categories generate the most revenue per rental?" },
+  { emoji: '🕵️‍♂️', query: "Which films have the highest customer repeat rental rate?" },
+  { emoji: '🗑️', query: "What's the average rental duration and spending per customer in top 25 cities" },
 ];
 
 
