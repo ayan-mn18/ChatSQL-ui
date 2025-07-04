@@ -9,7 +9,7 @@ interface SettingsModalProps {
   initialSettings?: Settings;
 }
 
-const DEFAULT_DB_URI = 'postgresql://postgres.ewaasuzfvkbievcclxkh:Ayan@2001@aws-0-ap-south-1.pooler.supabase.com:6543/pagila';
+const DEFAULT_DB_URI = 'postgresql://postgres.ewaasuzfvkbievcclxkh:Ayan@2001@aws-0-ap-south-1.pooler.supabase.com:5432/postgres';
 const DEFAULT_DB_NAME = 'Dummy Database';
 const MASKED_DB_URI = '********************';
 
