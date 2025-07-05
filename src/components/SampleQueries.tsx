@@ -4,12 +4,19 @@ import { Sparkles } from 'lucide-react';
 interface SampleQueriesProps {
   onQueryClick: (query: string) => void;
 }
-
 const sampleQueries = [
-  { emoji: '🔥', query: "Which categories generate the most revenue per rental?" },
-  { emoji: '🕵️‍♂️', query: "Which films have the highest customer repeat rental rate?" },
-  { emoji: '🗑️', query: "What's the average rental duration and spending per customer in top 25 cities" },
+  {
+    emoji: '📈',
+    query: "Compare total points by all constructors across the last 5 seasons",
+  },
+  { emoji: '📊', query: "What are the total points earned by each constructor in 2021?" },
+  {
+    emoji: '🛞',
+    query: "Rank drivers by number of podium finishes in the last two seasons",
+  },
 ];
+
+
 
 
 export default function SampleQueries({ onQueryClick }: SampleQueriesProps) {

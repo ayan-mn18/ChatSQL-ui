@@ -4,6 +4,7 @@ import ChatMessage from '../components/ChatMessage';
 import { Send } from 'lucide-react';
 import LoadingMessage from '../components/LoadingMessage';
 import DBSettingsModal from '../components/DBSettingsModal';
+import DatabaseSidebar from '../components/DatabaseSidebar';
 import SampleQueries from '../components/SampleQueries';
 import { Navbar } from '../components';
 
@@ -12,6 +13,7 @@ function ChatPage() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [dbSettings, setDbSettings] = useState(() => {
     const savedSettings = localStorage.getItem('dbSettings');
     return savedSettings ? JSON.parse(savedSettings) : { dbName: '', dbUri: '' };
@@ -30,7 +32,9 @@ function ChatPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading) {
+      return;
+    }
 
     setShowSampleQueries(false);
 
@@ -116,10 +120,19 @@ function ChatPage() {
     }
   };
 
-  const handleSaveSettings = (settings: { dbName: string; dbUri: string }) => {
+  const handleSaveSettings = async (settings: { dbName: string; dbUri: string }) => {
     setDbSettings(settings);
+    localStorage.setItem('dbSettings', JSON.stringify(settings));
     setIsSettingsOpen(false);
     setShowTooltip(false);
+    
+    // Auto-open sidebar when database is connected
+    if (settings.dbUri) {
+      // Small delay to ensure modal closes first
+      setTimeout(() => {
+        setIsSidebarOpen(true);
+      }, 300);
+    }
   };
 
   const handleSampleQueryClick = (query: string) => {
@@ -133,13 +146,14 @@ function ChatPage() {
       <Navbar
         showSettings
         onSettingsClick={() => setIsSettingsOpen(true)}
+        onTablesClick={() => setIsSidebarOpen(true)}
         settingsStatus={{
           hasDbUri: !!dbSettings.dbUri,
           showTooltip
         }}
       />
 
-      <main className="flex-1 overflow-y-auto p-4">
+      <main className={`flex-1 overflow-y-auto p-4 transition-all duration-300 ${isSidebarOpen ? 'blur-sm' : ''}`}>
         <div className="max-w-4xl mx-auto mt-40">
           {!dbSettings.dbUri ? (
             <div className="text-center text-gray-500 mt-8">
@@ -161,7 +175,7 @@ function ChatPage() {
         </div>
       </main>
 
-      <footer className="border-t border-gray-200 bg-white">
+      <footer className={`border-t border-gray-200 bg-white transition-all duration-300 ${isSidebarOpen ? 'blur-sm' : ''}`}>
         <div className="max-w-4xl mx-auto p-4">
           {dbSettings.dbUri && messages.length === 0 && showSampleQueries && (
             <SampleQueries onQueryClick={handleSampleQueryClick} />
@@ -186,6 +200,17 @@ function ChatPage() {
           </form>
         </div>
       </footer>
+
+      {/* Database Sidebar */}
+      <DatabaseSidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        onTableSelect={(tableId) => {
+          console.log('Selected table:', tableId);
+          // You can add logic here to handle table selection
+        }}
+        dbUri={dbSettings.dbUri}
+      />
 
       <DBSettingsModal
         isOpen={isSettingsOpen}
