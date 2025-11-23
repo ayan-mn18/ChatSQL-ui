@@ -2,48 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom scrollbar styling */
-.scroll-container {
-  scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 #f8fafc;
-}
-
-.scroll-container::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.scroll-container::-webkit-scrollbar-track {
-  background: #f8fafc;
-  border-radius: 4px;
-}
-
-.scroll-container::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
-}
-
-.scroll-container::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
-.scroll-container::-webkit-scrollbar-corner {
-  background: #f8fafc;
-}
-
-/* Smooth scrolling */
-.scroll-smooth {
-  scroll-behavior: smooth;
-}
-
-/* Force table to maintain minimum width */
-.table-container table {
-  table-layout: auto;
-  white-space: nowrap;
-}
-
-.table-container th,
-.table-container td {
-  white-space: nowrap;
-  text-overflow: ellipsis;
+@layer base {
+  body {
+    @apply bg-[#020817] text-white;
+  }
 }
