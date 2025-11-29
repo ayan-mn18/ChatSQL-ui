@@ -238,16 +238,6 @@ export default function FuturisticLanding() {
           90% { opacity: 1; }
           100% { transform: translateY(100vh); opacity: 0; }
         }
-        
-        @keyframes pulse-glow {
-          0%, 100% { box-shadow: 0 0 20px rgba(34, 211, 238, 0.3); }
-          50% { box-shadow: 0 0 40px rgba(34, 211, 238, 0.6); }
-        }
-        
-        @keyframes scan-line {
-          0% { transform: translateY(-100%); }
-          100% { transform: translateY(100vh); }
-        }
       `}</style>
 
       {/* Navigation */}
