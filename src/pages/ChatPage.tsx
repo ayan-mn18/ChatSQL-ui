@@ -66,7 +66,7 @@ function ChatPage() {
 
     try {
       // const getResultsApiUrl = 'http://localhost:8080/api/getResult';
-      const getResultsApiUrl = 'https://api.chatsql.ayanmn18.live/api/getResult';
+      const getResultsApiUrl = 'https://api.sql.bizer.dev/api/getResult';
       const response = await fetch(getResultsApiUrl, {
         method: 'POST',
         headers: {

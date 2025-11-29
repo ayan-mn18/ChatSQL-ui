@@ -60,7 +60,7 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
 
     try {
       // const connUrl = 'http://localhost:8080/api/testConnection';
-      const connUrl = 'https://api.chatsql.ayanmn18.live/api/testConnection';
+      const connUrl = 'https://api.sql.bizer.dev/api/testConnection';
       const response = await fetch(connUrl, {
         method: 'POST',
         headers: {
