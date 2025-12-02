@@ -1,6 +1,7 @@
 import { ArrowRight, Check, ChevronDown, Database, Zap, Shield, Users, Code, Cpu, Keyboard, Server, Cloud, Layers, Box } from 'lucide-react';
 import { useEffect } from 'react';
 import { motion, useMotionTemplate, useMotionValue, animate } from 'framer-motion';
+import { Link } from 'react-router-dom';
 
 // Import logos
 import amazonLogo from '../public/amazon.png';
@@ -89,9 +90,9 @@ const SquareGrid = () => {
 
       <div className="flex items-center gap-4">
         <a href="#" className="text-sm font-medium text-white hover:text-gray-300 hidden sm:block">Sign In</a>
-        <button className="bg-[#6366f1] hover:bg-[#5558dd] text-white px-5 py-2.5 rounded-full text-sm font-medium transition-all shadow-[0_0_15px_rgba(99,102,241,0.5)] hover:shadow-[0_0_25px_rgba(99,102,241,0.6)]">
+        <Link to="/dashboard" className="bg-[#6366f1] hover:bg-[#5558dd] text-white px-5 py-2.5 rounded-full text-sm font-medium transition-all shadow-[0_0_15px_rgba(99,102,241,0.5)] hover:shadow-[0_0_25px_rgba(99,102,241,0.6)]">
           Get Started
-        </button>
+        </Link>
       </div>
     </div>
   </nav>
@@ -128,10 +129,10 @@ const Hero = () => (
         </p>
 
         <div className="flex flex-wrap gap-4 mb-16">
-          <button className="bg-white text-black px-8 py-4 rounded-full font-semibold hover:bg-gray-200 transition-all flex items-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.15)] hover:shadow-[0_0_30px_rgba(255,255,255,0.25)] hover:-translate-y-0.5">
+          <Link to="/dashboard" className="bg-white text-black px-8 py-4 rounded-full font-semibold hover:bg-gray-200 transition-all flex items-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.15)] hover:shadow-[0_0_30px_rgba(255,255,255,0.25)] hover:-translate-y-0.5">
             Get Started Free
             <ArrowRight className="w-4 h-4" />
-          </button>
+          </Link>
           <button className="px-8 py-4 rounded-full font-semibold text-white border border-white/10 hover:bg-white/5 transition-all flex items-center gap-2 backdrop-blur-sm hover:-translate-y-0.5">
             Watch Demo
           </button>
@@ -267,7 +268,7 @@ const FeatureSpotlight = () => (
       </div>
 
       {/* Feature 2 */}
-      <div className="bg-white/5 border border-white/10 rounded-3xl p-12 relative overflow-hidden">
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-12 relative overflow-hidden">
         <div className="grid md:grid-cols-2 gap-12 items-center">
           <div className="order-2 md:order-1 flex justify-center">
             {/* Keyboard Visual Placeholder */}

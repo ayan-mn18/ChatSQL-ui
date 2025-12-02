@@ -41,7 +41,7 @@ export default function LandingPage() {
 
           <div className="flex flex-col sm:flex-row gap-5 justify-center">
             <Link
-              to="/chat"
+              to="/dashboard"
               className="group relative inline-flex items-center justify-center gap-3 bg-white text-black px-8 py-4 rounded-full hover:bg-gray-100 transition-all duration-300 text-lg font-medium overflow-hidden"
             >
               <span className="relative z-10 flex items-center gap-2">
