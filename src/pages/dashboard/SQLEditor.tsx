@@ -4,7 +4,6 @@ import { Play, Sparkles, Save, Download, BarChart3, Table as TableIcon, ChevronR
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Parser } from 'node-sql-parser';
 import Editor from 'react-simple-code-editor';
 import Prism from '@/lib/prism-setup';
@@ -19,8 +18,11 @@ import {
   Title,
   Tooltip,
   Legend,
+  PointElement,
+  LineElement,
+  ArcElement,
 } from 'chart.js';
-import { Bar } from 'react-chartjs-2';
+import { Bar, Line, Doughnut } from 'react-chartjs-2';
 
 ChartJS.register(
   CategoryScale,
@@ -28,11 +30,33 @@ ChartJS.register(
   BarElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  PointElement,
+  LineElement,
+  ArcElement
 );
 
 export default function SQLEditor() {
-  const [query, setQuery] = useState('SELECT category, SUM(sales) as total_sales, AVG(growth) as avg_growth\nFROM sales_data\nGROUP BY category\nORDER BY total_sales DESC\nLIMIT 5;');
+  const [query, setQuery] = useState(`WITH monthly_stats AS (
+  SELECT 
+    DATE_TRUNC('month', created_at) as month,
+    p.category,
+    COUNT(o.id) as total_orders,
+    SUM(o.amount) as revenue
+  FROM orders o
+  JOIN products p ON o.product_id = p.id
+  WHERE o.status = 'completed'
+  GROUP BY 1, 2
+)
+SELECT 
+  month,
+  category,
+  revenue,
+  total_orders,
+  ROUND((revenue / NULLIF(LAG(revenue) OVER (PARTITION BY category ORDER BY month), 0) - 1) * 100, 1) as growth_rate
+FROM monthly_stats
+ORDER BY month DESC, revenue DESC
+LIMIT 100;`);
   const [aiPrompt, setAiPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [, setActiveTab] = useState('table');
@@ -63,45 +87,139 @@ export default function SQLEditor() {
 
   // Mock Result Data
   const results = [
-    { id: 1, category: 'Electronics', total_sales: 125000, avg_growth: 12.5, status: 'Active' },
-    { id: 2, category: 'Fashion', total_sales: 98000, avg_growth: 8.2, status: 'Active' },
-    { id: 3, category: 'Home & Garden', total_sales: 85000, avg_growth: 5.4, status: 'Pending' },
-    { id: 4, category: 'Sports', total_sales: 62000, avg_growth: 15.1, status: 'Active' },
-    { id: 5, category: 'Books', total_sales: 45000, avg_growth: 2.1, status: 'Inactive' },
+    { id: 1, month: '2024-03-01', category: 'Electronics', revenue: 125000, total_orders: 450, growth_rate: 12.5 },
+    { id: 2, month: '2024-03-01', category: 'Fashion', revenue: 98000, total_orders: 820, growth_rate: 8.2 },
+    { id: 3, month: '2024-03-01', category: 'Home', revenue: 85000, total_orders: 320, growth_rate: -2.4 },
+    { id: 4, month: '2024-02-01', category: 'Electronics', revenue: 111000, total_orders: 410, growth_rate: 5.1 },
+    { id: 5, month: '2024-02-01', category: 'Fashion', revenue: 90500, total_orders: 780, growth_rate: 3.8 },
+    { id: 6, month: '2024-02-01', category: 'Home', revenue: 87100, total_orders: 340, growth_rate: 1.2 },
   ];
 
-  const chartData = {
-    labels: results.map(r => r.category),
+  // Chart 1: Revenue Trends (Line)
+  const lineChartData = {
+    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
     datasets: [
       {
-        label: 'Total Sales ($)',
-        data: results.map(r => r.total_sales),
-        backgroundColor: 'rgba(59, 130, 246, 0.8)', // Blue
-        borderRadius: 4,
+        label: 'Electronics',
+        data: [95000, 102000, 111000, 125000, 132000, 145000],
+        borderColor: '#8b5cf6', // Violet
+        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+        tension: 0.4,
+        fill: true,
+        pointBackgroundColor: '#1e293b',
+        pointBorderColor: '#8b5cf6',
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+      },
+      {
+        label: 'Fashion',
+        data: [82000, 85000, 90500, 98000, 95000, 105000],
+        borderColor: '#06b6d4', // Cyan
+        backgroundColor: 'rgba(6, 182, 212, 0.1)',
+        tension: 0.4,
+        fill: true,
+        pointBackgroundColor: '#1e293b',
+        pointBorderColor: '#06b6d4',
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6,
       },
     ],
   };
 
-  const chartOptions = {
+  // Chart 2: Category Distribution (Doughnut)
+  const doughnutChartData = {
+    labels: ['Electronics', 'Fashion', 'Home', 'Sports', 'Books'],
+    datasets: [
+      {
+        data: [35, 25, 20, 15, 5],
+        backgroundColor: [
+          '#8b5cf6', // Violet
+          '#06b6d4', // Cyan
+          '#10b981', // Emerald
+          '#f59e0b', // Amber
+          '#6366f1', // Indigo
+        ],
+        borderWidth: 0,
+        hoverOffset: 4,
+      },
+    ],
+  };
+
+  // Chart 3: Monthly Growth (Bar)
+  const barChartData = {
+    labels: ['Electronics', 'Fashion', 'Home', 'Sports', 'Books'],
+    datasets: [
+      {
+        label: 'Growth Rate (%)',
+        data: [12.5, 8.2, -2.4, 15.1, 2.1],
+        backgroundColor: (context: any) => {
+          const value = context.raw;
+          return value >= 0 ? '#10b981' : '#ef4444';
+        },
+        borderRadius: 6,
+        barThickness: 32,
+      },
+    ],
+  };
+
+  const commonOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
       legend: {
         position: 'top' as const,
-        labels: { color: '#9ca3af' }
+        align: 'end' as const,
+        labels: {
+          color: '#94a3b8',
+          font: { size: 11, family: '"Inter", sans-serif' },
+          usePointStyle: true,
+          boxWidth: 6,
+        }
       },
-      title: {
-        display: false,
-      },
+      tooltip: {
+        backgroundColor: '#1e293b',
+        titleColor: '#f8fafc',
+        bodyColor: '#cbd5e1',
+        borderColor: 'rgba(255,255,255,0.1)',
+        borderWidth: 1,
+        padding: 10,
+        cornerRadius: 8,
+        displayColors: true,
+      }
     },
     scales: {
       y: {
-        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-        ticks: { color: '#9ca3af' },
+        grid: { color: 'rgba(255, 255, 255, 0.04)' },
+        ticks: { color: '#94a3b8', font: { size: 10 } },
+        border: { display: false },
       },
       x: {
         grid: { display: false },
-        ticks: { color: '#9ca3af' },
+        ticks: { color: '#94a3b8', font: { size: 10 } },
+        border: { display: false },
+      },
+    },
+    interaction: {
+      mode: 'index' as const,
+      intersect: false,
+    },
+  };
+
+  const doughnutOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: '75%',
+    plugins: {
+      legend: {
+        position: 'right' as const,
+        labels: {
+          color: '#94a3b8',
+          font: { size: 11, family: '"Inter", sans-serif' },
+          usePointStyle: true,
+          boxWidth: 6,
+        }
       },
     },
   };
@@ -198,7 +316,7 @@ export default function SQLEditor() {
                 ))}
               </div>
               {/* Text Area */}
-              <div className="flex-1 bg-[#0f172a] overflow-auto relative">
+              <div className="flex-1 bg-[#0f172a] overflow-auto relative [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-[#0f172a] [&::-webkit-scrollbar-thumb]:bg-[#1e293b] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#334155] transition-colors">
                 <Editor
                   value={query}
                   onValueChange={handleQueryChange}
@@ -230,7 +348,7 @@ export default function SQLEditor() {
           </div>
         </ResizablePanel>
 
-        <ResizableHandle className="bg-[#273142] hover:bg-[#3b82f6] transition-colors h-1.5" />
+        <ResizableHandle withHandle className="bg-[#1e293b] hover:bg-[#3b82f6] transition-colors h-2 border-y border-white/5" />
 
         {/* Results Panel */}
         <ResizablePanel defaultSize={60} minSize={20}>
@@ -255,31 +373,26 @@ export default function SQLEditor() {
 
               <div className="flex-1 overflow-hidden p-0">
                 <TabsContent value="table" className="h-full m-0 border-none data-[state=active]:flex flex-col">
-                  <div className="flex-1 overflow-auto">
+                  <div className="flex-1 overflow-auto [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-[#1B2431] [&::-webkit-scrollbar-thumb]:bg-[#273142] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#374151] transition-colors">
                     <Table>
                       <TableHeader className="bg-[#273142] sticky top-0 z-10">
                         <TableRow className="border-b border-white/5 hover:bg-[#273142]">
-                          <TableHead className="text-gray-400 font-medium h-10">ID</TableHead>
+                          <TableHead className="text-gray-400 font-medium h-10">Month</TableHead>
                           <TableHead className="text-gray-400 font-medium h-10">Category</TableHead>
-                          <TableHead className="text-gray-400 font-medium h-10 text-right">Total Sales</TableHead>
-                          <TableHead className="text-gray-400 font-medium h-10 text-right">Avg Growth (%)</TableHead>
-                          <TableHead className="text-gray-400 font-medium h-10">Status</TableHead>
+                          <TableHead className="text-gray-400 font-medium h-10 text-right">Revenue</TableHead>
+                          <TableHead className="text-gray-400 font-medium h-10 text-right">Orders</TableHead>
+                          <TableHead className="text-gray-400 font-medium h-10 text-right">Growth</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {results.map((row) => (
                           <TableRow key={row.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                            <TableCell className="text-gray-300 font-mono text-xs">{row.id}</TableCell>
+                            <TableCell className="text-gray-300 font-mono text-xs">{row.month}</TableCell>
                             <TableCell className="text-white font-medium">{row.category}</TableCell>
-                            <TableCell className="text-gray-300 text-right font-mono">${row.total_sales.toLocaleString()}</TableCell>
-                            <TableCell className="text-green-400 text-right font-mono">+{row.avg_growth}%</TableCell>
-                            <TableCell>
-                              <span className={`px-2 py-1 rounded-full text-[10px] font-medium ${row.status === 'Active' ? 'bg-green-500/10 text-green-500' :
-                                row.status === 'Pending' ? 'bg-yellow-500/10 text-yellow-500' :
-                                  'bg-red-500/10 text-red-500'
-                                }`}>
-                                {row.status}
-                              </span>
+                            <TableCell className="text-gray-300 text-right font-mono">${row.revenue.toLocaleString()}</TableCell>
+                            <TableCell className="text-gray-300 text-right font-mono">{row.total_orders}</TableCell>
+                            <TableCell className={`text-right font-mono ${row.growth_rate >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {row.growth_rate > 0 ? '+' : ''}{row.growth_rate}%
                             </TableCell>
                           </TableRow>
                         ))}
@@ -288,7 +401,7 @@ export default function SQLEditor() {
                   </div>
                   {/* Table Footer / Pagination */}
                   <div className="h-12 border-t border-white/5 bg-[#273142] flex items-center justify-between px-4">
-                    <div className="text-xs text-gray-500">Showing 1-5 of 5 results</div>
+                    <div className="text-xs text-gray-500">Showing 1-6 of 6 results</div>
                     <div className="flex items-center gap-2">
                       <Button size="icon" variant="ghost" className="h-8 w-8 text-gray-400 hover:text-white disabled:opacity-50" disabled>
                         <ChevronLeft className="w-4 h-4" />
@@ -300,9 +413,31 @@ export default function SQLEditor() {
                   </div>
                 </TabsContent>
 
-                <TabsContent value="chart" className="h-full m-0 p-6">
-                  <div className="h-full w-full bg-[#273142] rounded-xl p-4 border border-white/5 shadow-inner">
-                    <Bar data={chartData} options={chartOptions} />
+                <TabsContent value="chart" className="h-full m-0 p-6 overflow-y-auto [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-[#1B2431] [&::-webkit-scrollbar-thumb]:bg-[#273142] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#374151] transition-colors">
+                  <div className="grid grid-cols-2 gap-6 h-full min-h-[500px]">
+                    {/* Main Chart - Revenue Trend */}
+                    <div className="col-span-2 bg-[#273142] rounded-xl p-4 border border-white/5 shadow-inner h-[300px]">
+                      <h4 className="text-sm font-medium text-gray-400 mb-4">Revenue Trends (6 Months)</h4>
+                      <div className="h-[calc(100%-2rem)]">
+                        <Line data={lineChartData} options={commonOptions} />
+                      </div>
+                    </div>
+
+                    {/* Secondary Chart - Distribution */}
+                    <div className="bg-[#273142] rounded-xl p-4 border border-white/5 shadow-inner h-[250px]">
+                      <h4 className="text-sm font-medium text-gray-400 mb-4">Revenue Share by Category</h4>
+                      <div className="h-[calc(100%-2rem)]">
+                        <Doughnut data={doughnutChartData} options={doughnutOptions} />
+                      </div>
+                    </div>
+
+                    {/* Tertiary Chart - Growth */}
+                    <div className="bg-[#273142] rounded-xl p-4 border border-white/5 shadow-inner h-[250px]">
+                      <h4 className="text-sm font-medium text-gray-400 mb-4">MoM Growth Rate</h4>
+                      <div className="h-[calc(100%-2rem)]">
+                        <Bar data={barChartData} options={commonOptions} />
+                      </div>
+                    </div>
                   </div>
                 </TabsContent>
               </div>
