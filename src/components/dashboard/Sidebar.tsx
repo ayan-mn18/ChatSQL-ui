@@ -17,7 +17,7 @@ export function Sidebar() {
         <div className="w-8 h-8 bg-[#3b82f6] rounded-lg flex items-center justify-center mr-3">
           <div className="w-4 h-4 bg-white rounded-sm" />
         </div>
-        <span className="text-lg font-bold tracking-tight">DashStack</span>
+        <span className="text-lg font-bold tracking-tight">ChatSQL</span>
       </div>
 
       {/* Navigation */}
