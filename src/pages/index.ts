@@ -1,4 +1,11 @@
 export { default as LandingPage } from './LandingPage';
 export { default as ChatPage } from './ChatPage';
 export { default as FuturisticLanding } from './FuturisticLanding';
-export { default as HexoraLanding } from './HexoraLanding';
+export { default as ChatSQLLanding } from './ChatSQLLanding';
+export { default as ConnectionsPage } from './dashboard/ConnectionsPage';
+export { default as AnalyticsPage } from './dashboard/AnalyticsPage';
+export { default as SettingsPage } from './dashboard/SettingsPage';
+export { default as ConnectionOverview } from './dashboard/ConnectionOverview';
+export { default as TableView } from './dashboard/TableView';
+export { default as SQLEditor } from './dashboard/SQLEditor';
+export { default as SchemaVisualizer } from './dashboard/SchemaVisualizer';

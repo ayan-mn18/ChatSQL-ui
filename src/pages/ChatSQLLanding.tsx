@@ -41,7 +41,7 @@ const SquareGrid = () => {
   return (
     <div className="absolute inset-0 z-0 overflow-hidden">
       {/* Base Grid (Dim) */}
-      <div 
+      <div
         className="absolute inset-0 opacity-[0.15]"
         style={{
           backgroundImage: `
@@ -53,7 +53,7 @@ const SquareGrid = () => {
       />
 
       {/* Glowing Grid (Revealed by mask) */}
-      <motion.div 
+      <motion.div
         className="absolute inset-0"
         style={{
           backgroundImage: `
@@ -65,7 +65,7 @@ const SquareGrid = () => {
           WebkitMaskImage: maskImage,
         }}
       />
-      
+
       {/* Fade out at bottom */}
       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#050505]/60 to-[#050505] pointer-events-none" />
     </div>
@@ -77,7 +77,7 @@ const SquareGrid = () => {
         <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
           <div className="w-4 h-4 bg-black rounded-sm" />
         </div>
-        <span className="text-xl font-bold text-white tracking-tight">Hexora</span>
+        <span className="text-xl font-bold text-white tracking-tight">ChatSQL</span>
       </div>
 
       <div className="hidden md:flex items-center gap-8">
@@ -114,7 +114,7 @@ const Hero = () => (
             New Update
           </span>
           <span className="text-gray-600">|</span>
-          <span className="group-hover:text-white transition-colors">Introducing Hexora v3</span>
+          <span className="group-hover:text-white transition-colors">Introducing ChatSQL v3</span>
           <ArrowRight className="w-3 h-3 text-gray-500 group-hover:text-white transition-colors ml-1" />
         </div>
 
@@ -163,7 +163,7 @@ const Hero = () => (
               </div>
               <div className="ml-4 px-3 py-1 rounded-md bg-black/50 border border-white/5 text-[10px] text-gray-500 font-mono flex items-center gap-2">
                 <Shield className="w-3 h-3" />
-                hexora.app/builder
+                chatsql.app/builder
               </div>
             </div>
 
@@ -250,7 +250,7 @@ const FeatureSpotlight = () => (
     <div className="max-w-7xl mx-auto">
       <div className="text-center mb-20">
         <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">Build Databases With Clarity <br /> and Confidence</h2>
-        <p className="text-gray-400 max-w-2xl mx-auto">From planning to execution, Hexora ensures your workflow stays clear, secure, and reliable.</p>
+        <p className="text-gray-400 max-w-2xl mx-auto">From planning to execution, ChatSQL ensures your workflow stays clear, secure, and reliable.</p>
       </div>
 
       {/* Feature 1 */}
@@ -261,7 +261,7 @@ const FeatureSpotlight = () => (
             <Cpu className="w-8 h-8 text-[#6366f1]" />
           </div>
           <h3 className="text-3xl font-bold text-white mb-4">The Core Of Smarter <br /> Database Building</h3>
-          <p className="text-gray-400 max-w-lg">Built on a foundation of precision and performance, Hexora gives you the stability to scale.</p>
+          <p className="text-gray-400 max-w-lg">Built on a foundation of precision and performance, ChatSQL gives you the stability to scale.</p>
           <button className="mt-8 px-6 py-2 rounded-full border border-white/20 text-white text-sm hover:bg-white/5 transition-colors">Explore Docs</button>
         </div>
       </div>
@@ -284,7 +284,7 @@ const FeatureSpotlight = () => (
               Faster Workflows
             </div>
             <h3 className="text-3xl font-bold text-white mb-4">Efficiency Built Into <br /> Every Step You Take</h3>
-            <p className="text-gray-400 mb-8">From shortcuts to smart workflows, Hexora keeps your focus on building, not struggling with complexity.</p>
+            <p className="text-gray-400 mb-8">From shortcuts to smart workflows, ChatSQL keeps your focus on building, not struggling with complexity.</p>
             <button className="px-6 py-2 rounded-full border border-white/20 text-white text-sm hover:bg-white/5 transition-colors">Explore Docs</button>
           </div>
         </div>
@@ -308,7 +308,7 @@ const BentoGrid = () => (
             <Database className="text-gray-600" />
           </div>
           <h3 className="text-lg font-bold text-white mb-2">Connect With Your Favorite Tools</h3>
-          <p className="text-sm text-gray-400">Hexora integrates with GitHub, AWS, MongoDB, and more.</p>
+          <p className="text-sm text-gray-400">ChatSQL integrates with GitHub, AWS, MongoDB, and more.</p>
         </div>
 
         {/* Card 2 */}
@@ -335,7 +335,7 @@ const BentoGrid = () => (
             <span className="font-mono text-gray-600">SELECT * FROM users WHERE...</span>
           </div>
           <h3 className="text-lg font-bold text-white mb-2">Code-First Schema Design</h3>
-          <p className="text-sm text-gray-400">Write, edit, and execute database schemas directly in Hexora.</p>
+          <p className="text-sm text-gray-400">Write, edit, and execute database schemas directly in ChatSQL.</p>
         </div>
 
         {/* Card 5 */}
@@ -381,7 +381,7 @@ const Pricing = () => (
     <div className="max-w-7xl mx-auto">
       <div className="text-center mb-20">
         <h2 className="text-4xl font-bold text-white mb-6">Flexible Pricing That <br /> Scales With Growth</h2>
-        <p className="text-gray-400">From startups to enterprises, Hexora offers pricing built to match your journey.</p>
+        <p className="text-gray-400">From startups to enterprises, ChatSQL offers pricing built to match your journey.</p>
       </div>
 
       <div className="grid md:grid-cols-3 gap-8">
@@ -451,7 +451,7 @@ const FAQ = () => (
     <div className="max-w-3xl mx-auto">
       <h2 className="text-4xl font-bold text-white mb-12 text-center">Frequently Asked <br /> Questions</h2>
       <div className="space-y-4">
-        {['What is Hexora and how does it work?', 'Can I use Hexora for free before upgrading?', 'Which databases are supported?', 'How does collaboration work?'].map((q) => (
+        {['What is ChatSQL and how does it work?', 'Can I use ChatSQL for free before upgrading?', 'Which databases are supported?', 'How does collaboration work?'].map((q) => (
           <div key={q} className="border-b border-white/10 py-4">
             <button className="flex items-center justify-between w-full text-left text-white hover:text-gray-300">
               <span className="font-medium">{q}</span>
@@ -470,7 +470,7 @@ const Footer = () => (
       <div className="col-span-2">
         <div className="flex items-center gap-2 mb-6">
           <div className="w-6 h-6 bg-white rounded-md" />
-          <span className="text-lg font-bold text-white">Hexora</span>
+          <span className="text-lg font-bold text-white">ChatSQL</span>
         </div>
         <div className="flex gap-4 text-gray-400">
           {/* Social Icons */}
@@ -508,13 +508,13 @@ const Footer = () => (
       </div>
     </div>
     <div className="max-w-7xl mx-auto mt-20 pt-8 border-t border-white/10 flex justify-between text-xs text-gray-600">
-      <span>© 2025 Hexora Inc. All rights reserved.</span>
+      <span>© 2025 ChatSQL Inc. All rights reserved.</span>
       <span>Made with love</span>
     </div>
   </footer>
 );
 
-export default function HexoraLanding() {
+export default function ChatSQLLanding() {
   return (
     <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#6366f1]/30">
       <Navbar />

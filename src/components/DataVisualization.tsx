@@ -89,15 +89,18 @@ export default function DataVisualization({ data }: DataVisualizationProps) {
 					return Number(String(value).replace(/[,$]/g, '')) || 0;
 				}),
 				backgroundColor: [
-					'rgba(255, 99, 132, 0.5)',
-					'rgba(54, 162, 235, 0.5)',
-					'rgba(255, 206, 86, 0.5)',
-					'rgba(75, 192, 192, 0.5)',
-					'rgba(153, 102, 255, 0.5)',
+					'rgba(59, 130, 246, 0.5)', // Blue
+					'rgba(16, 185, 129, 0.5)', // Green
+					'rgba(245, 158, 11, 0.5)', // Amber
+					'rgba(139, 92, 246, 0.5)', // Purple
+					'rgba(236, 72, 153, 0.5)', // Pink
 				][index % 5],
 				borderColor: [
-					'rgba(255, 99, 132, 1)',
-					'rgba(54, 162, 235, 1)',
+					'rgba(59, 130, 246, 1)',
+					'rgba(16, 185, 129, 1)',
+					'rgba(245, 158, 11, 1)',
+					'rgba(139, 92, 246, 1)',
+					'rgba(236, 72, 153, 1)',
 					'rgba(255, 206, 86, 1)',
 					'rgba(75, 192, 192, 1)',
 					'rgba(153, 102, 255, 1)',
