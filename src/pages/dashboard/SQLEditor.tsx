@@ -4,6 +4,7 @@ import { Play, Sparkles, Save, Download, BarChart3, Table as TableIcon, ChevronR
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Parser } from 'node-sql-parser';
 import Editor from 'react-simple-code-editor';
 import Prism from '@/lib/prism-setup';
@@ -59,6 +60,7 @@ ORDER BY month DESC, revenue DESC
 LIMIT 100;`);
   const [aiPrompt, setAiPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isAiOpen, setIsAiOpen] = useState(false);
   const [, setActiveTab] = useState('table');
   const [error, setError] = useState<string | null>(null);
 
@@ -232,6 +234,7 @@ LIMIT 100;`);
     setTimeout(() => {
       setQuery(`-- Generated from: "${aiPrompt}"\nSELECT * FROM orders WHERE status = 'pending' AND created_at > NOW() - INTERVAL '7 days';`);
       setIsGenerating(false);
+      setIsAiOpen(false);
     }, 1500);
   };
 
@@ -271,29 +274,62 @@ LIMIT 100;`);
         </div>
 
         {/* AI Input Section */}
-        <div className="flex-1 max-w-2xl mx-6">
-          <div className="relative group">
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-lg opacity-30 group-hover:opacity-100 transition duration-500 blur"></div>
-            <div className="relative flex items-center bg-[#0f172a] rounded-lg p-1">
-              <Sparkles className="w-5 h-5 text-purple-400 ml-3 animate-pulse" />
-              <input
-                type="text"
-                placeholder="Ask AI to generate SQL (e.g., 'Show me top selling products')"
-                className="flex-1 bg-transparent border-none outline-none text-sm text-white px-3 py-2 placeholder:text-gray-500"
-                value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleGenerateSQL()}
-              />
-              <Button
-                size="sm"
-                onClick={handleGenerateSQL}
-                disabled={isGenerating}
-                className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:opacity-90 text-white border-none shadow-lg"
-              >
-                {isGenerating ? 'Generating...' : 'Generate SQL'}
+        <div className="flex-1 max-w-2xl mx-6 flex justify-center">
+          <Dialog open={isAiOpen} onOpenChange={setIsAiOpen}>
+            <DialogTrigger asChild>
+              <Button variant="ghost" className="relative group bg-[#0f172a] hover:bg-[#1e293b] border border-purple-500/30 text-gray-300 hover:text-white w-full max-w-md justify-start px-4 py-6 overflow-hidden">
+                <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-lg opacity-20 group-hover:opacity-50 transition duration-500 blur"></div>
+                <div className="relative flex items-center gap-3">
+                  <Sparkles className="w-5 h-5 text-purple-400 animate-pulse" />
+                  <span className="text-sm">Ask AI to generate SQL...</span>
+                </div>
               </Button>
-            </div>
-          </div>
+            </DialogTrigger>
+            <DialogContent className="bg-[#1e293b] border-white/10 text-white sm:max-w-[600px]">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-xl">
+                  <Sparkles className="w-5 h-5 text-purple-400" />
+                  Generate SQL with AI
+                </DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="relative">
+                  <textarea
+                    placeholder="Describe your query in plain English (e.g., 'Show me top selling products from last month')"
+                    className="w-full h-32 bg-[#0f172a] border border-white/10 rounded-lg p-4 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 resize-none font-mono"
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleGenerateSQL();
+                      }
+                    }}
+                  />
+                </div>
+                <div className="flex justify-end gap-3">
+                  <Button variant="ghost" onClick={() => setIsAiOpen(false)} className="text-gray-400 hover:text-white hover:bg-white/5">Cancel</Button>
+                  <Button
+                    onClick={handleGenerateSQL}
+                    disabled={isGenerating || !aiPrompt.trim()}
+                    className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white border-none hover:opacity-90"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <Sparkles className="w-4 h-4 mr-2 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        Generate Query
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
 
         <div className="flex items-center gap-2">
