@@ -372,8 +372,8 @@ LIMIT 100;`);
               </div>
 
               <div className="flex-1 overflow-hidden p-0">
-                <TabsContent value="table" className="h-full m-0 border-none data-[state=active]:flex flex-col">
-                  <div className="flex-1 overflow-auto [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-[#1B2431] [&::-webkit-scrollbar-thumb]:bg-[#273142] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#374151] transition-colors">
+                <TabsContent value="table" className="h-full m-0 border-none data-[state=active]:flex flex-col overflow-auto [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-[#1B2431] [&::-webkit-scrollbar-thumb]:bg-[#273142] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#374151] transition-colors">
+                  <div className="flex-1 min-w-full">
                     <Table>
                       <TableHeader className="bg-[#273142] sticky top-0 z-10">
                         <TableRow className="border-b border-white/5 hover:bg-[#273142]">
@@ -413,29 +413,34 @@ LIMIT 100;`);
                   </div>
                 </TabsContent>
 
-                <TabsContent value="chart" className="h-full m-0 p-6 overflow-y-auto [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-[#1B2431] [&::-webkit-scrollbar-thumb]:bg-[#273142] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#374151] transition-colors">
-                  <div className="grid grid-cols-2 gap-6 h-full min-h-[500px]">
-                    {/* Main Chart - Revenue Trend */}
-                    <div className="col-span-2 bg-[#273142] rounded-xl p-4 border border-white/5 shadow-inner h-[300px]">
-                      <h4 className="text-sm font-medium text-gray-400 mb-4">Revenue Trends (6 Months)</h4>
-                      <div className="h-[calc(100%-2rem)]">
-                        <Line data={lineChartData} options={commonOptions} />
+                <TabsContent value="chart" className="h-full m-0 p-0 border-none data-[state=active]:flex flex-col">
+                  <div className="h-full w-full overflow-y-auto p-6 [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-[#1B2431] [&::-webkit-scrollbar-thumb]:bg-[#273142] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#374151] transition-colors">
+                    <div className="flex flex-col gap-6 min-h-[800px] pb-6">
+                      {/* Main Chart - Revenue Trend */}
+                      <div className="flex-[3] min-h-[350px] bg-[#273142] rounded-xl p-4 border border-white/5 shadow-inner w-full flex flex-col">
+                        <h4 className="text-sm font-medium text-gray-400 mb-4 shrink-0">Revenue Trends (6 Months)</h4>
+                        <div className="flex-1 min-h-0 w-full">
+                          <Line data={lineChartData} options={commonOptions} />
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Secondary Chart - Distribution */}
-                    <div className="bg-[#273142] rounded-xl p-4 border border-white/5 shadow-inner h-[250px]">
-                      <h4 className="text-sm font-medium text-gray-400 mb-4">Revenue Share by Category</h4>
-                      <div className="h-[calc(100%-2rem)]">
-                        <Doughnut data={doughnutChartData} options={doughnutOptions} />
-                      </div>
-                    </div>
+                      {/* Secondary Charts Row */}
+                      <div className="flex-[2] min-h-[300px] grid grid-cols-2 gap-6 w-full">
+                        {/* Distribution */}
+                        <div className="bg-[#273142] rounded-xl p-4 border border-white/5 shadow-inner h-full flex flex-col">
+                          <h4 className="text-sm font-medium text-gray-400 mb-4 shrink-0">Revenue Share by Category</h4>
+                          <div className="flex-1 min-h-0 w-full relative">
+                            <Doughnut data={doughnutChartData} options={doughnutOptions} />
+                          </div>
+                        </div>
 
-                    {/* Tertiary Chart - Growth */}
-                    <div className="bg-[#273142] rounded-xl p-4 border border-white/5 shadow-inner h-[250px]">
-                      <h4 className="text-sm font-medium text-gray-400 mb-4">MoM Growth Rate</h4>
-                      <div className="h-[calc(100%-2rem)]">
-                        <Bar data={barChartData} options={commonOptions} />
+                        {/* Growth */}
+                        <div className="bg-[#273142] rounded-xl p-4 border border-white/5 shadow-inner h-full flex flex-col">
+                          <h4 className="text-sm font-medium text-gray-400 mb-4 shrink-0">MoM Growth Rate</h4>
+                          <div className="flex-1 min-h-0 w-full">
+                            <Bar data={barChartData} options={commonOptions} />
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
