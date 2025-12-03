@@ -1,10 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Play, Sparkles, Save, Download, BarChart3, Table as TableIcon, ChevronRight, ChevronLeft, AlertCircle } from 'lucide-react';
+import { Play, Sparkles, Save, Download, BarChart3, Table as TableIcon, ChevronRight, ChevronLeft, AlertCircle, ArrowUpDown, Filter, MoreHorizontal, ChevronDown } from 'lucide-react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Parser } from 'node-sql-parser';
 import Editor from 'react-simple-code-editor';
 import Prism from '@/lib/prism-setup';
@@ -87,15 +103,65 @@ LIMIT 100;`);
     validateSQL(newQuery);
   };
 
-  // Mock Result Data
-  const results = [
-    { id: 1, month: '2024-03-01', category: 'Electronics', revenue: 125000, total_orders: 450, growth_rate: 12.5 },
-    { id: 2, month: '2024-03-01', category: 'Fashion', revenue: 98000, total_orders: 820, growth_rate: 8.2 },
-    { id: 3, month: '2024-03-01', category: 'Home', revenue: 85000, total_orders: 320, growth_rate: -2.4 },
-    { id: 4, month: '2024-02-01', category: 'Electronics', revenue: 111000, total_orders: 410, growth_rate: 5.1 },
-    { id: 5, month: '2024-02-01', category: 'Fashion', revenue: 90500, total_orders: 780, growth_rate: 3.8 },
-    { id: 6, month: '2024-02-01', category: 'Home', revenue: 87100, total_orders: 340, growth_rate: 1.2 },
-  ];
+  // Enhanced Mock Data Generation
+  const generateMockData = (count: number) => {
+    return Array.from({ length: count }).map((_, i) => ({
+      id: i + 1,
+      month: '2024-03-01',
+      category: ['Electronics', 'Fashion', 'Home', 'Sports', 'Books'][Math.floor(Math.random() * 5)],
+      revenue: Math.floor(Math.random() * 100000) + 10000,
+      total_orders: Math.floor(Math.random() * 1000) + 50,
+      growth_rate: Number((Math.random() * 20 - 5).toFixed(1))
+    }));
+  };
+
+  const [results] = useState(generateMockData(55));
+  const [sortConfig, setSortConfig] = useState<{ key: string | null; direction: 'asc' | 'desc' }>({ key: null, direction: 'asc' });
+  const [filters, setFilters] = useState<{ [key: string]: string }>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const handleFilter = (key: string, value: string) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+    setCurrentPage(1);
+  };
+
+  const processedResults = useMemo(() => {
+    let data = [...results];
+
+    // Filtering
+    Object.keys(filters).forEach(key => {
+      if (filters[key]) {
+        data = data.filter(item =>
+          String(item[key as keyof typeof item]).toLowerCase().includes(filters[key].toLowerCase())
+        );
+      }
+    });
+
+    // Sorting
+    if (sortConfig.key) {
+      data.sort((a, b) => {
+        const aValue = a[sortConfig.key as keyof typeof a];
+        const bValue = b[sortConfig.key as keyof typeof b];
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return data;
+  }, [results, filters, sortConfig]);
+
+  const totalPages = Math.ceil(processedResults.length / itemsPerPage);
+  const paginatedData = processedResults.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   // Chart 1: Revenue Trends (Line)
   const lineChartData = {
@@ -407,49 +473,118 @@ LIMIT 100;`);
                 </TabsList>
               </div>
 
-              <div className="flex-1 overflow-hidden p-0">
-                <TabsContent value="table" className="h-full m-0 border-none data-[state=active]:flex flex-col overflow-auto [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-[#1B2431] [&::-webkit-scrollbar-thumb]:bg-[#273142] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#374151] transition-colors">
-                  <div className="flex-1 min-w-full">
-                    <Table>
-                      <TableHeader className="bg-[#273142] sticky top-0 z-10">
+              <div className="flex-1 overflow-hidden p-0 relative">
+                <TabsContent value="table" className="h-full w-full m-0 border-none data-[state=active]:flex flex-col overflow-hidden absolute inset-0">
+                  <div className="flex-1 overflow-auto w-full [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-[#1B2431] [&::-webkit-scrollbar-thumb]:bg-[#273142] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#374151] transition-colors">
+                    <table className="w-full caption-bottom text-sm text-left border-collapse min-w-[800px]">
+                      <TableHeader className="bg-[#273142] sticky top-0 z-10 shadow-sm">
                         <TableRow className="border-b border-white/5 hover:bg-[#273142]">
-                          <TableHead className="text-gray-400 font-medium h-10">Month</TableHead>
-                          <TableHead className="text-gray-400 font-medium h-10">Category</TableHead>
-                          <TableHead className="text-gray-400 font-medium h-10 text-right">Revenue</TableHead>
-                          <TableHead className="text-gray-400 font-medium h-10 text-right">Orders</TableHead>
-                          <TableHead className="text-gray-400 font-medium h-10 text-right">Growth</TableHead>
+                          {['Month', 'Category', 'Revenue', 'Orders', 'Growth'].map((header, index) => {
+                            const key = header.toLowerCase().replace(' ', '_');
+                            const mapKey = header === 'Orders' ? 'total_orders' : header === 'Growth' ? 'growth_rate' : key;
+
+                            return (
+                              <TableHead key={header} className={`h-10 font-medium text-gray-400 ${index > 1 ? 'text-right' : ''}`}>
+                                <div className={`flex items-center gap-2 ${index > 1 ? 'justify-end' : 'justify-between'}`}>
+                                  <span>{header}</span>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-white/10 data-[state=open]:bg-white/10">
+                                        {sortConfig.key === mapKey ? (
+                                          <ArrowUpDown className={`h-3 w-3 ${sortConfig.direction === 'asc' ? 'text-blue-400' : 'text-green-400'}`} />
+                                        ) : (
+                                          <MoreHorizontal className="h-3 w-3" />
+                                        )}
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-48 bg-[#1e293b] border-white/10 text-gray-200">
+                                      <DropdownMenuLabel>Options</DropdownMenuLabel>
+                                      <DropdownMenuSeparator className="bg-white/10" />
+                                      <DropdownMenuItem onClick={() => handleSort(mapKey)} className="focus:bg-white/10 focus:text-white cursor-pointer">
+                                        <ArrowUpDown className="mr-2 h-3.5 w-3.5 text-gray-400" />
+                                        Sort {sortConfig.key === mapKey && sortConfig.direction === 'asc' ? 'Desc' : 'Asc'}
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator className="bg-white/10" />
+                                      <div className="p-2">
+                                        <Input
+                                          placeholder="Filter..."
+                                          className="h-8 bg-[#0f172a] border-white/10 text-xs"
+                                          value={filters[mapKey] || ''}
+                                          onChange={(e) => handleFilter(mapKey, e.target.value)}
+                                        />
+                                      </div>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+                              </TableHead>
+                            );
+                          })}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {results.map((row) => (
-                          <TableRow key={row.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                            <TableCell className="text-gray-300 font-mono text-xs">{row.month}</TableCell>
-                            <TableCell className="text-white font-medium">{row.category}</TableCell>
-                            <TableCell className="text-gray-300 text-right font-mono">${row.revenue.toLocaleString()}</TableCell>
-                            <TableCell className="text-gray-300 text-right font-mono">{row.total_orders}</TableCell>
+                        {paginatedData.map((row) => (
+                          <TableRow key={row.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
+                            <TableCell className="text-gray-300 font-mono text-xs border-r border-white/5">{row.month}</TableCell>
+                            <TableCell className="text-white font-medium border-r border-white/5">{row.category}</TableCell>
+                            <TableCell className="text-gray-300 text-right font-mono border-r border-white/5">${row.revenue.toLocaleString()}</TableCell>
+                            <TableCell className="text-gray-300 text-right font-mono border-r border-white/5">{row.total_orders}</TableCell>
                             <TableCell className={`text-right font-mono ${row.growth_rate >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                               {row.growth_rate > 0 ? '+' : ''}{row.growth_rate}%
                             </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
-                    </Table>
+                    </table>
                   </div>
-                  {/* Table Footer / Pagination */}
-                  <div className="h-12 border-t border-white/5 bg-[#273142] flex items-center justify-between px-4">
-                    <div className="text-xs text-gray-500">Showing 1-6 of 6 results</div>
+
+                  {/* Pagination Footer */}
+                  <div className="h-14 shrink-0 border-t border-white/5 bg-[#273142] flex items-center justify-between px-4 z-20">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400">Rows per page</span>
+                        <Select value={String(itemsPerPage)} onValueChange={(v) => setItemsPerPage(Number(v))}>
+                          <SelectTrigger className="h-8 w-[70px] bg-[#1B2431] border-white/10 text-xs">
+                            <SelectValue placeholder={itemsPerPage} />
+                          </SelectTrigger>
+                          <SelectContent className="bg-[#1B2431] border-white/10 text-gray-200">
+                            {[10, 20, 50, 100].map(pageSize => (
+                              <SelectItem key={pageSize} value={String(pageSize)} className="focus:bg-white/10 focus:text-white">{pageSize}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Showing {(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, processedResults.length)} of {processedResults.length} results
+                      </div>
+                    </div>
+
                     <div className="flex items-center gap-2">
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-gray-400 hover:text-white disabled:opacity-50" disabled>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-gray-400 hover:text-white disabled:opacity-50"
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      >
                         <ChevronLeft className="w-4 h-4" />
                       </Button>
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-gray-400 hover:text-white disabled:opacity-50" disabled>
+                      <div className="text-xs text-gray-400 font-medium">
+                        Page {currentPage} of {totalPages}
+                      </div>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-gray-400 hover:text-white disabled:opacity-50"
+                        disabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      >
                         <ChevronRight className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>
                 </TabsContent>
 
-                <TabsContent value="chart" className="h-full m-0 p-0 border-none data-[state=active]:flex flex-col">
+                <TabsContent value="chart" className="h-full w-full m-0 p-0 border-none data-[state=active]:flex flex-col absolute inset-0">
                   <div className="h-full w-full overflow-y-auto p-6 [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-[#1B2431] [&::-webkit-scrollbar-thumb]:bg-[#273142] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#374151] transition-colors">
                     <div className="flex flex-col gap-6 min-h-[800px] pb-6">
                       {/* Main Chart - Revenue Trend */}
