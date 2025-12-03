@@ -25,7 +25,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { ArrowUpDown, ChevronLeft, ChevronRight, MoreHorizontal, Save, X, Edit2 } from 'lucide-react';
+import { ArrowUpDown, ChevronLeft, ChevronRight, MoreHorizontal, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 export interface ColumnDef<T = any> {
@@ -113,7 +113,7 @@ export default function DataTable<T extends Record<string, any>>({
       await onSave(data);
     }
     setEditedRows({});
-    setIsEditing(false);
+    setEditingCell(null);
     setIsSaveDialogOpen(false);
     toast.success('Changes saved successfully');
   };
@@ -121,7 +121,7 @@ export default function DataTable<T extends Record<string, any>>({
   const handleCancelEdit = () => {
     setData(initialData);
     setEditedRows({});
-    setIsEditing(false);
+    setEditingCell(null);
   };
 
   const processedData = useMemo(() => {
@@ -161,28 +161,15 @@ export default function DataTable<T extends Record<string, any>>({
   return (
     <div className={`flex flex-col h-full w-full overflow-hidden ${className}`}>
       {/* Toolbar */}
-      <div className="flex items-center justify-between p-2 bg-[#273142] border-b border-white/5">
+      <div className="flex items-center justify-between p-2 bg-[#273142] border-b border-white/5 shrink-0">
         <div className="flex items-center gap-2">
-          {/* Left side toolbar items if any */}
-        </div>
-        <div className="flex items-center gap-2">
-          {isEditing ? (
+          {hasChanges && (
             <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCancelEdit}
-                className="text-gray-400 hover:text-white"
-              >
-                <X className="w-4 h-4 mr-2" />
-                Cancel
-              </Button>
               <Dialog open={isSaveDialogOpen} onOpenChange={setIsSaveDialogOpen}>
                 <DialogTrigger asChild>
                   <Button
                     size="sm"
                     className="bg-green-600 hover:bg-green-700 text-white"
-                    disabled={!hasChanges}
                   >
                     <Save className="w-4 h-4 mr-2" />
                     Save Changes
@@ -201,22 +188,22 @@ export default function DataTable<T extends Record<string, any>>({
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCancelEdit}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="w-4 h-4 mr-2" />
+                Cancel
+              </Button>
             </>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsEditing(true)}
-              className="border-white/10 bg-white/5 hover:bg-white/10 text-gray-200"
-            >
-              <Edit2 className="w-4 h-4 mr-2" />
-              Edit Mode
-            </Button>
           )}
         </div>
-      </div>
-
-      <div className="flex-1 overflow-auto w-full [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-[#1B2431] [&::-webkit-scrollbar-thumb]:bg-[#273142] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#374151] transition-colors">
+        <div className="flex items-center gap-2">
+          {/* Right side toolbar items if any */}
+        </div>
+      </div>      <div className="flex-1 overflow-auto w-full [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-[#1B2431] [&::-webkit-scrollbar-thumb]:bg-[#273142] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#374151] transition-colors">
         <table className="w-full caption-bottom text-sm text-left border-collapse min-w-[800px]">
           <thead className="bg-[#273142] sticky top-0 z-10 shadow-sm">
             <tr className="border-b border-white/5 hover:bg-[#273142]">
@@ -270,19 +257,37 @@ export default function DataTable<T extends Record<string, any>>({
               const actualIndex = (currentPage - 1) * itemsPerPage + rowIndex;
               return (
                 <tr key={rowIndex} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                  {columns.map((col) => (
-                    <td key={`${rowIndex}-${col.key}`} className={`px-4 py-2 border-r border-white/5 last:border-r-0 ${col.className || ''}`}>
-                      {isEditing && col.editable !== false ? (
-                        <Input
-                          value={row[col.key] || ''}
-                          onChange={(e) => handleCellChange(actualIndex, col.key, e.target.value)}
-                          className="h-8 bg-[#0f172a] border-white/10 text-xs focus-visible:ring-1 focus-visible:ring-blue-500"
-                        />
-                      ) : (
-                        col.cell ? col.cell(row) : row[col.key]
-                      )}
-                    </td>
-                  ))}
+                  {columns.map((col) => {
+                    const isCellEditing = editingCell?.rowIndex === actualIndex && editingCell?.key === col.key;
+                    return (
+                      <td
+                        key={`${rowIndex}-${col.key}`}
+                        className={`px-4 py-2 border-r border-white/5 last:border-r-0 ${col.className || ''}`}
+                        onDoubleClick={() => {
+                          if (col.editable !== false) {
+                            setEditingCell({ rowIndex: actualIndex, key: col.key });
+                          }
+                        }}
+                      >
+                        {isCellEditing ? (
+                          <Input
+                            autoFocus
+                            value={row[col.key] || ''}
+                            onChange={(e) => handleCellChange(actualIndex, col.key, e.target.value)}
+                            onBlur={() => setEditingCell(null)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                setEditingCell(null);
+                              }
+                            }}
+                            className="h-8 bg-[#0f172a] border-white/10 text-xs focus-visible:ring-1 focus-visible:ring-blue-500"
+                          />
+                        ) : (
+                          col.cell ? col.cell(row) : row[col.key]
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
               );
             })}
