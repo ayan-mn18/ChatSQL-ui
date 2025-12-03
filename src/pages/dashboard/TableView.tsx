@@ -1,81 +1,119 @@
 import { useParams } from 'react-router-dom';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Plus, Trash2, ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ChevronRight } from 'lucide-react';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import DataTable, { ColumnDef } from '@/components/DataTable';
+import { mockDatabase } from '@/lib/mockData';
 
 export default function TableView() {
-  const { tableName } = useParams();
+  const { tableName } = useParams<{ tableName: string }>();
 
-  // Mock Data matching the "Deals Details" reference style
-  const columns = ['Product Name', 'Location', 'Date - Time', 'Piece', 'Amount', 'Status'];
-  const data = [
-    { id: 1, name: 'Apple Watch', image: 'https://github.com/shadcn.png', location: '6096 Marjolaine Landing', date: '12.09.2019 - 12.53 PM', piece: 423, amount: '$34,295', status: 'Delivered' },
-    { id: 2, name: 'AirPods Pro', image: 'https://github.com/shadcn.png', location: '4234 Kaley Road', date: '13.09.2019 - 10.20 AM', piece: 120, amount: '$24,500', status: 'Pending' },
-    { id: 3, name: 'MacBook Pro', image: 'https://github.com/shadcn.png', location: '1234 Broadway Ave', date: '14.09.2019 - 09.00 AM', piece: 50, amount: '$120,000', status: 'Delivered' },
-    { id: 4, name: 'iPhone 13', image: 'https://github.com/shadcn.png', location: '5678 Market St', date: '15.09.2019 - 02.30 PM', piece: 200, amount: '$180,000', status: 'Cancelled' },
-    { id: 5, name: 'iPad Air', image: 'https://github.com/shadcn.png', location: '9012 Sunset Blvd', date: '16.09.2019 - 04.15 PM', piece: 80, amount: '$45,000', status: 'Delivered' },
-  ];
+  // Normalize tableName to match mockDatabase keys (e.g., "users", "products")
+  // If tableName is undefined, default to 'users' or handle error
+  const dbKey = (tableName?.toLowerCase() || 'users') as keyof typeof mockDatabase;
+  const data = mockDatabase[dbKey] || [];
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Delivered': return 'bg-green-500/20 text-green-500 hover:bg-green-500/30';
-      case 'Pending': return 'bg-orange-500/20 text-orange-500 hover:bg-orange-500/30';
-      case 'Cancelled': return 'bg-red-500/20 text-red-500 hover:bg-red-500/30';
+      case 'delivered': return 'bg-green-500/20 text-green-500 hover:bg-green-500/30';
+      case 'shipped': return 'bg-blue-500/20 text-blue-500 hover:bg-blue-500/30';
+      case 'pending': return 'bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30';
+      case 'processing': return 'bg-purple-500/20 text-purple-500 hover:bg-purple-500/30';
+      case 'cancelled': return 'bg-red-500/20 text-red-500 hover:bg-red-500/30';
       default: return 'bg-gray-500/20 text-gray-500';
     }
   };
 
+  // Dynamic column definitions based on table name
+  const getColumns = (): ColumnDef<any>[] => {
+    switch (dbKey) {
+      case 'users':
+        return [
+          {
+            key: 'first_name',
+            header: 'User',
+            cell: (row) => (
+              <div className="flex items-center gap-3">
+                <Avatar className="h-8 w-8 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                  <AvatarFallback>{row.first_name[0]}{row.last_name[0]}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <div className="text-white font-medium">{row.first_name} {row.last_name}</div>
+                  <div className="text-xs text-gray-500">{row.email}</div>
+                </div>
+              </div>
+            )
+          },
+          { key: 'role', header: 'Role', cell: (row) => <Badge variant="outline" className="capitalize border-white/10 text-gray-400">{row.role}</Badge> },
+          { key: 'job_title', header: 'Job Title', className: 'text-gray-300' },
+          { key: 'department', header: 'Department', className: 'text-gray-300' },
+          { key: 'company', header: 'Company', className: 'text-gray-300' },
+          { key: 'phone', header: 'Phone', className: 'text-gray-400' },
+          { key: 'country', header: 'Country', className: 'text-gray-300' },
+          { key: 'city', header: 'City', className: 'text-gray-400' },
+          { key: 'status', header: 'Status', cell: (row) => <Badge variant="outline" className={`capitalize border-white/10 ${row.status === 'active' ? 'text-green-400 bg-green-400/10' : 'text-gray-400'}`}>{row.status}</Badge> },
+          { key: 'created_at', header: 'Joined', cell: (row) => new Date(row.created_at).toLocaleDateString(), className: 'text-gray-400' },
+          { key: 'last_login', header: 'Last Login', cell: (row) => new Date(row.last_login).toLocaleDateString(), className: 'text-gray-400' },
+        ];
+      case 'products':
+        return [
+          { key: 'name', header: 'Product Name', className: 'text-white font-medium' },
+          { key: 'price', header: 'Price', cell: (row) => `$${row.price}`, className: 'text-right font-mono text-gray-300' },
+          { key: 'stock_quantity', header: 'Stock', className: 'text-right font-mono text-gray-300' },
+          { key: 'created_at', header: 'Added', cell: (row) => new Date(row.created_at).toLocaleDateString(), className: 'text-gray-400' },
+        ];
+      case 'orders':
+        return [
+          { key: 'id', header: 'Order ID', className: 'font-mono text-xs text-gray-400' },
+          {
+            key: 'status',
+            header: 'Status',
+            cell: (row) => (
+              <Badge className={`rounded-full px-3 py-0.5 border-none capitalize ${getStatusColor(row.status)}`}>
+                {row.status}
+              </Badge>
+            )
+          },
+          { key: 'total_amount', header: 'Total', cell: (row) => `$${row.total_amount}`, className: 'text-right font-mono text-white font-medium' },
+          { key: 'shipping_address', header: 'Address', className: 'text-gray-400 truncate max-w-[200px]' },
+          { key: 'created_at', header: 'Date', cell: (row) => new Date(row.created_at).toLocaleDateString(), className: 'text-gray-400' },
+        ];
+      default:
+        // Fallback to auto-generated columns from DataTable
+        return [];
+    }
+  };
+
+  const columns = getColumns();
+  const title = dbKey.charAt(0).toUpperCase() + dbKey.slice(1);
+
+  const handleSave = async (updatedData: any[]) => {
+    // Update the mock database in memory
+    (mockDatabase as any)[dbKey] = updatedData;
+  };
+
   return (
     <div className="p-8 h-full flex flex-col space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-1">Deals Details</h1>
-          <p className="text-gray-400 text-sm">Manage your product deals and status.</p>
+          <h1 className="text-2xl font-bold text-white mb-1">{title}</h1>
+          <p className="text-gray-400 text-sm">Manage your {dbKey} data.</p>
         </div>
         <div className="flex gap-3">
           <Button variant="outline" className="border-none bg-[#273142] text-white hover:bg-[#323d52]">
-            <span className="mr-2">October</span>
+            <span className="mr-2">Filter</span>
             <ChevronRight className="w-4 h-4 rotate-90" />
           </Button>
         </div>
       </div>
 
-      <div className="border-none rounded-xl overflow-hidden bg-[#273142] shadow-lg">
-        <Table>
-          <TableHeader className="bg-[#323d52]">
-            <TableRow className="border-none hover:bg-[#323d52]">
-              {columns.map(col => (
-                <TableHead key={col} className="text-gray-300 font-medium py-4">{col}</TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.map((row) => (
-              <TableRow key={row.id} className="border-b border-gray-700/50 hover:bg-[#323d52]/50">
-                <TableCell className="py-4">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-10 w-10 rounded-xl">
-                      <AvatarImage src={row.image} />
-                      <AvatarFallback>PD</AvatarFallback>
-                    </Avatar>
-                    <span className="text-white font-medium">{row.name}</span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-gray-400">{row.location}</TableCell>
-                <TableCell className="text-gray-400">{row.date}</TableCell>
-                <TableCell className="text-gray-400">{row.piece}</TableCell>
-                <TableCell className="text-white font-medium">{row.amount}</TableCell>
-                <TableCell>
-                  <Badge className={`rounded-full px-4 py-1 border-none ${getStatusColor(row.status)}`}>
-                    {row.status}
-                  </Badge>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+      <div className="flex-1 border-none rounded-xl overflow-hidden bg-[#273142] shadow-lg min-h-0">
+        <DataTable
+          data={data}
+          columns={columns.length > 0 ? columns : undefined}
+          onSave={handleSave}
+        />
       </div>
     </div>
   );

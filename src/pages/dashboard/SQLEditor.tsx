@@ -2,30 +2,14 @@ import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Play, Sparkles, Save, Download, BarChart3, Table as TableIcon, ChevronRight, ChevronLeft, AlertCircle, ArrowUpDown, Filter, MoreHorizontal, ChevronDown } from 'lucide-react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
-import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import DataTable, { ColumnDef } from '@/components/DataTable';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Parser } from 'node-sql-parser';
 import Editor from 'react-simple-code-editor';
 import Prism from '@/lib/prism-setup';
 import 'prismjs/components/prism-sql';
-import 'prismjs/themes/prism-tomorrow.css'; // Dark theme
+import 'prismjs/themes/prism-tomorrow.css';
 
 import {
   Chart as ChartJS,
@@ -53,26 +37,18 @@ ChartJS.register(
   ArcElement
 );
 
+import { mockDatabase } from '@/lib/mockData';
+
 export default function SQLEditor() {
-  const [query, setQuery] = useState(`WITH monthly_stats AS (
-  SELECT 
-    DATE_TRUNC('month', created_at) as month,
-    p.category,
-    COUNT(o.id) as total_orders,
-    SUM(o.amount) as revenue
-  FROM orders o
-  JOIN products p ON o.product_id = p.id
-  WHERE o.status = 'completed'
-  GROUP BY 1, 2
-)
-SELECT 
-  month,
-  category,
-  revenue,
-  total_orders,
-  ROUND((revenue / NULLIF(LAG(revenue) OVER (PARTITION BY category ORDER BY month), 0) - 1) * 100, 1) as growth_rate
-FROM monthly_stats
-ORDER BY month DESC, revenue DESC
+  const [query, setQuery] = useState(`SELECT 
+  o.id,
+  u.first_name || ' ' || u.last_name as customer,
+  o.status,
+  o.total_amount,
+  o.created_at
+FROM orders o
+JOIN users u ON o.user_id = u.id
+ORDER BY o.created_at DESC
 LIMIT 100;`);
   const [aiPrompt, setAiPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -103,65 +79,45 @@ LIMIT 100;`);
     validateSQL(newQuery);
   };
 
-  // Enhanced Mock Data Generation
-  const generateMockData = (count: number) => {
-    return Array.from({ length: count }).map((_, i) => ({
-      id: i + 1,
-      month: '2024-03-01',
-      category: ['Electronics', 'Fashion', 'Home', 'Sports', 'Books'][Math.floor(Math.random() * 5)],
-      revenue: Math.floor(Math.random() * 100000) + 10000,
-      total_orders: Math.floor(Math.random() * 1000) + 50,
-      growth_rate: Number((Math.random() * 20 - 5).toFixed(1))
-    }));
-  };
-
-  const [results] = useState(generateMockData(55));
-  const [sortConfig, setSortConfig] = useState<{ key: string | null; direction: 'asc' | 'desc' }>({ key: null, direction: 'asc' });
-  const [filters, setFilters] = useState<{ [key: string]: string }>({});
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
-
-  const handleSort = (key: string) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
-  };
-
-  const handleFilter = (key: string, value: string) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-    setCurrentPage(1);
-  };
-
-  const processedResults = useMemo(() => {
-    let data = [...results];
-
-    // Filtering
-    Object.keys(filters).forEach(key => {
-      if (filters[key]) {
-        data = data.filter(item =>
-          String(item[key as keyof typeof item]).toLowerCase().includes(filters[key].toLowerCase())
-        );
-      }
+  // Transform mock data for display
+  const results = useMemo(() => {
+    return mockDatabase.orders.map(order => {
+      const user = mockDatabase.users.find(u => u.id === order.user_id);
+      return {
+        id: order.id,
+        customer: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
+        status: order.status,
+        total_amount: order.total_amount,
+        created_at: new Date(order.created_at).toLocaleDateString(),
+      };
     });
+  }, []);
 
-    // Sorting
-    if (sortConfig.key) {
-      data.sort((a, b) => {
-        const aValue = a[sortConfig.key as keyof typeof a];
-        const bValue = b[sortConfig.key as keyof typeof b];
-        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-        return 0;
-      });
-    }
-
-    return data;
-  }, [results, filters, sortConfig]);
-
-  const totalPages = Math.ceil(processedResults.length / itemsPerPage);
-  const paginatedData = processedResults.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const columns: ColumnDef<any>[] = [
+    { key: 'id', header: 'Order ID', className: 'text-gray-400 font-mono text-xs' },
+    { key: 'customer', header: 'Customer', className: 'text-white font-medium' },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (row) => {
+        const colors: any = {
+          pending: 'text-yellow-400',
+          processing: 'text-blue-400',
+          shipped: 'text-purple-400',
+          delivered: 'text-green-400',
+          cancelled: 'text-red-400'
+        };
+        return <span className={`capitalize ${colors[row.status] || 'text-gray-400'}`}>{row.status}</span>;
+      }
+    },
+    {
+      key: 'total_amount',
+      header: 'Amount',
+      className: 'text-right font-mono',
+      cell: (row) => `$${row.total_amount.toLocaleString()}`
+    },
+    { key: 'created_at', header: 'Date', className: 'text-gray-400 text-right' },
+  ];
 
   // Chart 1: Revenue Trends (Line)
   const lineChartData = {
@@ -475,113 +431,7 @@ LIMIT 100;`);
 
               <div className="flex-1 overflow-hidden p-0 relative">
                 <TabsContent value="table" className="h-full w-full m-0 border-none data-[state=active]:flex flex-col overflow-hidden absolute inset-0">
-                  <div className="flex-1 overflow-auto w-full [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-[#1B2431] [&::-webkit-scrollbar-thumb]:bg-[#273142] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#374151] transition-colors">
-                    <table className="w-full caption-bottom text-sm text-left border-collapse min-w-[800px]">
-                      <TableHeader className="bg-[#273142] sticky top-0 z-10 shadow-sm">
-                        <TableRow className="border-b border-white/5 hover:bg-[#273142]">
-                          {['Month', 'Category', 'Revenue', 'Orders', 'Growth'].map((header, index) => {
-                            const key = header.toLowerCase().replace(' ', '_');
-                            const mapKey = header === 'Orders' ? 'total_orders' : header === 'Growth' ? 'growth_rate' : key;
-
-                            return (
-                              <TableHead key={header} className={`h-10 font-medium text-gray-400 ${index > 1 ? 'text-right' : ''}`}>
-                                <div className={`flex items-center gap-2 ${index > 1 ? 'justify-end' : 'justify-between'}`}>
-                                  <span>{header}</span>
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-white/10 data-[state=open]:bg-white/10">
-                                        {sortConfig.key === mapKey ? (
-                                          <ArrowUpDown className={`h-3 w-3 ${sortConfig.direction === 'asc' ? 'text-blue-400' : 'text-green-400'}`} />
-                                        ) : (
-                                          <MoreHorizontal className="h-3 w-3" />
-                                        )}
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="w-48 bg-[#1e293b] border-white/10 text-gray-200">
-                                      <DropdownMenuLabel>Options</DropdownMenuLabel>
-                                      <DropdownMenuSeparator className="bg-white/10" />
-                                      <DropdownMenuItem onClick={() => handleSort(mapKey)} className="focus:bg-white/10 focus:text-white cursor-pointer">
-                                        <ArrowUpDown className="mr-2 h-3.5 w-3.5 text-gray-400" />
-                                        Sort {sortConfig.key === mapKey && sortConfig.direction === 'asc' ? 'Desc' : 'Asc'}
-                                      </DropdownMenuItem>
-                                      <DropdownMenuSeparator className="bg-white/10" />
-                                      <div className="p-2">
-                                        <Input
-                                          placeholder="Filter..."
-                                          className="h-8 bg-[#0f172a] border-white/10 text-xs"
-                                          value={filters[mapKey] || ''}
-                                          onChange={(e) => handleFilter(mapKey, e.target.value)}
-                                        />
-                                      </div>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                </div>
-                              </TableHead>
-                            );
-                          })}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {paginatedData.map((row) => (
-                          <TableRow key={row.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                            <TableCell className="text-gray-300 font-mono text-xs border-r border-white/5">{row.month}</TableCell>
-                            <TableCell className="text-white font-medium border-r border-white/5">{row.category}</TableCell>
-                            <TableCell className="text-gray-300 text-right font-mono border-r border-white/5">${row.revenue.toLocaleString()}</TableCell>
-                            <TableCell className="text-gray-300 text-right font-mono border-r border-white/5">{row.total_orders}</TableCell>
-                            <TableCell className={`text-right font-mono ${row.growth_rate >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              {row.growth_rate > 0 ? '+' : ''}{row.growth_rate}%
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </table>
-                  </div>
-
-                  {/* Pagination Footer */}
-                  <div className="h-14 shrink-0 border-t border-white/5 bg-[#273142] flex items-center justify-between px-4 z-20">
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-400">Rows per page</span>
-                        <Select value={String(itemsPerPage)} onValueChange={(v) => setItemsPerPage(Number(v))}>
-                          <SelectTrigger className="h-8 w-[70px] bg-[#1B2431] border-white/10 text-xs">
-                            <SelectValue placeholder={itemsPerPage} />
-                          </SelectTrigger>
-                          <SelectContent className="bg-[#1B2431] border-white/10 text-gray-200">
-                            {[10, 20, 50, 100].map(pageSize => (
-                              <SelectItem key={pageSize} value={String(pageSize)} className="focus:bg-white/10 focus:text-white">{pageSize}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        Showing {(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, processedResults.length)} of {processedResults.length} results
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 text-gray-400 hover:text-white disabled:opacity-50"
-                        disabled={currentPage === 1}
-                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </Button>
-                      <div className="text-xs text-gray-400 font-medium">
-                        Page {currentPage} of {totalPages}
-                      </div>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 text-gray-400 hover:text-white disabled:opacity-50"
-                        disabled={currentPage === totalPages}
-                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
+                  <DataTable data={results} columns={columns} />
                 </TabsContent>
 
                 <TabsContent value="chart" className="h-full w-full m-0 p-0 border-none data-[state=active]:flex flex-col absolute inset-0">

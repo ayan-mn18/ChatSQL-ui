@@ -18,81 +18,24 @@ import { toPng } from 'html-to-image';
 import { Button } from '@/components/ui/button';
 import { Download, FileCode, Plus, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
 import TableNode from '@/components/dashboard/TableNode';
+import { databaseSchema, databaseRelationships } from '@/lib/mockData';
 
 const nodeTypes = {
   table: TableNode,
 };
 
-const initialNodes: Node[] = [
-  {
-    id: 'users',
-    type: 'table',
-    position: { x: 100, y: 100 },
-    data: {
-      label: 'users',
-      color: '#3b82f6', // Blue
-      columns: [
-        { name: 'id', type: 'uuid', isPrimary: true },
-        { name: 'email', type: 'varchar(255)' },
-        { name: 'full_name', type: 'varchar(100)' },
-        { name: 'created_at', type: 'timestamp' },
-      ],
-    },
+const initialNodes: Node[] = databaseSchema.map(table => ({
+  id: table.id,
+  type: 'table',
+  position: table.position || { x: 0, y: 0 },
+  data: {
+    label: table.label,
+    color: table.color,
+    columns: table.columns,
   },
-  {
-    id: 'orders',
-    type: 'table',
-    position: { x: 500, y: 100 },
-    data: {
-      label: 'orders',
-      color: '#10b981', // Emerald
-      columns: [
-        { name: 'id', type: 'uuid', isPrimary: true },
-        { name: 'user_id', type: 'uuid', isForeign: true },
-        { name: 'status', type: 'varchar(50)' },
-        { name: 'total_amount', type: 'decimal' },
-        { name: 'created_at', type: 'timestamp' },
-      ],
-    },
-  },
-  {
-    id: 'products',
-    type: 'table',
-    position: { x: 500, y: 400 },
-    data: {
-      label: 'products',
-      color: '#f59e0b', // Amber
-      columns: [
-        { name: 'id', type: 'uuid', isPrimary: true },
-        { name: 'name', type: 'varchar(255)' },
-        { name: 'price', type: 'decimal' },
-        { name: 'stock', type: 'integer' },
-      ],
-    },
-  },
-  {
-    id: 'order_items',
-    type: 'table',
-    position: { x: 900, y: 250 },
-    data: {
-      label: 'order_items',
-      color: '#8b5cf6', // Violet
-      columns: [
-        { name: 'id', type: 'uuid', isPrimary: true },
-        { name: 'order_id', type: 'uuid', isForeign: true },
-        { name: 'product_id', type: 'uuid', isForeign: true },
-        { name: 'quantity', type: 'integer' },
-        { name: 'unit_price', type: 'decimal' },
-      ],
-    },
-  },
-];
+}));
 
-const initialEdges: Edge[] = [
-  { id: 'e1-2', source: 'users', target: 'orders', type: 'smoothstep', animated: true, style: { stroke: '#64748b', strokeWidth: 1.5 } },
-  { id: 'e2-4', source: 'orders', target: 'order_items', type: 'smoothstep', animated: true, style: { stroke: '#64748b', strokeWidth: 1.5 } },
-  { id: 'e3-4', source: 'products', target: 'order_items', type: 'smoothstep', animated: true, style: { stroke: '#64748b', strokeWidth: 1.5 } },
-];
+const initialEdges: Edge[] = databaseRelationships;
 
 export default function SchemaVisualizer() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);

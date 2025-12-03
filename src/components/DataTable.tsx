@@ -1,40 +1,340 @@
-import React from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { ArrowUpDown, ChevronLeft, ChevronRight, MoreHorizontal, Save, X, Edit2 } from 'lucide-react';
+import { toast } from 'sonner';
 
-interface DataTableProps {
-  data: any[];
-  columns: string[];
+export interface ColumnDef<T = any> {
+  key: string;
+  header: string;
+  cell?: (row: T) => React.ReactNode;
+  className?: string;
+  sortable?: boolean;
+  filterable?: boolean;
+  editable?: boolean;
 }
 
-export default function DataTable({ data, columns }: DataTableProps) {
-  if (!data.length) return null;
+interface DataTableProps<T> {
+  data: T[];
+  columns?: ColumnDef<T>[];
+  className?: string;
+  onSave?: (updatedData: T[]) => Promise<void> | void;
+}
+
+export default function DataTable<T extends Record<string, any>>({
+  data: initialData,
+  columns: userColumns,
+  className,
+  onSave
+}: DataTableProps<T>) {
+  const [data, setData] = useState<T[]>(initialData);
+  const [sortConfig, setSortConfig] = useState<{ key: string | null; direction: 'asc' | 'desc' }>({ key: null, direction: 'asc' });
+  const [filters, setFilters] = useState<{ [key: string]: string }>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+
+  // Edit mode state
+  const [editingCell, setEditingCell] = useState<{ rowIndex: number; key: string } | null>(null);
+  const [editedRows, setEditedRows] = useState<Record<string, Partial<T>>>({});
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+
+  useEffect(() => {
+    setData(initialData);
+  }, [initialData]);
+
+  // Auto-generate columns if not provided
+  const columns = useMemo<ColumnDef<T>[]>(() => {
+    if (userColumns) return userColumns;
+    if (!data || data.length === 0) return [];
+
+    return Object.keys(data[0]).map(key => ({
+      key,
+      header: key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' '),
+      sortable: true,
+      filterable: true,
+      editable: key !== 'id' && key !== 'created_at' && key !== 'updated_at'
+    }));
+  }, [data, userColumns]);
+
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const handleFilter = (key: string, value: string) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+    setCurrentPage(1);
+  };
+
+  const handleCellChange = (rowIndex: number, key: string, value: any) => {
+    const rowId = (data[rowIndex] as any).id || rowIndex;
+    setEditedRows(prev => ({
+      ...prev,
+      [rowId]: {
+        ...(prev[rowId] || {}),
+        [key]: value
+      }
+    }));
+
+    const newData = [...data];
+    newData[rowIndex] = { ...newData[rowIndex], [key]: value };
+    setData(newData);
+  };
+
+  const handleSave = async () => {
+    if (onSave) {
+      await onSave(data);
+    }
+    setEditedRows({});
+    setIsEditing(false);
+    setIsSaveDialogOpen(false);
+    toast.success('Changes saved successfully');
+  };
+
+  const handleCancelEdit = () => {
+    setData(initialData);
+    setEditedRows({});
+    setIsEditing(false);
+  };
+
+  const processedData = useMemo(() => {
+    let result = [...data];
+
+    // Filtering
+    Object.keys(filters).forEach(key => {
+      if (filters[key]) {
+        result = result.filter(item => {
+          const val = item[key];
+          return String(val).toLowerCase().includes(filters[key].toLowerCase());
+        });
+      }
+    });
+
+    // Sorting
+    if (sortConfig.key) {
+      result.sort((a, b) => {
+        const aValue = a[sortConfig.key!];
+        const bValue = b[sortConfig.key!];
+
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [data, filters, sortConfig]);
+
+  const totalPages = Math.ceil(processedData.length / itemsPerPage);
+  const paginatedData = processedData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const hasChanges = Object.keys(editedRows).length > 0;
+
+  if (!data) return null;
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
-          <tr>
-            {columns.map((column) => (
-              <th
-                key={column}
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+    <div className={`flex flex-col h-full w-full overflow-hidden ${className}`}>
+      {/* Toolbar */}
+      <div className="flex items-center justify-between p-2 bg-[#273142] border-b border-white/5">
+        <div className="flex items-center gap-2">
+          {/* Left side toolbar items if any */}
+        </div>
+        <div className="flex items-center gap-2">
+          {isEditing ? (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCancelEdit}
+                className="text-gray-400 hover:text-white"
               >
-                {column}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
-          {data.map((row, i) => (
-            <tr key={i}>
-              {columns.map((column) => (
-                <td key={column} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {row[column]}
-                </td>
+                <X className="w-4 h-4 mr-2" />
+                Cancel
+              </Button>
+              <Dialog open={isSaveDialogOpen} onOpenChange={setIsSaveDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    size="sm"
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    disabled={!hasChanges}
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    Save Changes
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="bg-[#1e293b] border-white/10 text-gray-200">
+                  <DialogHeader>
+                    <DialogTitle>Save Changes?</DialogTitle>
+                    <DialogDescription className="text-gray-400">
+                      You have modified {Object.keys(editedRows).length} rows. This action cannot be undone.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <Button variant="ghost" onClick={() => setIsSaveDialogOpen(false)}>Cancel</Button>
+                    <Button className="bg-green-600 hover:bg-green-700" onClick={handleSave}>Confirm Save</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEditing(true)}
+              className="border-white/10 bg-white/5 hover:bg-white/10 text-gray-200"
+            >
+              <Edit2 className="w-4 h-4 mr-2" />
+              Edit Mode
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-auto w-full [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-[#1B2431] [&::-webkit-scrollbar-thumb]:bg-[#273142] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#374151] transition-colors">
+        <table className="w-full caption-bottom text-sm text-left border-collapse min-w-[800px]">
+          <thead className="bg-[#273142] sticky top-0 z-10 shadow-sm">
+            <tr className="border-b border-white/5 hover:bg-[#273142]">
+              {columns.map((col) => (
+                <th key={col.key} className={`h-10 px-4 font-medium text-gray-400 ${col.className || ''}`}>
+                  <div className={`flex items-center gap-2 justify-between`}>
+                    <span>{col.header}</span>
+                    {(col.sortable !== false || col.filterable !== false) && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-white/10 data-[state=open]:bg-white/10">
+                            {sortConfig.key === col.key ? (
+                              <ArrowUpDown className={`h-3 w-3 ${sortConfig.direction === 'asc' ? 'text-blue-400' : 'text-green-400'}`} />
+                            ) : (
+                              <MoreHorizontal className="h-3 w-3" />
+                            )}
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48 bg-[#1e293b] border-white/10 text-gray-200">
+                          <DropdownMenuLabel>Options</DropdownMenuLabel>
+                          <DropdownMenuSeparator className="bg-white/10" />
+                          {col.sortable !== false && (
+                            <DropdownMenuItem onClick={() => handleSort(col.key)} className="focus:bg-white/10 focus:text-white cursor-pointer">
+                              <ArrowUpDown className="mr-2 h-3.5 w-3.5 text-gray-400" />
+                              Sort {sortConfig.key === col.key && sortConfig.direction === 'asc' ? 'Desc' : 'Asc'}
+                            </DropdownMenuItem>
+                          )}
+                          {col.filterable !== false && (
+                            <>
+                              <DropdownMenuSeparator className="bg-white/10" />
+                              <div className="p-2">
+                                <Input
+                                  placeholder="Filter..."
+                                  className="h-8 bg-[#0f172a] border-white/10 text-xs"
+                                  value={filters[col.key] || ''}
+                                  onChange={(e) => handleFilter(col.key, e.target.value)}
+                                />
+                              </div>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {paginatedData.map((row, rowIndex) => {
+              const actualIndex = (currentPage - 1) * itemsPerPage + rowIndex;
+              return (
+                <tr key={rowIndex} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
+                  {columns.map((col) => (
+                    <td key={`${rowIndex}-${col.key}`} className={`px-4 py-2 border-r border-white/5 last:border-r-0 ${col.className || ''}`}>
+                      {isEditing && col.editable !== false ? (
+                        <Input
+                          value={row[col.key] || ''}
+                          onChange={(e) => handleCellChange(actualIndex, col.key, e.target.value)}
+                          className="h-8 bg-[#0f172a] border-white/10 text-xs focus-visible:ring-1 focus-visible:ring-blue-500"
+                        />
+                      ) : (
+                        col.cell ? col.cell(row) : row[col.key]
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination Footer */}
+      <div className="h-14 shrink-0 border-t border-white/5 bg-[#273142] flex items-center justify-between px-4 z-20">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400">Rows per page</span>
+            <Select value={String(itemsPerPage)} onValueChange={(v) => setItemsPerPage(Number(v))}>
+              <SelectTrigger className="h-8 w-[70px] bg-[#1B2431] border-white/10 text-xs">
+                <SelectValue placeholder={itemsPerPage} />
+              </SelectTrigger>
+              <SelectContent className="bg-[#1B2431] border-white/10 text-gray-200">
+                {[10, 20, 50, 100].map(pageSize => (
+                  <SelectItem key={pageSize} value={String(pageSize)} className="focus:bg-white/10 focus:text-white">{pageSize}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="text-xs text-gray-500">
+            Showing {(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, processedData.length)} of {processedData.length} results
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 text-gray-400 hover:text-white disabled:opacity-50"
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <div className="text-xs text-gray-400 font-medium">
+            Page {currentPage} of {totalPages}
+          </div>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 text-gray-400 hover:text-white disabled:opacity-50"
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
