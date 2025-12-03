@@ -39,7 +39,7 @@ export default function TableNode({ data }: { data: TableNodeData }) {
         </div>
 
         {/* Columns */}
-        <div className="py-2">
+        <div className="py-2 max-h-[300px] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-white/20">
           {data.columns.map((col, index) => (
             <div key={index} className="group/row flex items-center justify-between text-xs px-4 py-1.5 hover:bg-white/5 transition-colors cursor-default">
               <div className="flex items-center gap-2">
