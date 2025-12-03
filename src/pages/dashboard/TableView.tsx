@@ -94,26 +94,29 @@ export default function TableView() {
   };
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col space-y-6">
-      <div className="flex items-center justify-between shrink-0">
+    <div className="h-screen flex flex-col bg-[#1B2431] overflow-hidden">
+      <div className="flex items-center justify-between shrink-0 px-4 md:px-6 py-4 md:py-6 border-b border-white/5">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-1">{title}</h1>
-          <p className="text-gray-400 text-sm">Manage your {dbKey} data.</p>
+          <h1 className="text-xl md:text-2xl font-bold text-white mb-1">{title}</h1>
+          <p className="text-gray-400 text-xs md:text-sm">Manage your {dbKey} data.</p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" className="border-none bg-[#273142] text-white hover:bg-[#323d52]">
+          <Button variant="outline" size="sm" className="border-none bg-[#273142] text-white hover:bg-[#323d52]">
             <span className="mr-2">Filter</span>
             <ChevronRight className="w-4 h-4 rotate-90" />
           </Button>
         </div>
       </div>
 
-      <div className="flex-1 border-none rounded-xl overflow-hidden bg-[#273142] shadow-lg min-h-0">
-        <DataTable
-          data={data}
-          columns={columns.length > 0 ? columns : undefined}
-          onSave={handleSave}
-        />
+      <div className="flex-1 overflow-hidden bg-[#1B2431] md:p-6 p-0 pb-24 md:pb-6">
+        <div className="h-full w-full border-none md:rounded-xl overflow-hidden bg-[#1B2431] md:bg-[#273142] md:shadow-lg">
+          <DataTable
+            data={data}
+            columns={columns.length > 0 ? columns : undefined}
+            onSave={handleSave}
+            className="h-full"
+          />
+        </div>
       </div>
     </div>
   );

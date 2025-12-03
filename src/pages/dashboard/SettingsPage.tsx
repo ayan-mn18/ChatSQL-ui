@@ -6,13 +6,13 @@ import { Switch } from '@/components/ui/switch';
 
 export default function SettingsPage() {
   return (
-    <div className="space-y-8">
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8 pb-24 md:pb-8 overflow-y-auto h-full">
       <div>
-        <h1 className="text-3xl font-bold text-white mb-2">Settings</h1>
-        <p className="text-gray-400">Manage your account and application preferences.</p>
+        <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Settings</h1>
+        <p className="text-sm md:text-base text-gray-400">Manage your account and application preferences.</p>
       </div>
 
-      <div className="grid gap-6">
+      <div className="grid gap-4 md:gap-6">
         <Card className="bg-[#273142] border-none shadow-lg">
           <CardHeader>
             <CardTitle className="text-white">Profile Information</CardTitle>

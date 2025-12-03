@@ -279,7 +279,7 @@ LIMIT 100;`);
   return (
     <div className="h-screen flex flex-col bg-[#1B2431]">
       {/* Toolbar */}
-      <div className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-[#1B2431]">
+      <div className="h-16 border-b border-white/5 flex items-center justify-between px-4 md:px-6 bg-[#1B2431] shrink-0">
         <div className="flex items-center gap-3">
           <Button
             size="sm"
@@ -287,23 +287,24 @@ LIMIT 100;`);
             onClick={handleRunQuery}
           >
             <Play className="w-4 h-4 mr-2" />
-            Run Query
+            <span className="hidden sm:inline">Run Query</span>
+            <span className="sm:hidden">Run</span>
           </Button>
           <Button size="sm" variant="outline" className="border-white/10 bg-white/5 hover:bg-white/10 text-white">
             <Save className="w-4 h-4 mr-2" />
-            Save
+            <span className="hidden sm:inline">Save</span>
           </Button>
         </div>
 
         {/* AI Input Section */}
-        <div className="flex-1 max-w-2xl mx-6 flex justify-center">
+        <div className="flex-1 max-w-2xl mx-4 md:mx-6 flex justify-center">
           <Dialog open={isAiOpen} onOpenChange={setIsAiOpen}>
             <DialogTrigger asChild>
               <Button variant="ghost" className="relative group bg-[#0f172a] hover:bg-[#1e293b] border border-purple-500/30 text-gray-300 hover:text-white w-full max-w-md justify-start px-4 py-6 overflow-hidden">
                 <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-lg opacity-20 group-hover:opacity-50 transition duration-500 blur"></div>
                 <div className="relative flex items-center gap-3">
                   <Sparkles className="w-5 h-5 text-purple-400 animate-pulse" />
-                  <span className="text-sm">Ask AI to generate SQL...</span>
+                  <span className="text-sm truncate">Ask AI...</span>
                 </div>
               </Button>
             </DialogTrigger>
@@ -361,8 +362,8 @@ LIMIT 100;`);
         </div>
       </div>
 
-      {/* Editor & Results */}
-      <ResizablePanelGroup direction="vertical" className="flex-1">
+      {/* Desktop Layout */}
+      <ResizablePanelGroup direction="vertical" className="hidden md:flex flex-1">
         {/* Editor Panel */}
         <ResizablePanel defaultSize={40} minSize={20}>
           <div className="h-full flex flex-col bg-[#0f172a]"> {/* Darker background for editor */}
@@ -471,6 +472,88 @@ LIMIT 100;`);
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
+
+      {/* Mobile Layout */}
+      <div className="flex md:hidden flex-col flex-1 overflow-y-auto pb-24">
+        {/* Mobile Editor */}
+        <div className="h-[40vh] flex flex-col bg-[#0f172a] border-b border-white/10 shrink-0">
+          <div className="flex-1 flex overflow-hidden relative">
+            <div className="w-10 bg-[#0f172a] border-r border-white/5 flex flex-col items-end py-4 pr-2 select-none text-gray-600 font-mono text-xs leading-6">
+              {lineNumbers.map(num => (
+                <div key={num} style={{ height: '24px' }}>{num}</div>
+              ))}
+            </div>
+            <div className="flex-1 bg-[#0f172a] overflow-auto">
+              <Editor
+                value={query}
+                onValueChange={handleQueryChange}
+                highlight={code => Prism.highlight(code, Prism.languages.sql, 'sql')}
+                padding={16}
+                style={{
+                  fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+                  fontSize: 14,
+                  backgroundColor: '#0f172a',
+                  color: '#e2e8f0',
+                  minHeight: '100%',
+                  lineHeight: '24px'
+                }}
+                className={`font-mono ${error ? 'border-b-2 border-red-500' : ''}`}
+                textareaClassName="focus:outline-none"
+              />
+            </div>
+          </div>
+          {error && (
+            <div className="bg-red-500/10 border-t border-red-500/20 px-4 py-2 flex items-center gap-2 text-red-400 text-xs">
+              <AlertCircle className="w-3 h-3" />
+              <span>{error}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Mobile Results */}
+        <div className="flex-1 min-h-[50vh] bg-[#1B2431] flex flex-col">
+          <Tabs defaultValue="table" className="flex-1 flex flex-col" onValueChange={setActiveTab}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-[#273142]">
+              <h3 className="text-sm font-semibold text-white">Results</h3>
+              <TabsList className="bg-[#1B2431] border border-white/5 h-8">
+                <TabsTrigger value="table" className="text-xs h-7 data-[state=active]:bg-[#3b82f6] data-[state=active]:text-white">
+                  <TableIcon className="w-3 h-3 mr-1" />
+                  Table
+                </TabsTrigger>
+                <TabsTrigger value="chart" className="text-xs h-7 data-[state=active]:bg-[#3b82f6] data-[state=active]:text-white">
+                  <BarChart3 className="w-3 h-3 mr-1" />
+                  Chart
+                </TabsTrigger>
+              </TabsList>
+            </div>
+
+            <div className="flex-1 overflow-hidden p-0 relative">
+              <TabsContent value="table" className="h-full w-full m-0 border-none data-[state=active]:flex flex-col overflow-hidden absolute inset-0">
+                <DataTable data={results} columns={columns} />
+              </TabsContent>
+
+              <TabsContent value="chart" className="h-full w-full m-0 p-0 border-none data-[state=active]:flex flex-col absolute inset-0">
+                <div className="h-full w-full overflow-y-auto p-4">
+                  <div className="flex flex-col gap-4 pb-4">
+                    <div className="bg-[#273142] rounded-xl p-3 border border-white/5 shadow-inner w-full h-[300px] flex flex-col">
+                      <h4 className="text-xs font-medium text-gray-400 mb-2">Revenue Trends</h4>
+                      <div className="flex-1 min-h-0 w-full">
+                        <Line data={lineChartData} options={commonOptions} />
+                      </div>
+                    </div>
+                    <div className="bg-[#273142] rounded-xl p-3 border border-white/5 shadow-inner w-full h-[300px] flex flex-col">
+                      <h4 className="text-xs font-medium text-gray-400 mb-2">Revenue Share</h4>
+                      <div className="flex-1 min-h-0 w-full relative">
+                        <Doughnut data={doughnutChartData} options={doughnutOptions} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+            </div>
+          </Tabs>
+        </div>
+      </div>
     </div>
   );
 }

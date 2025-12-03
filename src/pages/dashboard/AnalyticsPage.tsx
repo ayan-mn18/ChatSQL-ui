@@ -135,11 +135,11 @@ export default function AnalyticsPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white mb-6">Dashboard</h1>
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8 pb-24 md:pb-8 overflow-y-auto h-full">
+      <h1 className="text-2xl md:text-3xl font-bold text-white mb-4 md:mb-6">Analytics</h1>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {stats.map((stat, index) => (
           <Card key={index} className="bg-[#273142] border-none shadow-lg">
             <CardContent className="p-6">
@@ -177,7 +177,7 @@ export default function AnalyticsPage() {
       </Card>
 
       {/* Bottom Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
         {/* Customers */}
         <Card className="bg-[#273142] border-none shadow-lg">
           <CardHeader>

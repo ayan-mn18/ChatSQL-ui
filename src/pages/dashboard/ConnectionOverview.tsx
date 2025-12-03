@@ -115,10 +115,10 @@ export default function ConnectionOverview() {
   };
 
   return (
-    <div className="p-8 space-y-8">
-      <h1 className="text-3xl font-bold text-white">Overview</h1>
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8 pb-24 md:pb-8 overflow-y-auto h-full">
+      <h1 className="text-2xl md:text-3xl font-bold text-white">Overview</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <Card className="bg-[#273142] border-none shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-400">Total Tables</CardTitle>
@@ -168,9 +168,9 @@ export default function ConnectionOverview() {
       </div>
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
         {/* Operations Chart */}
-        <Card className="col-span-2 bg-[#273142] border-none shadow-lg">
+        <Card className="col-span-1 lg:col-span-2 bg-[#273142] border-none shadow-lg">
           <CardHeader>
             <CardTitle className="text-white">Database Operations</CardTitle>
           </CardHeader>
@@ -224,7 +224,7 @@ export default function ConnectionOverview() {
         </Card>
 
         {/* Data Growth Chart */}
-        <Card className="col-span-3 bg-[#273142] border-none shadow-lg">
+        <Card className="col-span-1 lg:col-span-3 bg-[#273142] border-none shadow-lg">
           <CardHeader>
             <CardTitle className="text-white">Data Growth</CardTitle>
           </CardHeader>
