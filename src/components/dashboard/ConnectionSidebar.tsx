@@ -6,7 +6,12 @@ import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-export function ConnectionSidebar() {
+interface ConnectionSidebarProps {
+  className?: string;
+  onClose?: () => void;
+}
+
+export function ConnectionSidebar({ className, onClose }: ConnectionSidebarProps) {
   const { id } = useParams();
   const navigate = useNavigate();
   const { connections } = useConnections();
@@ -17,13 +22,13 @@ export function ConnectionSidebar() {
   const tables = ['users', 'orders', 'products', 'categories', 'reviews', 'audit_logs'];
 
   if (!connection) return (
-    <div className="h-screen w-64 bg-[#1B2431] border-r border-white/10 flex items-center justify-center text-gray-500">
+    <div className={cn("h-full w-64 bg-[#1B2431] border-r border-white/10 flex items-center justify-center text-gray-500", className)}>
       Loading...
     </div>
   );
 
   return (
-    <div className="h-screen w-64 bg-[#1B2431] border-r border-white/10 flex flex-col text-white fixed left-0 top-0 z-40">
+    <div className={cn("h-full w-64 bg-[#1B2431] border-r border-white/10 flex flex-col text-white", className)}>
       {/* Header */}
       <div className="h-16 flex items-center px-4 border-b border-white/5 gap-3">
         <button
@@ -42,9 +47,10 @@ export function ConnectionSidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1">
+      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         <NavLink
           to={`/dashboard/connection/${id}/overview`}
+          onClick={onClose}
           className={({ isActive }) => cn(
             "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
             isActive ? "bg-[#3b82f6] text-white shadow-lg shadow-blue-500/20" : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -56,6 +62,7 @@ export function ConnectionSidebar() {
 
         <NavLink
           to={`/dashboard/connection/${id}/sql`}
+          onClick={onClose}
           className={({ isActive }) => cn(
             "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
             isActive ? "bg-[#3b82f6] text-white shadow-lg shadow-blue-500/20" : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -67,6 +74,7 @@ export function ConnectionSidebar() {
 
         <NavLink
           to={`/dashboard/connection/${id}/visualizer`}
+          onClick={onClose}
           className={({ isActive }) => cn(
             "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
             isActive ? "bg-[#3b82f6] text-white shadow-lg shadow-blue-500/20" : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -102,6 +110,7 @@ export function ConnectionSidebar() {
                   <NavLink
                     key={table}
                     to={`/dashboard/connection/${id}/tables/${table}`}
+                    onClick={onClose}
                     className={({ isActive }) => cn(
                       "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
                       isActive ? "text-[#3b82f6] bg-[#3b82f6]/10" : "text-gray-400 hover:text-white hover:bg-white/5"

@@ -25,7 +25,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { ArrowUpDown, ChevronLeft, ChevronRight, MoreHorizontal, Save, X } from 'lucide-react';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from "@/components/ui/sheet";
+import { Label } from "@/components/ui/label";
+import { ArrowUpDown, ChevronLeft, ChevronRight, MoreHorizontal, Save, X, Edit2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export interface ColumnDef<T = any> {
@@ -61,6 +70,21 @@ export default function DataTable<T extends Record<string, any>>({
   const [editingCell, setEditingCell] = useState<{ rowIndex: number; key: string } | null>(null);
   const [editedRows, setEditedRows] = useState<Record<string, Partial<T>>>({});
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+
+  // Mobile Edit Sheet State
+  const [sheetEditingRowIndex, setSheetEditingRowIndex] = useState<number | null>(null);
+  const [sheetEditData, setSheetEditData] = useState<T | null>(null);
+
+  const handleSheetSave = async () => {
+    if (sheetEditingRowIndex === null || !sheetEditData || !onSave) return;
+
+    const newData = [...data];
+    newData[sheetEditingRowIndex] = sheetEditData;
+
+    await onSave(newData);
+    setSheetEditingRowIndex(null);
+    setSheetEditData(null);
+  };
 
   useEffect(() => {
     setData(initialData);
@@ -250,6 +274,7 @@ export default function DataTable<T extends Record<string, any>>({
                   </div>
                 </th>
               ))}
+              {onSave && <th className="h-10 px-4 font-medium text-gray-400 w-10"></th>}
             </tr>
           </thead>
           <tbody>
@@ -288,6 +313,21 @@ export default function DataTable<T extends Record<string, any>>({
                       </td>
                     );
                   })}
+                  {onSave && (
+                    <td className="px-4 py-2 border-r border-white/5 last:border-r-0 w-10">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-gray-400 hover:text-white"
+                        onClick={() => {
+                          setSheetEditingRowIndex(actualIndex);
+                          setSheetEditData({ ...row });
+                        }}
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -340,6 +380,43 @@ export default function DataTable<T extends Record<string, any>>({
           </Button>
         </div>
       </div>
+
+      <Sheet open={sheetEditingRowIndex !== null} onOpenChange={(open) => !open && setSheetEditingRowIndex(null)}>
+        <SheetContent className="bg-[#1B2431] border-white/10 text-white overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="text-white">Edit Row</SheetTitle>
+            <SheetDescription className="text-gray-400">
+              Make changes to the row data here. Click save when you're done.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="grid gap-4 py-4">
+            {columns.map((col) => {
+              if (col.editable === false) return null;
+              return (
+                <div key={col.key} className="grid gap-2">
+                  <Label htmlFor={`edit-${col.key}`} className="text-gray-300">
+                    {col.header}
+                  </Label>
+                  <Input
+                    id={`edit-${col.key}`}
+                    value={sheetEditData?.[col.key] || ''}
+                    onChange={(e) => setSheetEditData(prev => prev ? ({ ...prev, [col.key]: e.target.value }) : null)}
+                    className="bg-[#0f172a] border-white/10 text-white"
+                  />
+                </div>
+              );
+            })}
+          </div>
+          <SheetFooter>
+            <Button variant="outline" onClick={() => setSheetEditingRowIndex(null)} className="border-white/10 text-gray-400 hover:text-white hover:bg-white/10">
+              Cancel
+            </Button>
+            <Button onClick={handleSheetSave} className="bg-blue-600 hover:bg-blue-700 text-white">
+              Save changes
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
