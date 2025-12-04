@@ -39,6 +39,10 @@ export function useConnections() {
     saveConnections(connections.filter((c) => c.id !== id));
   };
 
+  const updateConnection = (id: string, updates: Partial<DatabaseConnection>) => {
+    saveConnections(connections.map(c => c.id === id ? { ...c, ...updates } : c));
+  };
+
   const testConnection = async (details: any) => {
     return new Promise<boolean>((resolve) => {
       setTimeout(() => {
@@ -51,6 +55,7 @@ export function useConnections() {
     connections,
     addConnection,
     removeConnection,
+    updateConnection,
     testConnection,
   };
 }

@@ -1,7 +1,7 @@
 import { useConnections } from '@/hooks/useConnections';
 import { AddConnectionDialog } from '@/components/dashboard/AddConnectionDialog';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { Database, Trash2, ArrowRight, Server } from 'lucide-react';
+import { Database, Trash2, ArrowRight, Server, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 
@@ -39,14 +39,29 @@ export default function ConnectionsPage() {
                   <div className="w-10 h-10 rounded-lg bg-[#3b82f6]/10 flex items-center justify-center text-[#3b82f6]">
                     <Server className="w-5 h-5" />
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-gray-500 hover:text-red-400 hover:bg-red-400/10 -mr-2 -mt-2"
-                    onClick={() => removeConnection(conn.id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  <div className="flex gap-1 -mr-2 -mt-2">
+                    <AddConnectionDialog
+                      onConnectionAdded={() => { }}
+                      connectionToEdit={conn}
+                      trigger={
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-gray-500 hover:text-blue-400 hover:bg-blue-400/10"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                      }
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-gray-500 hover:text-red-400 hover:bg-red-400/10"
+                      onClick={() => removeConnection(conn.id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
                 <CardTitle className="text-white mt-4">{conn.name}</CardTitle>
                 <CardDescription className="text-gray-500 font-mono text-xs">

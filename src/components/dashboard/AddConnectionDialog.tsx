@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,9 +16,10 @@ import {
   CheckCircle2,
   XCircle,
   Snowflake,
-  Check
+  Check,
+  Pencil
 } from 'lucide-react';
-import { useConnections } from '@/hooks/useConnections';
+import { useConnections, DatabaseConnection } from '@/hooks/useConnections';
 import { cn } from '@/lib/utils';
 
 const DB_PROVIDERS = [
@@ -105,13 +106,21 @@ const STEPS = [
   }
 ];
 
-export function AddConnectionDialog({ onConnectionAdded }: { onConnectionAdded: () => void }) {
+export function AddConnectionDialog({
+  onConnectionAdded,
+  connectionToEdit,
+  trigger
+}: {
+  onConnectionAdded: () => void;
+  connectionToEdit?: DatabaseConnection;
+  trigger?: React.ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(1);
   const [selectedProvider, setSelectedProvider] = useState<typeof DB_PROVIDERS[0] | null>(null);
   const [testing, setTesting] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const { addConnection, testConnection } = useConnections();
+  const { addConnection, updateConnection, testConnection } = useConnections();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -122,6 +131,31 @@ export function AddConnectionDialog({ onConnectionAdded }: { onConnectionAdded: 
     password: '',
     database: 'postgres'
   });
+
+  useEffect(() => {
+    if (connectionToEdit && open) {
+      setFormData({
+        name: connectionToEdit.name,
+        type: connectionToEdit.type,
+        host: connectionToEdit.host,
+        port: connectionToEdit.port,
+        user: connectionToEdit.user,
+        password: '', // Don't populate password for security, or maybe we should if it's stored locally? 
+        // For now let's assume user needs to re-enter or we keep it empty.
+        // Actually, if we are editing, we might want to keep the old password if not changed.
+        // But the form binds to value. Let's leave it empty and handle "if empty keep old" in update logic if needed.
+        // For simplicity in this mock, let's just leave it empty.
+        database: connectionToEdit.database
+      });
+
+      // Find provider to set selectedProvider
+      const provider = DB_PROVIDERS.find(p => p.type === connectionToEdit.type) || DB_PROVIDERS[3]; // Default to postgres
+      setSelectedProvider(provider);
+      setStep(2); // Skip to config
+    } else if (!open && !connectionToEdit) {
+      // Reset handled by handleOpenChange
+    }
+  }, [connectionToEdit, open]);
 
   const handleProviderSelect = (provider: typeof DB_PROVIDERS[0]) => {
     setSelectedProvider(provider);
@@ -154,7 +188,13 @@ export function AddConnectionDialog({ onConnectionAdded }: { onConnectionAdded: 
 
   const handleSave = () => {
     if (testStatus !== 'success') return;
-    addConnection(formData as any);
+
+    if (connectionToEdit) {
+      updateConnection(connectionToEdit.id, formData as any);
+    } else {
+      addConnection(formData as any);
+    }
+
     setOpen(false);
     onConnectionAdded();
     resetForm();
@@ -186,21 +226,21 @@ export function AddConnectionDialog({ onConnectionAdded }: { onConnectionAdded: 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button className="bg-[#3b82f6] hover:bg-[#2563eb] text-white shadow-lg shadow-blue-500/20">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Connection
-        </Button>
+        {trigger ? trigger : (
+          <Button className="bg-[#3b82f6] hover:bg-[#2563eb] text-white shadow-lg shadow-blue-500/20">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Connection
+          </Button>
+        )}
       </DialogTrigger>
-      <DialogContent className="bg-[#273142] border-none text-white sm:max-w-5xl shadow-2xl p-0 overflow-hidden gap-0 flex h-[600px]">
+      <DialogContent className="bg-[#273142] border-none text-white sm:max-w-6xl shadow-2xl p-0 overflow-hidden gap-0 flex h-[700px]">
 
         {/* Left Sidebar - Stepper */}
         <div className="w-[240px] bg-[#1B2431] border-r border-gray-800 p-6 flex flex-col">
           <div className="mb-8">
-            <h2 className="text-lg font-semibold text-white">Add Connection</h2>
-            <p className="text-xs text-gray-400 mt-1">Follow the steps to connect your database</p>
-          </div>
-
-          <div className="space-y-8 relative">
+            <h2 className="text-lg font-semibold text-white">{connectionToEdit ? 'Edit Connection' : 'Add Connection'}</h2>
+            <p className="text-xs text-gray-400 mt-1">Follow the steps to {connectionToEdit ? 'update' : 'connect'} your database</p>
+          </div>          <div className="space-y-8 relative">
             {/* Vertical Line Background */}
             <div className="absolute left-[11px] top-2 bottom-2 w-[1px] bg-gray-800" />
 
@@ -267,12 +307,10 @@ export function AddConnectionDialog({ onConnectionAdded }: { onConnectionAdded: 
               <DialogDescription className="text-gray-400">
                 {step === 1 ? 'Choose the type of database you want to connect to.' :
                   step === 2 ? 'Enter your connection details below.' :
-                    'Test your connection and save.'}
+                    `Test your connection and ${connectionToEdit ? 'update' : 'save'}.`}
               </DialogDescription>
             </DialogHeader>
-          </div>
-
-          <div className="flex-1 p-6 overflow-y-auto">
+          </div>          <div className="flex-1 p-6 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-[#1B2431] [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
             {step === 1 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {DB_PROVIDERS.map((provider) => (
@@ -414,7 +452,7 @@ export function AddConnectionDialog({ onConnectionAdded }: { onConnectionAdded: 
                 disabled={testStatus !== 'success'}
                 className="bg-[#3b82f6] hover:bg-[#2563eb] disabled:opacity-50 disabled:cursor-not-allowed min-w-[100px]"
               >
-                Save & Finish
+                {connectionToEdit ? 'Update' : 'Save & Finish'}
               </Button>
             </div>
           )}
