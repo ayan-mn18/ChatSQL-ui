@@ -50,6 +50,7 @@ export const databaseSchema: TableSchema[] = [
       { name: 'company', type: 'varchar(100)' },
       { name: 'status', type: 'varchar(20)' },
       { name: 'bio', type: 'text' },
+      { name: 'metadata', type: 'jsonb' },
       { name: 'created_at', type: 'timestamp' },
       { name: 'last_login', type: 'timestamp' },
     ],
@@ -182,6 +183,30 @@ export const generateMockData = () => {
       company: `${last} Inc.`,
       status: Math.random() > 0.1 ? 'active' : 'inactive',
       bio: `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.`,
+      metadata: JSON.stringify({
+        preferences: {
+          theme: Math.random() > 0.5 ? 'dark' : 'light',
+          notifications: {
+            email: Math.random() > 0.5,
+            sms: Math.random() > 0.5,
+            push: true
+          },
+          language: randomItem(['en', 'es', 'fr', 'de', 'jp'])
+        },
+        device_info: {
+          last_ip: `192.168.${randomInt(0, 255)}.${randomInt(0, 255)}`,
+          user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          screen_resolution: `${randomInt(1366, 2560)}x${randomInt(768, 1440)}`
+        },
+        history: Array.from({ length: 5 }).map((_, idx) => ({
+          action: randomItem(['login', 'view_product', 'add_to_cart', 'checkout']),
+          timestamp: new Date(Date.now() - idx * 86400000).toISOString(),
+          details: {
+            session_id: `sess_${Math.random().toString(36).substring(7)}`,
+            duration: randomInt(60, 3600)
+          }
+        }))
+      }, null, 2),
       created_at: randomDate(new Date(2023, 0, 1), new Date()).toISOString(),
       last_login: randomDate(new Date(2024, 0, 1), new Date()).toISOString(),
     };

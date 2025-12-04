@@ -25,16 +25,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetFooter,
-} from "@/components/ui/sheet";
+
 import { Label } from "@/components/ui/label";
-import { ArrowUpDown, ChevronLeft, ChevronRight, MoreHorizontal, Save, X, Edit2 } from 'lucide-react';
+import { ArrowUpDown, ChevronLeft, ChevronRight, MoreHorizontal, Save, X, Edit2, Copy, Maximize2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export interface ColumnDef<T = any> {
@@ -71,19 +64,46 @@ export default function DataTable<T extends Record<string, any>>({
   const [editedRows, setEditedRows] = useState<Record<string, Partial<T>>>({});
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
 
-  // Mobile Edit Sheet State
-  const [sheetEditingRowIndex, setSheetEditingRowIndex] = useState<number | null>(null);
-  const [sheetEditData, setSheetEditData] = useState<T | null>(null);
+  // Row Edit Dialog State
+  const [rowEditingIndex, setRowEditingIndex] = useState<number | null>(null);
+  const [rowEditData, setRowEditData] = useState<T | null>(null);
 
-  const handleSheetSave = async () => {
-    if (sheetEditingRowIndex === null || !sheetEditData || !onSave) return;
+  // Cell Edit Dialog State
+  const [cellEditingDialog, setCellEditingDialog] = useState<{ rowIndex: number; key: string; value: string } | null>(null);
+
+  const handleRowEditSave = async () => {
+    if (rowEditingIndex === null || !rowEditData || !onSave) return;
 
     const newData = [...data];
-    newData[sheetEditingRowIndex] = sheetEditData;
+    newData[rowEditingIndex] = rowEditData;
 
     await onSave(newData);
-    setSheetEditingRowIndex(null);
-    setSheetEditData(null);
+    setRowEditingIndex(null);
+    setRowEditData(null);
+  };
+
+  const handleCellDialogSave = async () => {
+    if (!cellEditingDialog || !onSave) return;
+
+    // Try to parse JSON if it looks like JSON
+    let valueToSave: any = cellEditingDialog.value;
+    try {
+      // Only attempt to parse if it starts with { or [
+      if (valueToSave.trim().startsWith('{') || valueToSave.trim().startsWith('[')) {
+        valueToSave = JSON.parse(valueToSave);
+      }
+    } catch (e) {
+      // If parse fails, save as string
+    }
+
+    const newData = [...data];
+    newData[cellEditingDialog.rowIndex] = {
+      ...newData[cellEditingDialog.rowIndex],
+      [cellEditingDialog.key]: valueToSave
+    };
+
+    await onSave(newData);
+    setCellEditingDialog(null);
   };
 
   useEffect(() => {
@@ -117,20 +137,7 @@ export default function DataTable<T extends Record<string, any>>({
     setCurrentPage(1);
   };
 
-  const handleCellChange = (rowIndex: number, key: string, value: any) => {
-    const rowId = (data[rowIndex] as any).id || rowIndex;
-    setEditedRows(prev => ({
-      ...prev,
-      [rowId]: {
-        ...(prev[rowId] || {}),
-        [key]: value
-      }
-    }));
 
-    const newData = [...data];
-    newData[rowIndex] = { ...newData[rowIndex], [key]: value };
-    setData(newData);
-  };
 
   const handleSave = async () => {
     if (onSave) {
@@ -283,33 +290,19 @@ export default function DataTable<T extends Record<string, any>>({
               return (
                 <tr key={rowIndex} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                   {columns.map((col) => {
-                    const isCellEditing = editingCell?.rowIndex === actualIndex && editingCell?.key === col.key;
                     return (
                       <td
                         key={`${rowIndex}-${col.key}`}
                         className={`px-4 py-2 border-r border-white/5 last:border-r-0 ${col.className || ''}`}
                         onDoubleClick={() => {
-                          if (col.editable !== false) {
-                            setEditingCell({ rowIndex: actualIndex, key: col.key });
+                          if (col.editable !== false && onSave) {
+                            const val = row[col.key];
+                            const stringVal = typeof val === 'object' ? JSON.stringify(val, null, 2) : String(val || '');
+                            setCellEditingDialog({ rowIndex: actualIndex, key: col.key, value: stringVal });
                           }
                         }}
                       >
-                        {isCellEditing ? (
-                          <Input
-                            autoFocus
-                            value={row[col.key] || ''}
-                            onChange={(e) => handleCellChange(actualIndex, col.key, e.target.value)}
-                            onBlur={() => setEditingCell(null)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                setEditingCell(null);
-                              }
-                            }}
-                            className="h-8 bg-[#0f172a] border-white/10 text-xs focus-visible:ring-1 focus-visible:ring-blue-500"
-                          />
-                        ) : (
-                          col.cell ? col.cell(row) : row[col.key]
-                        )}
+                        {col.cell ? col.cell(row) : row[col.key]}
                       </td>
                     );
                   })}
@@ -320,8 +313,8 @@ export default function DataTable<T extends Record<string, any>>({
                         size="icon"
                         className="h-8 w-8 text-gray-400 hover:text-white"
                         onClick={() => {
-                          setSheetEditingRowIndex(actualIndex);
-                          setSheetEditData({ ...row });
+                          setRowEditingIndex(actualIndex);
+                          setRowEditData({ ...row });
                         }}
                       >
                         <Edit2 className="w-4 h-4" />
@@ -381,17 +374,19 @@ export default function DataTable<T extends Record<string, any>>({
         </div>
       </div>
 
-      <Sheet open={sheetEditingRowIndex !== null} onOpenChange={(open) => !open && setSheetEditingRowIndex(null)}>
-        <SheetContent className="bg-[#1B2431] border-white/10 text-white overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle className="text-white">Edit Row</SheetTitle>
-            <SheetDescription className="text-gray-400">
-              Make changes to the row data here. Click save when you're done.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="grid gap-4 py-4">
+      <Dialog open={rowEditingIndex !== null} onOpenChange={(open) => !open && setRowEditingIndex(null)}>
+        <DialogContent className="bg-[#1B2431] border-white/10 text-white max-h-[80vh] sm:max-w-[600px] flex flex-col p-0 gap-0">
+          <div className="p-6 pb-2">
+            <DialogHeader>
+              <DialogTitle className="text-white">Edit Row</DialogTitle>
+              <DialogDescription className="text-gray-400">
+                Make changes to the row data here. Click save when you're done.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="grid gap-4 py-4 px-6 overflow-y-auto flex-1 [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-[#1B2431] [&::-webkit-scrollbar-thumb]:bg-[#273142] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#374151]">
             {columns.map((col) => {
-              if (col.editable === false) return null;
+              if (col.editable === false || col.key === 'metadata') return null;
               return (
                 <div key={col.key} className="grid gap-2">
                   <Label htmlFor={`edit-${col.key}`} className="text-gray-300">
@@ -399,24 +394,66 @@ export default function DataTable<T extends Record<string, any>>({
                   </Label>
                   <Input
                     id={`edit-${col.key}`}
-                    value={sheetEditData?.[col.key] || ''}
-                    onChange={(e) => setSheetEditData(prev => prev ? ({ ...prev, [col.key]: e.target.value }) : null)}
+                    value={rowEditData?.[col.key] || ''}
+                    onChange={(e) => setRowEditData(prev => prev ? ({ ...prev, [col.key]: e.target.value }) : null)}
                     className="bg-[#0f172a] border-white/10 text-white"
                   />
                 </div>
               );
             })}
           </div>
-          <SheetFooter>
-            <Button variant="outline" onClick={() => setSheetEditingRowIndex(null)} className="border-white/10 text-gray-400 hover:text-white hover:bg-white/10">
+          <div className="p-6 pt-2 border-t border-white/5 bg-[#1B2431]">
+            <DialogFooter className="flex justify-between sm:justify-between w-full">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (rowEditData) {
+                    navigator.clipboard.writeText(JSON.stringify(rowEditData, null, 2));
+                    toast.success('Row data copied to clipboard');
+                  }
+                }}
+                className="border-white/10 text-gray-400 hover:text-white hover:bg-white/10 gap-2"
+              >
+                <Copy className="w-4 h-4" /> Copy JSON
+              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setRowEditingIndex(null)} className="border-white/10 text-gray-400 hover:text-white hover:bg-white/10">
+                  Cancel
+                </Button>
+                <Button onClick={handleRowEditSave} className="bg-blue-600 hover:bg-blue-700 text-white">
+                  Save changes
+                </Button>
+              </div>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={cellEditingDialog !== null} onOpenChange={(open) => !open && setCellEditingDialog(null)}>
+        <DialogContent className="bg-[#1B2431] border-white/10 text-white sm:max-w-[800px] max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-white">Edit Cell Content</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Edit the content of the cell. Valid JSON will be parsed automatically on save.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 flex-1 min-h-0">
+            <textarea
+              className="w-full h-full min-h-[300px] bg-[#0f172a] border border-white/10 rounded-md p-4 text-white font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-[#1B2431] [&::-webkit-scrollbar-thumb]:bg-[#273142] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#374151]"
+              value={cellEditingDialog?.value || ''}
+              onChange={(e) => setCellEditingDialog(prev => prev ? ({ ...prev, value: e.target.value }) : null)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCellEditingDialog(null)} className="border-white/10 text-gray-400 hover:text-white hover:bg-white/10">
               Cancel
             </Button>
-            <Button onClick={handleSheetSave} className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Button onClick={handleCellDialogSave} className="bg-blue-600 hover:bg-blue-700 text-white">
               Save changes
             </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

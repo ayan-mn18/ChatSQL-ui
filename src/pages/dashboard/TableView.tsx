@@ -55,6 +55,15 @@ export default function TableView() {
           { key: 'status', header: 'Status', cell: (row) => <Badge variant="outline" className={`capitalize border-white/10 ${row.status === 'active' ? 'text-green-400 bg-green-400/10' : 'text-gray-400'}`}>{row.status}</Badge> },
           { key: 'created_at', header: 'Joined', cell: (row) => new Date(row.created_at).toLocaleDateString(), className: 'text-gray-400' },
           { key: 'last_login', header: 'Last Login', cell: (row) => new Date(row.last_login).toLocaleDateString(), className: 'text-gray-400' },
+          {
+            key: 'metadata',
+            header: 'Metadata',
+            cell: (row) => (
+              <div className="max-w-[200px] truncate font-mono text-xs text-gray-400" title={JSON.stringify(row.metadata, null, 2)}>
+                {JSON.stringify(row.metadata)}
+              </div>
+            )
+          },
         ];
       case 'products':
         return [
