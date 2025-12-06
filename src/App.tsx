@@ -7,6 +7,7 @@ import DashboardLayout from './layouts/DashboardLayout';
 import ConnectionLayout from './layouts/ConnectionLayout';
 import SignInPage from './pages/auth/SignInPage';
 import SignUpPage from './pages/auth/SignUpPage';
+import { ProtectedRoute } from './components/ProtectedRoute';
 import {
   ConnectionsPage,
   AnalyticsPage,
