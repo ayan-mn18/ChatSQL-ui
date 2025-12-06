@@ -5,6 +5,8 @@ import FuturisticLanding from './pages/FuturisticLanding';
 import ChatSQLLanding from './pages/ChatSQLLanding';
 import DashboardLayout from './layouts/DashboardLayout';
 import ConnectionLayout from './layouts/ConnectionLayout';
+import SignInPage from './pages/auth/SignInPage';
+import SignUpPage from './pages/auth/SignUpPage';
 import {
   ConnectionsPage,
   AnalyticsPage,
@@ -22,6 +24,10 @@ function App() {
       <Route path="/landing" element={<FuturisticLanding />} />
       <Route path="/hexora" element={<LandingPage />} />
       <Route path="/chat" element={<ChatPage />} />
+
+      {/* Auth Routes */}
+      <Route path="/auth/signin" element={<SignInPage />} />
+      <Route path="/auth/signup" element={<SignUpPage />} />
 
       {/* Dashboard Routes */}
       <Route path="/dashboard" element={<DashboardLayout />}>

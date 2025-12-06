@@ -89,7 +89,7 @@ const SquareGrid = () => {
       </div>
 
       <div className="flex items-center gap-4">
-        <a href="#" className="text-sm font-medium text-white hover:text-gray-300 hidden sm:block">Sign In</a>
+        <Link to="/auth/signin" className="text-sm font-medium text-white hover:text-gray-300 hidden sm:block">Sign In</Link>
         <Link to="/dashboard" className="bg-[#6366f1] hover:bg-[#5558dd] text-white px-5 py-2.5 rounded-full text-sm font-medium transition-all shadow-[0_0_15px_rgba(99,102,241,0.5)] hover:shadow-[0_0_25px_rgba(99,102,241,0.6)]">
           Get Started
         </Link>
