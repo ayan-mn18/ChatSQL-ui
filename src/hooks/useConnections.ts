@@ -1,61 +1,228 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
+import { connectionService } from '../services/connection.service';
+import {
+  TestConnectionRequest,
+  TestConnectionResponse,
+  CreateConnectionRequest,
+  UpdateConnectionRequest,
+  ConnectionPublic,
+} from '../types';
 
-export interface DatabaseConnection {
-  id: string;
-  name: string;
-  type: 'postgres' | 'mysql' | 'mongodb';
-  host: string;
-  port: string;
-  user: string;
-  database: string;
-  createdAt: string;
+// ============================================
+// CONNECTION HOOK STATE
+// ============================================
+interface UseConnectionsState {
+  connections: ConnectionPublic[];
+  isLoading: boolean;
+  error: string | null;
+  testResult: TestConnectionResponse | null;
+  isTesting: boolean;
 }
 
+// ============================================
+// CONNECTION HOOK
+// ============================================
 export function useConnections() {
-  const [connections, setConnections] = useState<DatabaseConnection[]>([]);
+  const [state, setState] = useState<UseConnectionsState>({
+    connections: [],
+    isLoading: false,
+    error: null,
+    testResult: null,
+    isTesting: false,
+  });
 
-  useEffect(() => {
-    const stored = localStorage.getItem('chatsql_connections');
-    if (stored) {
-      setConnections(JSON.parse(stored));
+  // ============================================
+  // TEST CONNECTION
+  // ============================================
+  const testConnection = useCallback(async (data: TestConnectionRequest): Promise<TestConnectionResponse> => {
+    setState(prev => ({ ...prev, isTesting: true, error: null, testResult: null }));
+    
+    try {
+      const result = await connectionService.testConnection(data);
+      setState(prev => ({ ...prev, isTesting: false, testResult: result }));
+      return result;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || 'Failed to test connection';
+      const errorCode = error.response?.data?.code || 'CONNECTION_TEST_ERROR';
+      
+      const result: TestConnectionResponse = {
+        success: false,
+        message: errorMessage,
+        error: errorMessage,
+        code: errorCode,
+      };
+      
+      setState(prev => ({ ...prev, isTesting: false, testResult: result, error: errorMessage }));
+      return result;
     }
   }, []);
 
-  const saveConnections = (newConnections: DatabaseConnection[]) => {
-    setConnections(newConnections);
-    localStorage.setItem('chatsql_connections', JSON.stringify(newConnections));
-  };
+  // ============================================
+  // FETCH ALL CONNECTIONS
+  // ============================================
+  const fetchConnections = useCallback(async (): Promise<ConnectionPublic[]> => {
+    setState(prev => ({ ...prev, isLoading: true, error: null }));
+    
+    try {
+      const response = await connectionService.getAllConnections();
+      const connections = response.data || [];
+      setState(prev => ({ ...prev, isLoading: false, connections }));
+      return connections;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch connections';
+      setState(prev => ({ ...prev, isLoading: false, error: errorMessage }));
+      throw new Error(errorMessage);
+    }
+  }, []);
 
-  const addConnection = (connection: Omit<DatabaseConnection, 'id' | 'createdAt'>) => {
-    const newConnection: DatabaseConnection = {
-      ...connection,
-      id: Math.random().toString(36).substr(2, 9),
-      createdAt: new Date().toISOString(),
-    };
-    saveConnections([...connections, newConnection]);
-  };
+  // ============================================
+  // CREATE CONNECTION
+  // ============================================
+  const createConnection = useCallback(async (data: CreateConnectionRequest): Promise<ConnectionPublic> => {
+    setState(prev => ({ ...prev, isLoading: true, error: null }));
+    
+    try {
+      const response = await connectionService.createConnection(data);
+      if (!response.data) {
+        throw new Error('No connection data returned');
+      }
+      
+      setState(prev => ({
+        ...prev,
+        isLoading: false,
+        connections: [...prev.connections, response.data!],
+      }));
+      
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to create connection';
+      setState(prev => ({ ...prev, isLoading: false, error: errorMessage }));
+      throw new Error(errorMessage);
+    }
+  }, []);
 
-  const removeConnection = (id: string) => {
-    saveConnections(connections.filter((c) => c.id !== id));
-  };
+  // ============================================
+  // GET CONNECTION BY ID
+  // ============================================
+  const getConnectionById = useCallback(async (id: string): Promise<ConnectionPublic> => {
+    setState(prev => ({ ...prev, isLoading: true, error: null }));
+    
+    try {
+      const response = await connectionService.getConnectionById(id);
+      if (!response.data) {
+        throw new Error('Connection not found');
+      }
+      
+      setState(prev => ({ ...prev, isLoading: false }));
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch connection';
+      setState(prev => ({ ...prev, isLoading: false, error: errorMessage }));
+      throw new Error(errorMessage);
+    }
+  }, []);
 
-  const updateConnection = (id: string, updates: Partial<DatabaseConnection>) => {
-    saveConnections(connections.map(c => c.id === id ? { ...c, ...updates } : c));
-  };
+  // ============================================
+  // UPDATE CONNECTION
+  // ============================================
+  const updateConnection = useCallback(async (id: string, data: UpdateConnectionRequest): Promise<ConnectionPublic> => {
+    setState(prev => ({ ...prev, isLoading: true, error: null }));
+    
+    try {
+      const response = await connectionService.updateConnection(id, data);
+      if (!response.data) {
+        throw new Error('No connection data returned');
+      }
+      
+      setState(prev => ({
+        ...prev,
+        isLoading: false,
+        connections: prev.connections.map(c => c.id === id ? response.data! : c),
+      }));
+      
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to update connection';
+      setState(prev => ({ ...prev, isLoading: false, error: errorMessage }));
+      throw new Error(errorMessage);
+    }
+  }, []);
 
-  const testConnection = async (details: any) => {
-    return new Promise<boolean>((resolve) => {
-      setTimeout(() => {
-        resolve(true); // Always succeed for mock
-      }, 1500);
-    });
-  };
+  // ============================================
+  // DELETE CONNECTION
+  // ============================================
+  const deleteConnection = useCallback(async (id: string): Promise<void> => {
+    setState(prev => ({ ...prev, isLoading: true, error: null }));
+    
+    try {
+      await connectionService.deleteConnection(id);
+      
+      setState(prev => ({
+        ...prev,
+        isLoading: false,
+        connections: prev.connections.filter(c => c.id !== id),
+      }));
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to delete connection';
+      setState(prev => ({ ...prev, isLoading: false, error: errorMessage }));
+      throw new Error(errorMessage);
+    }
+  }, []);
+
+  // ============================================
+  // SYNC SCHEMA
+  // ============================================
+  const syncSchema = useCallback(async (id: string): Promise<{ jobId: string; message: string }> => {
+    setState(prev => ({ ...prev, isLoading: true, error: null }));
+    
+    try {
+      const response = await connectionService.syncSchema(id);
+      if (!response.data) {
+        throw new Error('No job data returned');
+      }
+      
+      setState(prev => ({ ...prev, isLoading: false }));
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to sync schema';
+      setState(prev => ({ ...prev, isLoading: false, error: errorMessage }));
+      throw new Error(errorMessage);
+    }
+  }, []);
+
+  // ============================================
+  // CLEAR ERROR
+  // ============================================
+  const clearError = useCallback(() => {
+    setState(prev => ({ ...prev, error: null }));
+  }, []);
+
+  // ============================================
+  // CLEAR TEST RESULT
+  // ============================================
+  const clearTestResult = useCallback(() => {
+    setState(prev => ({ ...prev, testResult: null }));
+  }, []);
 
   return {
-    connections,
-    addConnection,
-    removeConnection,
-    updateConnection,
+    // State
+    connections: state.connections,
+    isLoading: state.isLoading,
+    error: state.error,
+    testResult: state.testResult,
+    isTesting: state.isTesting,
+    
+    // Actions
     testConnection,
+    fetchConnections,
+    createConnection,
+    getConnectionById,
+    updateConnection,
+    deleteConnection,
+    syncSchema,
+    clearError,
+    clearTestResult,
   };
 }
+
+export default useConnections;

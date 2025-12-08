@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { toast } from 'react-hot-toast';
 import {
   Plus,
   Loader2,
@@ -19,8 +20,21 @@ import {
   Check,
   Pencil
 } from 'lucide-react';
-import { useConnections, DatabaseConnection } from '@/hooks/useConnections';
+import { useConnections } from '@/hooks/useConnections';
 import { cn } from '@/lib/utils';
+import { TestConnectionRequest } from '@/types';
+
+// Legacy interface for backwards compatibility with existing connection cards
+export interface DatabaseConnection {
+  id: string;
+  name: string;
+  type: 'postgres' | 'mysql' | 'mongodb';
+  host: string;
+  port: string;
+  user: string;
+  database: string;
+  createdAt: string;
+}
 
 const DB_PROVIDERS = [
   {
@@ -120,11 +134,32 @@ export function AddConnectionDialog({
   const [selectedProvider, setSelectedProvider] = useState<typeof DB_PROVIDERS[0] | null>(null);
   const [testing, setTesting] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const { addConnection, updateConnection, testConnection } = useConnections();
+  const { testConnection } = useConnections();
+
+  // Local storage functions for saving connections (until backend CRUD is implemented)
+  const saveConnectionToLocalStorage = (connection: Omit<DatabaseConnection, 'id' | 'createdAt'>) => {
+    const stored = localStorage.getItem('chatsql_connections');
+    const connections: DatabaseConnection[] = stored ? JSON.parse(stored) : [];
+    const newConnection: DatabaseConnection = {
+      ...connection,
+      id: Math.random().toString(36).substr(2, 9),
+      createdAt: new Date().toISOString(),
+    };
+    connections.push(newConnection);
+    localStorage.setItem('chatsql_connections', JSON.stringify(connections));
+    return newConnection;
+  };
+
+  const updateConnectionInLocalStorage = (id: string, updates: Partial<DatabaseConnection>) => {
+    const stored = localStorage.getItem('chatsql_connections');
+    const connections: DatabaseConnection[] = stored ? JSON.parse(stored) : [];
+    const updatedConnections = connections.map(c => c.id === id ? { ...c, ...updates } : c);
+    localStorage.setItem('chatsql_connections', JSON.stringify(updatedConnections));
+  };
 
   const [formData, setFormData] = useState({
     name: '',
-    type: 'postgres',
+    type: 'postgres' as 'postgres' | 'mysql' | 'mongodb',
     host: 'localhost',
     port: '5432',
     user: 'postgres',
@@ -161,7 +196,7 @@ export function AddConnectionDialog({
     setSelectedProvider(provider);
     setFormData(prev => ({
       ...prev,
-      type: provider.type,
+      type: provider.type as 'postgres' | 'mysql' | 'mongodb',
       name: provider.name === 'Supabase' || provider.name === 'Amazon RDS' ? `${provider.name} DB` : prev.name
     }));
     setStep(2);
@@ -173,31 +208,73 @@ export function AddConnectionDialog({
   };
 
   const handleTest = async () => {
+    // Validate required fields
+    if (!formData.host.trim() || !formData.database.trim() || !formData.user.trim() || !formData.password.trim()) {
+      toast.error('Please fill in all connection fields');
+      return;
+    }
+
     setTesting(true);
     setTestStatus('idle');
+
     try {
-      await testConnection(formData);
-      setTestStatus('success');
-      if (step === 2) setStep(3);
-    } catch (e) {
+      // Map form data to API request format
+      const connectionData: TestConnectionRequest = {
+        host: formData.host.trim(),
+        port: parseInt(formData.port) || 5432,
+        db_name: formData.database.trim(),
+        username: formData.user.trim(),
+        password: formData.password.trim(),
+        ssl: true, // SSL enabled by default for security
+      };
+
+      const result = await testConnection(connectionData);
+
+      if (result.success) {
+        setTestStatus('success');
+        toast.success(`Connection successful! (${result.latency_ms || 0}ms)`, {
+          icon: '✅',
+          duration: 3000,
+        });
+        if (step === 2) setStep(3);
+      } else {
+        setTestStatus('error');
+        toast.error(result.message || result.error || 'Connection failed', {
+          duration: 4000,
+        });
+      }
+    } catch (e: any) {
       setTestStatus('error');
+      const errorMessage = e.message || 'Failed to test connection';
+      toast.error(errorMessage, {
+        duration: 4000,
+      });
     } finally {
       setTesting(false);
     }
   };
 
   const handleSave = () => {
-    if (testStatus !== 'success') return;
-
-    if (connectionToEdit) {
-      updateConnection(connectionToEdit.id, formData as any);
-    } else {
-      addConnection(formData as any);
+    if (testStatus !== 'success') {
+      toast.error('Please test the connection first');
+      return;
     }
 
-    setOpen(false);
-    onConnectionAdded();
-    resetForm();
+    try {
+      if (connectionToEdit) {
+        updateConnectionInLocalStorage(connectionToEdit.id, formData);
+        toast.success('Connection updated successfully');
+      } else {
+        saveConnectionToLocalStorage(formData);
+        toast.success('Connection saved successfully');
+      }
+
+      setOpen(false);
+      onConnectionAdded();
+      resetForm();
+    } catch (e) {
+      toast.error('Failed to save connection');
+    }
   };
 
   const resetForm = () => {
@@ -206,7 +283,7 @@ export function AddConnectionDialog({
     setTestStatus('idle');
     setFormData({
       name: '',
-      type: 'postgres',
+      type: 'postgres' as 'postgres' | 'mysql' | 'mongodb',
       host: 'localhost',
       port: '5432',
       user: 'postgres',
