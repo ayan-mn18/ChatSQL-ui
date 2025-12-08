@@ -7,6 +7,9 @@ import DashboardLayout from './layouts/DashboardLayout';
 import ConnectionLayout from './layouts/ConnectionLayout';
 import SignInPage from './pages/auth/SignInPage';
 import SignUpPage from './pages/auth/SignUpPage';
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
+import ResetPasswordPage from './pages/auth/ResetPasswordPage';
+import ProfilePage from './pages/ProfilePage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import {
   ConnectionsPage,
@@ -29,22 +32,27 @@ function App() {
       {/* Auth Routes */}
       <Route path="/auth/signin" element={<SignInPage />} />
       <Route path="/auth/signup" element={<SignUpPage />} />
+      <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
 
       {/* Dashboard Routes */}
-      <Route path="/dashboard" element={<DashboardLayout />}>
-        <Route index element={<Navigate to="/dashboard/connections" replace />} />
-        <Route path="connections" element={<ConnectionsPage />} />
-        <Route path="analytics" element={<AnalyticsPage />} />
-        <Route path="settings" element={<SettingsPage />} />
-      </Route>
+      <Route element={<ProtectedRoute />}>
+        <Route path="/dashboard" element={<DashboardLayout />}>
+          <Route index element={<Navigate to="/dashboard/connections" replace />} />
+          <Route path="connections" element={<ConnectionsPage />} />
+          <Route path="analytics" element={<AnalyticsPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+          <Route path="profile" element={<ProfilePage />} />
+        </Route>
 
-      {/* Connection Routes */}
-      <Route path="/dashboard/connection/:id" element={<ConnectionLayout />}>
-        <Route index element={<Navigate to="overview" replace />} />
-        <Route path="overview" element={<ConnectionOverview />} />
-        <Route path="tables/:tableName" element={<TableView />} />
-        <Route path="sql" element={<SQLEditor />} />
-        <Route path="visualizer" element={<SchemaVisualizer />} />
+        {/* Connection Routes */}
+        <Route path="/dashboard/connection/:id" element={<ConnectionLayout />}>
+          <Route index element={<Navigate to="overview" replace />} />
+          <Route path="overview" element={<ConnectionOverview />} />
+          <Route path="tables/:tableName" element={<TableView />} />
+          <Route path="sql" element={<SQLEditor />} />
+          <Route path="visualizer" element={<SchemaVisualizer />} />
+        </Route>
       </Route>
     </Routes>
   );

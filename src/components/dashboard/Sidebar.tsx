@@ -1,8 +1,17 @@
 import { useState } from 'react';
-import { NavLink } from 'react-router-dom';
-import { Database, Settings, BarChart3, LogOut } from 'lucide-react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { Database, Settings, BarChart3, LogOut, User as UserIcon, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const navItems = [
   { icon: Database, label: 'Connections', href: '/dashboard/connections' },
@@ -17,9 +26,21 @@ interface SidebarProps {
 
 export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
   const [isHovered, setIsHovered] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
-  // The sidebar is "expanded" visually if it's NOT collapsed OR if it IS collapsed but currently hovered
-  const isExpanded = !isCollapsed || isHovered;
+  // The sidebar is "expanded" visually if it's NOT collapsed OR if it IS collapsed but currently hovered OR if the dropdown is open
+  const isExpanded = !isCollapsed || isHovered || isDropdownOpen;
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/auth/signin');
+    } catch (error) {
+      console.error('Logout failed', error);
+    }
+  };
 
   return (
     <div
@@ -73,17 +94,39 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
 
       {/* User Profile */}
       <div className="p-4 border-t border-white/5 overflow-hidden">
-        <div className={cn("flex items-center gap-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer group", isExpanded ? "px-4 py-3" : "p-0 w-10 h-10 justify-center mx-auto")}>
-          <Avatar className="w-8 h-8 border border-white/10 shrink-0">
-            <AvatarImage src="https://github.com/shadcn.png" />
-            <AvatarFallback>US</AvatarFallback>
-          </Avatar>
-          <div className={cn("flex-1 min-w-0 transition-all duration-300 overflow-hidden", isExpanded ? "opacity-100 w-auto" : "opacity-0 w-0 hidden")}>
-            <p className="text-sm font-medium text-white truncate">User Name</p>
-            <p className="text-xs text-gray-500 truncate">user@chatsql.app</p>
-          </div>
-          {isExpanded && <LogOut className="w-4 h-4 text-gray-500 group-hover:text-white transition-colors shrink-0" />}
-        </div>
+        <DropdownMenu onOpenChange={setIsDropdownOpen}>
+          <DropdownMenuTrigger asChild>
+            <button className={cn("flex items-center gap-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer group w-full outline-none", isExpanded ? "px-4 py-3" : "p-0 w-10 h-10 justify-center mx-auto")}>
+              <Avatar className="w-8 h-8 border border-white/10 shrink-0">
+                <AvatarImage src={user?.profile_url || "https://github.com/shadcn.png"} />
+                <AvatarFallback>{user?.username?.substring(0, 2).toUpperCase() || 'US'}</AvatarFallback>
+              </Avatar>
+              <div className={cn("flex-1 min-w-0 text-left transition-all duration-300 overflow-hidden", isExpanded ? "opacity-100 w-auto" : "opacity-0 w-0 hidden")}>
+                <p className="text-sm font-medium text-white truncate">{user?.username || 'User'}</p>
+                <p className="text-xs text-gray-500 truncate">{user?.email || 'user@chatsql.app'}</p>
+              </div>
+              {isExpanded && <ChevronUp className="w-4 h-4 text-gray-500 group-hover:text-white transition-colors shrink-0" />}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56 bg-[#1B2431] border-gray-800 text-white">
+            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+            <DropdownMenuSeparator className="bg-gray-800" />
+            <DropdownMenuItem
+              className="cursor-pointer hover:bg-white/5 focus:bg-white/5 focus:text-white"
+              onClick={() => navigate('/dashboard/profile')}
+            >
+              <UserIcon className="mr-2 h-4 w-4" />
+              <span>Profile</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer hover:bg-white/5 focus:bg-white/5 text-red-400 hover:text-red-400 focus:text-red-400"
+              onClick={handleLogout}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              <span>Log out</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );

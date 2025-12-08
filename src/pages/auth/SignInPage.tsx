@@ -4,12 +4,13 @@ import { ChevronLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { SignInForm } from './SignInForm';
 import { OTPVerification } from './OTPVerification';
+import { toast } from 'react-hot-toast';
 
 type AuthStep = 'signin' | 'otp';
 
 export default function SignInPage() {
   const navigate = useNavigate();
-  const { isAuthenticated, signIn, verifyOTP, resendOTP, isLoading, error, setError, resendCooldown } = useAuth();
+  const { isAuthenticated, login, verifyEmail, resendOTP, isLoading, error, clearError } = useAuth();
   const [step, setStep] = useState<AuthStep>('signin');
   const [email, setEmail] = useState('');
   const [isResending, setIsResending] = useState(false);
@@ -21,19 +22,29 @@ export default function SignInPage() {
     }
   }, [isAuthenticated, navigate]);
 
-  const handleSignInSubmit = async (userEmail: string) => {
+  const handleSignInSubmit = async (userEmail: string, password: string) => {
     try {
-      await signIn(userEmail);
-      setEmail(userEmail);
-      setStep('otp');
-    } catch {
-      // Error is handled by context
+      await login({ email: userEmail, password });
+      navigate('/dashboard');
+    } catch (err: any) {
+      if (err.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
+        setEmail(userEmail);
+        setStep('otp');
+        clearError();
+        toast.error('Please verify your email to continue.');
+        // Trigger resend OTP so they have a fresh code
+        try {
+          await resendOTP(userEmail);
+        } catch {
+          // Ignore resend error, maybe they just need to enter the code they already have
+        }
+      }
     }
   };
 
-  const handleOTPVerify = async () => {
+  const handleOTPVerify = async (otp: string) => {
     try {
-      await verifyOTP();
+      await verifyEmail({ email, otp });
       navigate('/dashboard');
     } catch {
       // Error is handled by context
@@ -43,7 +54,7 @@ export default function SignInPage() {
   const handleResendOTP = async () => {
     setIsResending(true);
     try {
-      await resendOTP();
+      await resendOTP(email);
     } catch {
       // Error is handled by context
     } finally {
@@ -74,7 +85,7 @@ export default function SignInPage() {
             <h1 className="text-3xl font-bold text-white">Sign In to ChatSQL</h1>
             <p className="text-gray-400">
               {step === 'signin'
-                ? 'Enter your email to continue'
+                ? 'Enter your email and password to continue'
                 : 'Check your email for the verification code'}
             </p>
           </div>
@@ -84,7 +95,7 @@ export default function SignInPage() {
         <div className="bg-[#1B2431]/40 backdrop-blur-xl border border-gray-800 rounded-2xl p-8 shadow-2xl">
           {step === 'signin' && (
             <SignInForm
-              onNext={handleSignInSubmit}
+              onLogin={handleSignInSubmit}
               isLoading={isLoading}
               error={error || ''}
             />
@@ -99,33 +110,19 @@ export default function SignInPage() {
                 isLoading={isLoading}
                 isResending={isResending}
                 error={error || ''}
-                resendCooldown={resendCooldown}
               />
-
               <button
                 onClick={() => {
                   setStep('signin');
-                  setEmail('');
-                  setError(null);
+                  clearError();
                 }}
-                className="w-full text-center text-sm text-gray-400 hover:text-gray-300 transition-colors mt-6"
+                className="w-full mt-4 text-sm text-gray-400 hover:text-white transition-colors"
               >
-                Use a different email
+                Back to Sign In
               </button>
             </>
           )}
         </div>
-
-        {/* Footer */}
-        <p className="text-center text-sm text-gray-500 mt-6">
-          Don't have an account?{' '}
-          <button
-            onClick={() => navigate('/auth/signup')}
-            className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
-          >
-            Sign Up
-          </button>
-        </p>
       </div>
     </div>
   );

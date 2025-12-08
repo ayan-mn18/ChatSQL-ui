@@ -1,17 +1,18 @@
 import { NavLink } from 'react-router-dom';
-import { Database, Settings, BarChart3, Home } from 'lucide-react';
+import { Database, Settings, BarChart3, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { icon: Database, label: 'Connections', href: '/dashboard/connections' },
   { icon: BarChart3, label: 'Analytics', href: '/dashboard/analytics' },
   { icon: Settings, label: 'Settings', href: '/dashboard/settings' },
+  { icon: User, label: 'Profile', href: '/dashboard/profile' },
 ];
 
 export function MobileNav() {
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 md:hidden">
-      <div className="flex items-center gap-1 p-2 rounded-full bg-[#1e293b]/80 backdrop-blur-xl border border-white/10 shadow-2xl shadow-black/50">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] md:hidden">
+      <div className="flex items-center gap-1 p-2 rounded-full bg-[#1e293b]/90 backdrop-blur-xl border border-white/10 shadow-2xl shadow-black/50">
         {navItems.map((item) => (
           <NavLink
             key={item.href}

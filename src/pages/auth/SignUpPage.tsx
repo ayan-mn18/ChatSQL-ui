@@ -4,6 +4,7 @@ import { ChevronLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { SignUpForm } from './SignUpForm';
 import { OTPVerification } from './OTPVerification';
+import { toast } from 'react-hot-toast';
 
 type AuthStep = 'signup' | 'otp';
 
@@ -15,7 +16,7 @@ interface SignUpData {
 
 export default function SignUpPage() {
   const navigate = useNavigate();
-  const { isAuthenticated, signUp, verifyOTP, resendOTP, isLoading, error, setError, resendCooldown } = useAuth();
+  const { isAuthenticated, register, verifyEmail, resendOTP, isLoading, error, clearError } = useAuth();
   const [step, setStep] = useState<AuthStep>('signup');
   const [signupData, setSignupData] = useState<SignUpData>({ email: '', username: '', password: '' });
   const [isResending, setIsResending] = useState(false);
@@ -29,17 +30,18 @@ export default function SignUpPage() {
 
   const handleSignUpSubmit = async (data: SignUpData) => {
     try {
-      await signUp(data.email, data.username);
+      await register(data);
       setSignupData(data);
       setStep('otp');
+      toast.success('Account created! Please check your email for the verification code.');
     } catch {
       // Error is handled by context
     }
   };
 
-  const handleOTPVerify = async () => {
+  const handleOTPVerify = async (otp: string) => {
     try {
-      await verifyOTP();
+      await verifyEmail({ email: signupData.email, otp });
       navigate('/dashboard');
     } catch {
       // Error is handled by context
@@ -49,7 +51,7 @@ export default function SignUpPage() {
   const handleResendOTP = async () => {
     setIsResending(true);
     try {
-      await resendOTP();
+      await resendOTP(signupData.email);
     } catch {
       // Error is handled by context
     } finally {
@@ -105,33 +107,19 @@ export default function SignUpPage() {
                 isLoading={isLoading}
                 isResending={isResending}
                 error={error || ''}
-                resendCooldown={resendCooldown}
               />
-
               <button
                 onClick={() => {
                   setStep('signup');
-                  setSignupData({ email: '', username: '', password: '' });
-                  setError(null);
+                  clearError();
                 }}
-                className="w-full text-center text-sm text-gray-400 hover:text-gray-300 transition-colors mt-6"
+                className="w-full mt-4 text-sm text-gray-400 hover:text-white transition-colors"
               >
-                Create a different account
+                Back to Sign Up
               </button>
             </>
           )}
         </div>
-
-        {/* Footer */}
-        <p className="text-center text-sm text-gray-500 mt-6">
-          Already have an account?{' '}
-          <button
-            onClick={() => navigate('/auth/signin')}
-            className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
-          >
-            Sign In
-          </button>
-        </p>
       </div>
     </div>
   );
