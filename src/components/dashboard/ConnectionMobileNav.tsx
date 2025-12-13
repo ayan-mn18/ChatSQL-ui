@@ -8,7 +8,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 
 export function ConnectionMobileNav() {
-  const { id } = useParams();
+  const { connectionId } = useParams();
+  const id = connectionId; // Use local alias
   const [isTablesOpen, setIsTablesOpen] = useState(false);
 
   // Mock tables (should match Sidebar)

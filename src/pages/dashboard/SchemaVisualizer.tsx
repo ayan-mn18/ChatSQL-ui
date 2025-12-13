@@ -114,7 +114,7 @@ function transformRelationsToEdges(relations: ERDRelation[]): Edge[] {
 }
 
 function SchemaVisualizerContent() {
-  const { id: connectionId } = useParams();
+  const { connectionId } = useParams();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [isLoading, setIsLoading] = useState(true);

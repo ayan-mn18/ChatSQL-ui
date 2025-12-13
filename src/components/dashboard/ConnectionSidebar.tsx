@@ -28,7 +28,8 @@ interface ConnectionSidebarProps {
 }
 
 export function ConnectionSidebar({ className, onClose }: ConnectionSidebarProps) {
-  const { id } = useParams();
+  const { connectionId } = useParams();
+  const id = connectionId; // Keep using id locally for easier transition
   const navigate = useNavigate();
   const { connections, fetchConnections } = useConnections();
   const {
@@ -123,6 +124,12 @@ export function ConnectionSidebar({ className, onClose }: ConnectionSidebarProps
     return { schemas: filteredSchemas, matchedTables };
   }, [schemas, tables, searchQuery]);
 
+  // Navigate to table view
+  const navigateToTable = (schemaName: string, tableName: string) => {
+    navigate(`/dashboard/connection/${id}/table/${schemaName}/${tableName}`);
+    if (onClose) onClose();
+  };
+
   // Render table with columns
   const renderTable = (table: TableSchema, schemaName: string) => {
     const isExpanded = expandedTables[`${schemaName}.${table.table_name}`];
@@ -130,21 +137,34 @@ export function ConnectionSidebar({ className, onClose }: ConnectionSidebarProps
 
     return (
       <div key={tableKey} className="ml-4">
-        <button
-          onClick={() => toggleTable(tableKey)}
-          className="flex items-center gap-2 w-full px-2 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 rounded transition-colors"
-        >
-          {isExpanded ? (
-            <ChevronDown className="w-3 h-3 text-gray-500 flex-shrink-0" />
-          ) : (
-            <ChevronRight className="w-3 h-3 text-gray-500 flex-shrink-0" />
-          )}
-          <Table className="w-3 h-3 flex-shrink-0" />
-          <span className="truncate flex-1 text-left">{table.table_name}</span>
-          {table.table_type === 'VIEW' && (
-            <span className="text-[10px] bg-purple-500/20 text-purple-400 px-1 rounded">VIEW</span>
-          )}
-        </button>
+        <div className="flex items-center gap-1">
+          {/* Toggle columns button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleTable(tableKey);
+            }}
+            className="p-1 text-gray-500 hover:text-white hover:bg-white/5 rounded transition-colors"
+          >
+            {isExpanded ? (
+              <ChevronDown className="w-3 h-3" />
+            ) : (
+              <ChevronRight className="w-3 h-3" />
+            )}
+          </button>
+
+          {/* Table name - click to navigate to table view */}
+          <button
+            onClick={() => navigateToTable(schemaName, table.table_name)}
+            className="flex items-center gap-2 flex-1 px-2 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 rounded transition-colors"
+          >
+            <Table className="w-3 h-3 flex-shrink-0" />
+            <span className="truncate flex-1 text-left">{table.table_name}</span>
+            {table.table_type === 'VIEW' && (
+              <span className="text-[10px] bg-purple-500/20 text-purple-400 px-1 rounded">VIEW</span>
+            )}
+          </button>
+        </div>
 
         {/* Columns */}
         {isExpanded && table.columns && (

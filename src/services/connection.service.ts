@@ -142,6 +142,218 @@ export const connectionService = {
     const response = await api.get<ApiResponse<ERDRelation[]>>(`/connections/${connectionId}/relations`);
     return response.data;
   },
+
+  // ============================================
+  // TABLE DATA OPERATIONS
+  // ============================================
+
+  /**
+   * Get table columns with metadata
+   * @param connectionId - Connection UUID
+   * @param schemaName - PostgreSQL schema name
+   * @param tableName - Table name
+   * @returns Column definitions and primary key info
+   */
+  getTableColumns: async (
+    connectionId: string,
+    schemaName: string,
+    tableName: string
+  ): Promise<ApiResponse<TableColumnsResponse>> => {
+    const response = await api.get<ApiResponse<TableColumnsResponse>>(
+      `/connections/${connectionId}/tables/${schemaName}/${tableName}/columns`
+    );
+    return response.data;
+  },
+
+  /**
+   * Get table data with pagination, sorting, and filtering
+   * @param connectionId - Connection UUID
+   * @param schemaName - PostgreSQL schema name
+   * @param tableName - Table name
+   * @param options - Pagination, sorting, and filtering options
+   * @returns Paginated table data
+   */
+  getTableData: async (
+    connectionId: string,
+    schemaName: string,
+    tableName: string,
+    options: TableDataOptions = {}
+  ): Promise<ApiResponse<TableDataResponse>> => {
+    const params = new URLSearchParams();
+    
+    if (options.page) params.append('page', String(options.page));
+    if (options.pageSize) params.append('pageSize', String(options.pageSize));
+    if (options.sortBy) params.append('sortBy', options.sortBy);
+    if (options.sortOrder) params.append('sortOrder', options.sortOrder);
+    if (options.filters && options.filters.length > 0) {
+      params.append('filters', JSON.stringify(options.filters));
+    }
+    
+    const queryString = params.toString();
+    const url = `/connections/${connectionId}/tables/${schemaName}/${tableName}/data${queryString ? `?${queryString}` : ''}`;
+    
+    const response = await api.get<ApiResponse<TableDataResponse>>(url);
+    return response.data;
+  },
+
+  /**
+   * Insert a new row into a table
+   * @param connectionId - Connection UUID
+   * @param schemaName - PostgreSQL schema name
+   * @param tableName - Table name
+   * @param values - Column values for the new row
+   * @returns Mutation result
+   */
+  insertRow: async (
+    connectionId: string,
+    schemaName: string,
+    tableName: string,
+    values: Record<string, any>
+  ): Promise<ApiResponse<MutationResult>> => {
+    const response = await api.post<ApiResponse<MutationResult>>(
+      `/connections/${connectionId}/tables/${schemaName}/${tableName}/data`,
+      { values }
+    );
+    return response.data;
+  },
+
+  /**
+   * Update a row in a table
+   * @param connectionId - Connection UUID
+   * @param schemaName - PostgreSQL schema name
+   * @param tableName - Table name
+   * @param rowId - Primary key value
+   * @param primaryKeyColumn - Primary key column name
+   * @param updates - Column updates
+   * @returns Mutation result
+   */
+  updateRow: async (
+    connectionId: string,
+    schemaName: string,
+    tableName: string,
+    rowId: string | number,
+    primaryKeyColumn: string,
+    updates: ColumnUpdate[]
+  ): Promise<ApiResponse<MutationResult>> => {
+    const response = await api.put<ApiResponse<MutationResult>>(
+      `/connections/${connectionId}/tables/${schemaName}/${tableName}/data/${rowId}`,
+      { primaryKeyColumn, updates }
+    );
+    return response.data;
+  },
+
+  /**
+   * Delete a row from a table
+   * @param connectionId - Connection UUID
+   * @param schemaName - PostgreSQL schema name
+   * @param tableName - Table name
+   * @param rowId - Primary key value
+   * @param primaryKeyColumn - Primary key column name
+   * @returns Mutation result
+   */
+  deleteRow: async (
+    connectionId: string,
+    schemaName: string,
+    tableName: string,
+    rowId: string | number,
+    primaryKeyColumn: string
+  ): Promise<ApiResponse<MutationResult>> => {
+    const response = await api.delete<ApiResponse<MutationResult>>(
+      `/connections/${connectionId}/tables/${schemaName}/${tableName}/data/${rowId}`,
+      { data: { primaryKeyColumn } }
+    );
+    return response.data;
+  },
+
+  /**
+   * Execute a raw SQL query
+   * @param connectionId - Connection UUID
+   * @param query - SQL query string
+   * @param readOnly - Whether to enforce read-only mode
+   * @returns Query results
+   */
+  executeQuery: async (
+    connectionId: string,
+    query: string,
+    readOnly: boolean = true
+  ): Promise<ApiResponse<QueryResult>> => {
+    const response = await api.post<ApiResponse<QueryResult>>(
+      `/connections/${connectionId}/query`,
+      { query, readOnly }
+    );
+    return response.data;
+  },
 };
+
+// ============================================
+// TYPE DEFINITIONS
+// ============================================
+
+export interface TableColumnsResponse {
+  columns: ColumnDefinition[];
+  primaryKey: string;
+  schemaName: string;
+  tableName: string;
+}
+
+export interface ColumnDefinition {
+  name: string;
+  type: string;
+  nullable: boolean;
+  defaultValue: string | null;
+  isPrimaryKey: boolean;
+  isForeignKey: boolean;
+  references?: {
+    table: string;
+    column: string;
+  };
+}
+
+export interface TableDataOptions {
+  page?: number;
+  pageSize?: number;
+  sortBy?: string;
+  sortOrder?: 'ASC' | 'DESC';
+  filters?: FilterCondition[];
+}
+
+export interface FilterCondition {
+  column: string;
+  operator: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'like' | 'ilike' | 'in' | 'is_null' | 'is_not_null';
+  value: any;
+}
+
+export interface TableDataResponse {
+  rows: Record<string, any>[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  columns: string[];
+  primaryKeyColumn?: string;
+  cached?: boolean;
+  cachedAt?: string;
+}
+
+export interface ColumnUpdate {
+  column: string;
+  value: any;
+  columnType: string;
+}
+
+export interface MutationResult {
+  success: boolean;
+  affectedRows: number;
+  message: string;
+  jobId?: string;
+}
+
+export interface QueryResult {
+  success: boolean;
+  rows: any[];
+  rowCount: number;
+  executionTime: number;
+  jobId?: string;
+}
 
 export default connectionService;

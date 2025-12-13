@@ -46,10 +46,10 @@ function App() {
         </Route>
 
         {/* Connection Routes */}
-        <Route path="/dashboard/connection/:id" element={<ConnectionLayout />}>
+        <Route path="/dashboard/connection/:connectionId" element={<ConnectionLayout />}>
           <Route index element={<Navigate to="overview" replace />} />
           <Route path="overview" element={<ConnectionOverview />} />
-          <Route path="tables/:tableName" element={<TableView />} />
+          <Route path="table/:schemaName/:tableName" element={<TableView />} />
           <Route path="sql" element={<SQLEditor />} />
           <Route path="visualizer" element={<SchemaVisualizer />} />
         </Route>
