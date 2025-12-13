@@ -1,10 +1,26 @@
 import { NavLink, useParams, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Table, Code, Network, ArrowLeft, ChevronDown, Search } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Table,
+  Code,
+  Network,
+  ArrowLeft,
+  ChevronDown,
+  ChevronRight,
+  Search,
+  Database,
+  Loader2,
+  Key,
+  Link2
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useConnections } from '@/hooks/useConnections';
-import { useState } from 'react';
+import { useSchemas } from '@/hooks/useSchemas';
+import { useState, useEffect, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { TableSchema } from '@/types';
 
 interface ConnectionSidebarProps {
   className?: string;
@@ -14,18 +30,182 @@ interface ConnectionSidebarProps {
 export function ConnectionSidebar({ className, onClose }: ConnectionSidebarProps) {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { connections } = useConnections();
+  const { connections, fetchConnections } = useConnections();
+  const {
+    schemas,
+    tables,
+    isLoading,
+    isLoadingTables,
+    fetchSchemas,
+    fetchTables,
+    areTablesLoaded
+  } = useSchemas();
+
+  const [expandedSchemas, setExpandedSchemas] = useState<Record<string, boolean>>({});
+  const [expandedTables, setExpandedTables] = useState<Record<string, boolean>>({});
+  const [searchQuery, setSearchQuery] = useState('');
+
   const connection = connections.find(c => c.id === id);
-  const [tablesOpen, setTablesOpen] = useState(true);
 
-  // Mock tables
-  const tables = ['users', 'orders', 'products', 'categories', 'reviews', 'audit_logs'];
+  // Fetch connection if not loaded
+  useEffect(() => {
+    if (connections.length === 0) {
+      fetchConnections();
+    }
+  }, [connections.length, fetchConnections]);
 
-  if (!connection) return (
-    <div className={cn("h-full w-64 bg-[#1B2431] border-r border-white/10 flex items-center justify-center text-gray-500", className)}>
-      Loading...
-    </div>
-  );
+  // Fetch schemas when connection changes
+  useEffect(() => {
+    if (id && connection?.schema_synced) {
+      fetchSchemas(id);
+    }
+  }, [id, connection?.schema_synced, fetchSchemas]);
+
+  // Auto-expand public schema and fetch its tables
+  useEffect(() => {
+    if (schemas.length > 0 && id) {
+      const publicSchema = schemas.find(s => s.schema_name === 'public');
+      if (publicSchema && !expandedSchemas['public']) {
+        setExpandedSchemas(prev => ({ ...prev, public: true }));
+        if (!areTablesLoaded('public')) {
+          fetchTables(id, 'public');
+        }
+      }
+    }
+  }, [schemas, id, expandedSchemas, areTablesLoaded, fetchTables]);
+
+  // Toggle schema expansion
+  const toggleSchema = async (schemaName: string) => {
+    const isExpanding = !expandedSchemas[schemaName];
+    setExpandedSchemas(prev => ({ ...prev, [schemaName]: isExpanding }));
+
+    // Fetch tables if expanding and not yet loaded
+    if (isExpanding && id && !areTablesLoaded(schemaName)) {
+      await fetchTables(id, schemaName);
+    }
+  };
+
+  // Toggle table expansion to show columns
+  const toggleTable = (tableName: string) => {
+    setExpandedTables(prev => ({ ...prev, [tableName]: !prev[tableName] }));
+  };
+
+  // Filter schemas and tables based on search
+  const filteredData = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return { schemas, matchedTables: {} as Record<string, string[]> };
+    }
+
+    const query = searchQuery.toLowerCase();
+    const matchedTables: Record<string, string[]> = {};
+
+    const filteredSchemas = schemas.filter(schema => {
+      // Check if schema name matches
+      if (schema.schema_name.toLowerCase().includes(query)) {
+        return true;
+      }
+
+      // Check if any table in this schema matches
+      const schemaTables = tables[schema.schema_name] || [];
+      const matchingTables = schemaTables.filter(t =>
+        t.table_name.toLowerCase().includes(query) ||
+        t.columns?.some(c => c.name.toLowerCase().includes(query))
+      );
+
+      if (matchingTables.length > 0) {
+        matchedTables[schema.schema_name] = matchingTables.map(t => t.table_name);
+        return true;
+      }
+
+      return false;
+    });
+
+    return { schemas: filteredSchemas, matchedTables };
+  }, [schemas, tables, searchQuery]);
+
+  // Render table with columns
+  const renderTable = (table: TableSchema, schemaName: string) => {
+    const isExpanded = expandedTables[`${schemaName}.${table.table_name}`];
+    const tableKey = `${schemaName}.${table.table_name}`;
+
+    return (
+      <div key={tableKey} className="ml-4">
+        <button
+          onClick={() => toggleTable(tableKey)}
+          className="flex items-center gap-2 w-full px-2 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 rounded transition-colors"
+        >
+          {isExpanded ? (
+            <ChevronDown className="w-3 h-3 text-gray-500 flex-shrink-0" />
+          ) : (
+            <ChevronRight className="w-3 h-3 text-gray-500 flex-shrink-0" />
+          )}
+          <Table className="w-3 h-3 flex-shrink-0" />
+          <span className="truncate flex-1 text-left">{table.table_name}</span>
+          {table.table_type === 'VIEW' && (
+            <span className="text-[10px] bg-purple-500/20 text-purple-400 px-1 rounded">VIEW</span>
+          )}
+        </button>
+
+        {/* Columns */}
+        {isExpanded && table.columns && (
+          <div className="ml-6 mt-1 space-y-0.5 border-l border-white/5 pl-2">
+            {table.columns.map((col, idx) => (
+              <TooltipProvider key={idx}>
+                <Tooltip delayDuration={300}>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-2 px-2 py-1 text-xs text-gray-500 hover:text-gray-300 cursor-default">
+                      <span className="flex-shrink-0">
+                        {col.is_primary_key ? (
+                          <Key className="w-3 h-3 text-yellow-500" />
+                        ) : col.is_foreign_key ? (
+                          <Link2 className="w-3 h-3 text-blue-400" />
+                        ) : (
+                          <span className="w-3 h-3 block" />
+                        )}
+                      </span>
+                      <span className={cn(
+                        "truncate flex-1",
+                        col.is_primary_key && "text-yellow-500/80",
+                        col.is_foreign_key && "text-blue-400/80"
+                      )}>
+                        {col.name}
+                      </span>
+                      <span className="text-gray-600 font-mono text-[10px] flex-shrink-0">
+                        {col.data_type.length > 15 ? col.udt_name : col.data_type}
+                      </span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="max-w-xs">
+                    <div className="space-y-1">
+                      <p className="font-medium">{col.name}</p>
+                      <p className="text-xs text-gray-400">Type: {col.data_type}</p>
+                      {col.is_nullable && <p className="text-xs text-gray-400">Nullable</p>}
+                      {col.default_value && (
+                        <p className="text-xs text-gray-400">Default: {col.default_value}</p>
+                      )}
+                      {col.foreign_key_ref && (
+                        <p className="text-xs text-blue-400">
+                          FK → {col.foreign_key_ref.schema}.{col.foreign_key_ref.table}.{col.foreign_key_ref.column}
+                        </p>
+                      )}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  if (!connection) {
+    return (
+      <div className={cn("h-full w-64 bg-[#1B2431] border-r border-white/10 flex items-center justify-center", className)}>
+        <Loader2 className="w-5 h-5 text-gray-500 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className={cn("h-full w-64 bg-[#1B2431] border-r border-white/10 flex flex-col text-white", className)}>
@@ -40,14 +220,19 @@ export function ConnectionSidebar({ className, onClose }: ConnectionSidebarProps
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-bold truncate">{connection.name}</h2>
           <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-            <span className="text-xs text-gray-500">Connected</span>
+            <span className={cn(
+              "w-1.5 h-1.5 rounded-full",
+              connection.is_valid ? "bg-green-500 animate-pulse" : "bg-red-500"
+            )} />
+            <span className="text-xs text-gray-500">
+              {connection.is_valid ? 'Connected' : 'Disconnected'}
+            </span>
           </div>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 p-4 space-y-1 overflow-hidden flex flex-col">
         <NavLink
           to={`/dashboard/connection/${id}/overview`}
           onClick={onClose}
@@ -81,48 +266,97 @@ export function ConnectionSidebar({ className, onClose }: ConnectionSidebarProps
           )}
         >
           <Network className="w-4 h-4" />
-          Visualizer
+          ERD Visualizer
         </NavLink>
 
-        {/* Tables Section */}
-        <div className="pt-4">
-          <button
-            onClick={() => setTablesOpen(!tablesOpen)}
-            className="flex items-center justify-between w-full px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider hover:text-white transition-colors"
-          >
-            Tables
-            <ChevronDown className={cn("w-3 h-3 transition-transform", tablesOpen ? "" : "-rotate-90")} />
-          </button>
+        {/* Schemas & Tables Section */}
+        <div className="pt-4 flex-1 overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between px-3 py-2">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              Schemas & Tables
+            </span>
+            {isLoading && <Loader2 className="w-3 h-3 text-gray-500 animate-spin" />}
+          </div>
 
-          {tablesOpen && (
-            <div className="mt-2 space-y-1">
-              <div className="px-3 mb-2">
-                <div className="relative">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500" />
-                  <Input
-                    placeholder="Search tables..."
-                    className="h-8 pl-8 bg-[#273142] border-none text-xs text-white focus:ring-1 focus:ring-[#3b82f6]"
-                  />
-                </div>
-              </div>
-              <ScrollArea className="h-[300px]">
-                {tables.map(table => (
-                  <NavLink
-                    key={table}
-                    to={`/dashboard/connection/${id}/tables/${table}`}
-                    onClick={onClose}
-                    className={({ isActive }) => cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
-                      isActive ? "text-[#3b82f6] bg-[#3b82f6]/10" : "text-gray-400 hover:text-white hover:bg-white/5"
-                    )}
-                  >
-                    <Table className="w-3 h-3" />
-                    {table}
-                  </NavLink>
-                ))}
-              </ScrollArea>
+          {/* Search */}
+          <div className="px-3 mb-2">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500" />
+              <Input
+                placeholder="Search tables..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-8 pl-8 bg-[#273142] border-none text-xs text-white placeholder:text-gray-500 focus:ring-1 focus:ring-[#3b82f6]"
+              />
+            </div>
+          </div>
+
+          {/* Schema sync notice */}
+          {!connection.schema_synced && (
+            <div className="px-3 py-2 mx-3 mb-2 bg-yellow-500/10 border border-yellow-500/20 rounded text-xs text-yellow-500">
+              <p>Schema not synced yet.</p>
+              <p className="text-yellow-500/70 mt-1">Syncing happens automatically after connection is saved.</p>
             </div>
           )}
+
+          {/* Schemas Tree */}
+          <ScrollArea className="flex-1">
+            <div className="space-y-1 pb-4">
+              {filteredData.schemas.length === 0 && !isLoading ? (
+                <div className="px-3 py-4 text-center text-gray-500 text-xs">
+                  {connection.schema_synced ? 'No schemas found' : 'Waiting for schema sync...'}
+                </div>
+              ) : (
+                filteredData.schemas.map(schema => {
+                  const isExpanded = expandedSchemas[schema.schema_name];
+                  const schemaTables = tables[schema.schema_name] || [];
+                  const isLoadingThisSchema = isLoadingTables[schema.schema_name];
+
+                  return (
+                    <div key={schema.id} className="space-y-0.5">
+                      {/* Schema Header */}
+                      <button
+                        onClick={() => toggleSchema(schema.schema_name)}
+                        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                      >
+                        {isLoadingThisSchema ? (
+                          <Loader2 className="w-3 h-3 text-gray-500 animate-spin flex-shrink-0" />
+                        ) : isExpanded ? (
+                          <ChevronDown className="w-3 h-3 text-gray-500 flex-shrink-0" />
+                        ) : (
+                          <ChevronRight className="w-3 h-3 text-gray-500 flex-shrink-0" />
+                        )}
+                        <Database className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                        <span className="truncate flex-1 text-left font-medium">{schema.schema_name}</span>
+                        <span className="text-[10px] text-gray-500 bg-white/5 px-1.5 py-0.5 rounded">
+                          {schema.table_count}
+                        </span>
+                      </button>
+
+                      {/* Tables */}
+                      {isExpanded && (
+                        <div className="space-y-0.5">
+                          {schemaTables.length === 0 && !isLoadingThisSchema ? (
+                            <div className="ml-6 px-2 py-2 text-xs text-gray-500">
+                              No tables in this schema
+                            </div>
+                          ) : (
+                            schemaTables
+                              .filter(t => {
+                                if (!searchQuery.trim()) return true;
+                                const matched = filteredData.matchedTables[schema.schema_name];
+                                return matched?.includes(t.table_name);
+                              })
+                              .map(table => renderTable(table, schema.schema_name))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
         </div>
       </nav>
     </div>

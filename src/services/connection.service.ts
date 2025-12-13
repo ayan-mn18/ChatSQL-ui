@@ -7,6 +7,7 @@ import {
   ConnectionPublic,
   DatabaseSchemaPublic,
   TableSchema,
+  ERDRelation,
   ApiResponse,
 } from '../types';
 
@@ -129,6 +130,16 @@ export const connectionService = {
    */
   getTablesBySchema: async (connectionId: string, schemaName: string): Promise<ApiResponse<TableSchema[]>> => {
     const response = await api.get<ApiResponse<TableSchema[]>>(`/connections/${connectionId}/schemas/${schemaName}/tables`);
+    return response.data;
+  },
+
+  /**
+   * Get all ERD relations (foreign keys) for a connection
+   * @param connectionId - Connection UUID
+   * @returns List of foreign key relationships for ERD visualization
+   */
+  getRelations: async (connectionId: string): Promise<ApiResponse<ERDRelation[]>> => {
+    const response = await api.get<ApiResponse<ERDRelation[]>>(`/connections/${connectionId}/relations`);
     return response.data;
   },
 };

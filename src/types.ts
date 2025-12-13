@@ -261,3 +261,20 @@ export interface IndexDef {
   is_unique: boolean;
   is_primary: boolean;
 }
+
+// ============================================
+// ERD RELATION TYPES (Foreign Key Relationships)
+// ============================================
+export interface ERDRelation {
+  id: string;
+  connection_id: string;
+  source_schema: string;
+  source_table: string;
+  source_column: string;
+  target_schema: string;
+  target_table: string;
+  target_column: string;
+  constraint_name?: string;
+  relation_type: 'one-to-one' | 'one-to-many' | 'many-to-many';
+  created_at: string;
+}
