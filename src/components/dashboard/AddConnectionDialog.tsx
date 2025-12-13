@@ -17,24 +17,13 @@ import {
   CheckCircle2,
   XCircle,
   Snowflake,
-  Check,
-  Pencil
+  Check
 } from 'lucide-react';
 import { useConnections } from '@/hooks/useConnections';
 import { cn } from '@/lib/utils';
-import { TestConnectionRequest } from '@/types';
+import { TestConnectionRequest, CreateConnectionRequest, UpdateConnectionRequest, ConnectionPublic } from '@/types';
 
-// Legacy interface for backwards compatibility with existing connection cards
-export interface DatabaseConnection {
-  id: string;
-  name: string;
-  type: 'postgres' | 'mysql' | 'mongodb';
-  host: string;
-  port: string;
-  user: string;
-  database: string;
-  createdAt: string;
-}
+// Legacy interface removed - now using ConnectionPublic from types
 
 const DB_PROVIDERS = [
   {
@@ -126,36 +115,16 @@ export function AddConnectionDialog({
   trigger
 }: {
   onConnectionAdded: () => void;
-  connectionToEdit?: DatabaseConnection;
+  connectionToEdit?: ConnectionPublic;
   trigger?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(1);
   const [selectedProvider, setSelectedProvider] = useState<typeof DB_PROVIDERS[0] | null>(null);
   const [testing, setTesting] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const { testConnection } = useConnections();
-
-  // Local storage functions for saving connections (until backend CRUD is implemented)
-  const saveConnectionToLocalStorage = (connection: Omit<DatabaseConnection, 'id' | 'createdAt'>) => {
-    const stored = localStorage.getItem('chatsql_connections');
-    const connections: DatabaseConnection[] = stored ? JSON.parse(stored) : [];
-    const newConnection: DatabaseConnection = {
-      ...connection,
-      id: Math.random().toString(36).substr(2, 9),
-      createdAt: new Date().toISOString(),
-    };
-    connections.push(newConnection);
-    localStorage.setItem('chatsql_connections', JSON.stringify(connections));
-    return newConnection;
-  };
-
-  const updateConnectionInLocalStorage = (id: string, updates: Partial<DatabaseConnection>) => {
-    const stored = localStorage.getItem('chatsql_connections');
-    const connections: DatabaseConnection[] = stored ? JSON.parse(stored) : [];
-    const updatedConnections = connections.map(c => c.id === id ? { ...c, ...updates } : c);
-    localStorage.setItem('chatsql_connections', JSON.stringify(updatedConnections));
-  };
+  const { testConnection, createConnection, updateConnection } = useConnections();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -164,7 +133,8 @@ export function AddConnectionDialog({
     port: '5432',
     user: 'postgres',
     password: '',
-    database: 'postgres'
+    database: 'postgres',
+    ssl: true
   });
 
   useEffect(() => {
@@ -173,14 +143,11 @@ export function AddConnectionDialog({
         name: connectionToEdit.name,
         type: connectionToEdit.type,
         host: connectionToEdit.host,
-        port: connectionToEdit.port,
-        user: connectionToEdit.user,
-        password: '', // Don't populate password for security, or maybe we should if it's stored locally? 
-        // For now let's assume user needs to re-enter or we keep it empty.
-        // Actually, if we are editing, we might want to keep the old password if not changed.
-        // But the form binds to value. Let's leave it empty and handle "if empty keep old" in update logic if needed.
-        // For simplicity in this mock, let's just leave it empty.
-        database: connectionToEdit.database
+        port: String(connectionToEdit.port),
+        user: connectionToEdit.username,
+        password: '', // Password is not returned from API for security
+        database: connectionToEdit.db_name,
+        ssl: connectionToEdit.ssl
       });
 
       // Find provider to set selectedProvider
@@ -209,8 +176,15 @@ export function AddConnectionDialog({
 
   const handleTest = async () => {
     // Validate required fields
-    if (!formData.host.trim() || !formData.database.trim() || !formData.user.trim() || !formData.password.trim()) {
-      toast.error('Please fill in all connection fields');
+    if (!formData.host.trim() || !formData.database.trim() || !formData.user.trim()) {
+      toast.error('Please fill in host, database, and username');
+      return;
+    }
+
+    // For new connections, password is required
+    // For updates, password is optional (keeps existing if not provided)
+    if (!connectionToEdit && !formData.password.trim()) {
+      toast.error('Password is required');
       return;
     }
 
@@ -225,7 +199,7 @@ export function AddConnectionDialog({
         db_name: formData.database.trim(),
         username: formData.user.trim(),
         password: formData.password.trim(),
-        ssl: true, // SSL enabled by default for security
+        ssl: formData.ssl,
       };
 
       const result = await testConnection(connectionData);
@@ -254,26 +228,63 @@ export function AddConnectionDialog({
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (testStatus !== 'success') {
       toast.error('Please test the connection first');
       return;
     }
 
+    // Validate name
+    if (!formData.name.trim()) {
+      toast.error('Please enter a connection name');
+      return;
+    }
+
+    setSaving(true);
+
     try {
       if (connectionToEdit) {
-        updateConnectionInLocalStorage(connectionToEdit.id, formData);
+        // Update existing connection
+        const updateData: UpdateConnectionRequest = {
+          name: formData.name.trim(),
+          host: formData.host.trim(),
+          port: parseInt(formData.port) || 5432,
+          db_name: formData.database.trim(),
+          username: formData.user.trim(),
+          ssl: formData.ssl,
+        };
+
+        // Only include password if it was changed (not empty)
+        if (formData.password.trim()) {
+          updateData.password = formData.password.trim();
+        }
+
+        await updateConnection(connectionToEdit.id, updateData);
         toast.success('Connection updated successfully');
       } else {
-        saveConnectionToLocalStorage(formData);
-        toast.success('Connection saved successfully');
+        // Create new connection
+        const createData: CreateConnectionRequest = {
+          name: formData.name.trim(),
+          host: formData.host.trim(),
+          port: parseInt(formData.port) || 5432,
+          db_name: formData.database.trim(),
+          username: formData.user.trim(),
+          password: formData.password.trim(),
+          ssl: formData.ssl,
+        };
+
+        await createConnection(createData);
+        toast.success('Connection saved! Schema sync started in background.');
       }
 
       setOpen(false);
       onConnectionAdded();
       resetForm();
-    } catch (e) {
-      toast.error('Failed to save connection');
+    } catch (e: any) {
+      const errorMessage = e.message || 'Failed to save connection';
+      toast.error(errorMessage);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -281,6 +292,7 @@ export function AddConnectionDialog({
     setStep(1);
     setSelectedProvider(null);
     setTestStatus('idle');
+    setSaving(false);
     setFormData({
       name: '',
       type: 'postgres' as 'postgres' | 'mysql' | 'mongodb',
@@ -288,7 +300,8 @@ export function AddConnectionDialog({
       port: '5432',
       user: 'postgres',
       password: '',
-      database: 'postgres'
+      database: 'postgres',
+      ssl: true
     });
   };
 
@@ -488,6 +501,35 @@ export function AddConnectionDialog({
                       placeholder="postgres"
                     />
                   </div>
+
+                  {/* Row 5: SSL Toggle */}
+                  <div className="flex items-center justify-between p-4 rounded-lg bg-[#1B2431] border border-gray-800">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="ssl" className="text-white font-medium">SSL Connection</Label>
+                      <p className="text-xs text-gray-500">Enable SSL/TLS encryption for secure connections</p>
+                    </div>
+                    <button
+                      id="ssl"
+                      type="button"
+                      role="switch"
+                      aria-checked={formData.ssl}
+                      onClick={() => {
+                        setFormData(prev => ({ ...prev, ssl: !prev.ssl }));
+                        setTestStatus('idle');
+                      }}
+                      className={cn(
+                        "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#273142]",
+                        formData.ssl ? "bg-blue-500" : "bg-gray-700"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                          formData.ssl ? "translate-x-5" : "translate-x-0"
+                        )}
+                      />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -526,10 +568,19 @@ export function AddConnectionDialog({
               </Button>
               <Button
                 onClick={handleSave}
-                disabled={testStatus !== 'success'}
-                className="bg-[#3b82f6] hover:bg-[#2563eb] disabled:opacity-50 disabled:cursor-not-allowed min-w-[100px]"
+                disabled={testStatus !== 'success' || saving}
+                className="bg-[#3b82f6] hover:bg-[#2563eb] disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px]"
               >
-                {connectionToEdit ? 'Update' : 'Save & Finish'}
+                {saving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : connectionToEdit ? (
+                  'Update'
+                ) : (
+                  'Save & Finish'
+                )}
               </Button>
             </div>
           )}

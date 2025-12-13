@@ -1,41 +1,94 @@
-import { useState, useEffect } from 'react';
-import { AddConnectionDialog, DatabaseConnection } from '@/components/dashboard/AddConnectionDialog';
+import { useState, useEffect, useCallback } from 'react';
+import { AddConnectionDialog } from '@/components/dashboard/AddConnectionDialog';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { Database, Trash2, ArrowRight, Server, Pencil, Sparkles, Zap, Shield, Cable } from 'lucide-react';
+import { Database, Trash2, ArrowRight, Server, Pencil, Sparkles, Zap, Shield, Cable, RefreshCw, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-
-// Local storage hook for connections (until backend CRUD is implemented)
-function useLocalConnections() {
-  const [connections, setConnections] = useState<DatabaseConnection[]>([]);
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  useEffect(() => {
-    const stored = localStorage.getItem('chatsql_connections');
-    if (stored) {
-      setConnections(JSON.parse(stored));
-    }
-  }, [refreshKey]);
-
-  const deleteConnection = (id: string) => {
-    const stored = localStorage.getItem('chatsql_connections');
-    const conns: DatabaseConnection[] = stored ? JSON.parse(stored) : [];
-    const filtered = conns.filter(c => c.id !== id);
-    localStorage.setItem('chatsql_connections', JSON.stringify(filtered));
-    setConnections(filtered);
-    toast.success('Connection deleted');
-  };
-
-  const refresh = () => setRefreshKey(k => k + 1);
-
-  return { connections, deleteConnection, refresh };
-}
+import { useConnections } from '@/hooks/useConnections';
+import { ConnectionPublic } from '@/types';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function ConnectionsPage() {
-  const { connections, deleteConnection, refresh } = useLocalConnections();
   const navigate = useNavigate();
+  const {
+    connections,
+    isLoading,
+    error,
+    fetchConnections,
+    deleteConnection: deleteConnectionApi,
+    clearError
+  } = useConnections();
+
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [connectionToDelete, setConnectionToDelete] = useState<ConnectionPublic | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Fetch connections on mount
+  useEffect(() => {
+    fetchConnections().catch(err => {
+      console.error('Failed to fetch connections:', err);
+    });
+  }, [fetchConnections]);
+
+  // Handle refresh
+  const handleRefresh = useCallback(async () => {
+    try {
+      await fetchConnections();
+      toast.success('Connections refreshed');
+    } catch (err) {
+      toast.error('Failed to refresh connections');
+    }
+  }, [fetchConnections]);
+
+  // Handle delete confirmation
+  const handleDeleteClick = (connection: ConnectionPublic) => {
+    setConnectionToDelete(connection);
+    setDeleteDialogOpen(true);
+  };
+
+  // Handle delete
+  const handleDeleteConfirm = async () => {
+    if (!connectionToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteConnectionApi(connectionToDelete.id);
+      toast.success(`Connection "${connectionToDelete.name}" deleted`);
+      setDeleteDialogOpen(false);
+      setConnectionToDelete(null);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete connection');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Format last tested time
+  const formatLastTested = (dateStr: string | null) => {
+    if (!dateStr) return 'Never tested';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${diffDays}d ago`;
+  };
 
   return (
     <div className="space-y-8">
@@ -44,10 +97,50 @@ export default function ConnectionsPage() {
           <h1 className="text-3xl font-bold text-white mb-2">Connections</h1>
           <p className="text-gray-400">Manage your database connections.</p>
         </div>
-        <AddConnectionDialog onConnectionAdded={refresh} />
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleRefresh}
+            disabled={isLoading}
+            className="border-gray-700 hover:bg-gray-800"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+          </Button>
+          <AddConnectionDialog onConnectionAdded={handleRefresh} />
+        </div>
       </div>
 
-      {connections.length === 0 ? (
+      {/* Error State */}
+      {error && (
+        <Card className="border-red-500/20 bg-red-500/10">
+          <CardContent className="flex items-center gap-3 py-4">
+            <AlertCircle className="w-5 h-5 text-red-400" />
+            <p className="text-red-400">{error}</p>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearError}
+              className="ml-auto text-red-400 hover:text-red-300"
+            >
+              Dismiss
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Loading State */}
+      {isLoading && connections.length === 0 && (
+        <Card className="border-none rounded-xl bg-[#273142]">
+          <CardContent className="flex flex-col items-center justify-center py-20">
+            <Loader2 className="w-10 h-10 text-blue-400 animate-spin mb-4" />
+            <p className="text-gray-400">Loading connections...</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Empty State */}
+      {!isLoading && connections.length === 0 && !error && (
         <Card className="border-none rounded-xl bg-gradient-to-br from-[#273142] to-[#1e2736] shadow-2xl overflow-hidden">
           <div className="relative">
             {/* Background decoration */}
@@ -119,7 +212,7 @@ export default function ConnectionsPage() {
               </div>
 
               {/* CTA Button */}
-              <AddConnectionDialog onConnectionAdded={refresh} />
+              <AddConnectionDialog onConnectionAdded={handleRefresh} />
 
               <p className="mt-4 text-xs text-gray-500">
                 Currently supports PostgreSQL • More databases coming soon
@@ -127,7 +220,10 @@ export default function ConnectionsPage() {
             </CardContent>
           </div>
         </Card>
-      ) : (
+      )}
+
+      {/* Connections Grid */}
+      {connections.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {connections.map((conn) => (
             <Card key={conn.id} className="bg-[#273142] border-none shadow-lg hover:shadow-xl transition-all group">
@@ -138,7 +234,7 @@ export default function ConnectionsPage() {
                   </div>
                   <div className="flex gap-1 -mr-2 -mt-2">
                     <AddConnectionDialog
-                      onConnectionAdded={refresh}
+                      onConnectionAdded={handleRefresh}
                       connectionToEdit={conn}
                       trigger={
                         <Button
@@ -154,7 +250,7 @@ export default function ConnectionsPage() {
                       variant="ghost"
                       size="icon"
                       className="text-gray-500 hover:text-red-400 hover:bg-red-400/10"
-                      onClick={() => deleteConnection(conn.id)}
+                      onClick={() => handleDeleteClick(conn)}
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -162,13 +258,29 @@ export default function ConnectionsPage() {
                 </div>
                 <CardTitle className="text-white mt-4">{conn.name}</CardTitle>
                 <CardDescription className="text-gray-500 font-mono text-xs">
-                  {conn.user}@{conn.host}:{conn.port}/{conn.database}
+                  {conn.username}@{conn.host}:{conn.port}/{conn.db_name}
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center gap-2 text-xs text-gray-400">
-                  <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                  {conn.type.toUpperCase()}
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2 text-gray-400">
+                    <span className={`w-2 h-2 rounded-full ${conn.is_valid ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
+                    {conn.type.toUpperCase()}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {conn.schema_synced ? (
+                      <Badge variant="secondary" className="bg-green-500/10 text-green-400 text-[10px]">
+                        Schema Synced
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-400 text-[10px]">
+                        Pending Sync
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-2 text-[10px] text-gray-500">
+                  Last tested: {formatLastTested(conn.last_tested_at)}
                 </div>
               </CardContent>
               <CardFooter>
@@ -184,6 +296,42 @@ export default function ConnectionsPage() {
           ))}
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="bg-[#273142] border-gray-800">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">Delete Connection</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-400">
+              Are you sure you want to delete "{connectionToDelete?.name}"?
+              This will also delete all synced schemas, tables, and query history associated with this connection.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="bg-transparent border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
+              disabled={isDeleting}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+              className="bg-red-500 hover:bg-red-600 text-white"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

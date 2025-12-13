@@ -83,17 +83,20 @@ export function useConnections() {
     
     try {
       const response = await connectionService.createConnection(data);
-      if (!response.data) {
+      // API returns { connection, jobId } in data
+      const connectionData = (response.data as any)?.connection || response.data;
+      
+      if (!connectionData) {
         throw new Error('No connection data returned');
       }
       
       setState(prev => ({
         ...prev,
         isLoading: false,
-        connections: [...prev.connections, response.data!],
+        connections: [...prev.connections, connectionData],
       }));
       
-      return response.data;
+      return connectionData;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to create connection';
       setState(prev => ({ ...prev, isLoading: false, error: errorMessage }));
@@ -130,17 +133,20 @@ export function useConnections() {
     
     try {
       const response = await connectionService.updateConnection(id, data);
-      if (!response.data) {
+      // API returns { connection, jobId? } in data
+      const connectionData = (response.data as any)?.connection || response.data;
+      
+      if (!connectionData) {
         throw new Error('No connection data returned');
       }
       
       setState(prev => ({
         ...prev,
         isLoading: false,
-        connections: prev.connections.map(c => c.id === id ? response.data! : c),
+        connections: prev.connections.map(c => c.id === id ? connectionData : c),
       }));
       
-      return response.data;
+      return connectionData;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to update connection';
       setState(prev => ({ ...prev, isLoading: false, error: errorMessage }));
