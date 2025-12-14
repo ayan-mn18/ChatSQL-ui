@@ -1,8 +1,10 @@
-import { useEffect, useState, useMemo } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import {
   ChevronLeft,
   ChevronRight,
@@ -21,6 +23,10 @@ import {
   AlertCircle,
   Key,
   Link2,
+  Copy,
+  Save,
+  ExternalLink,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   Table,
@@ -48,7 +54,6 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -57,6 +62,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useTableData } from '@/hooks/useTableData';
 import { useTableTabs } from '@/contexts/TableTabsContext';
 import { TableTabsBar } from '@/components/dashboard/TableTabsBar';
@@ -69,27 +84,39 @@ import { cn } from '@/lib/utils';
 // CONSTANTS
 // ============================================
 
-const MIN_COLUMN_WIDTH = 120;
-const MAX_COLUMN_WIDTH = 300;
-const DEFAULT_COLUMN_WIDTH = 150;
+const LONG_VALUE_THRESHOLD = 50; // Characters before showing in modal
+
+// ============================================
+// HELPER: Calculate column width based on column name
+// ============================================
+const calculateColumnWidth = (columnName: string): number => {
+  const baseWidth = columnName.length * 10; // ~10px per character
+  const minWidth = Math.max(120, baseWidth + 60); // Extra space for icons
+  return Math.min(minWidth, 300); // Cap at 300px
+};
 
 // ============================================
 // TABLE VIEW COMPONENT
 // ============================================
 
 export default function TableView() {
+  const navigate = useNavigate();
   const { connectionId, schemaName, tableName } = useParams<{
     connectionId: string;
     schemaName: string;
     tableName: string;
   }>();
 
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const initialPage = parseInt(searchParams.get('page') || '1', 10);
   const initialPageSize = parseInt(searchParams.get('pageSize') || '50', 10);
 
+  // FK navigation highlight params
+  const highlightColumn = searchParams.get('highlightColumn');
+  const highlightValue = searchParams.get('highlightValue');
+
   // Tabs management
-  const { addTab, activeTabId } = useTableTabs();
+  const { addTab } = useTableTabs();
 
   // Table data hook
   const {
@@ -116,8 +143,6 @@ export default function TableView() {
   });
 
   // Local state
-  const [editingCell, setEditingCell] = useState<{ rowIndex: number; column: string } | null>(null);
-  const [editValue, setEditValue] = useState<string>('');
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [showInsertDialog, setShowInsertDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -125,6 +150,45 @@ export default function TableView() {
   const [filterColumn, setFilterColumn] = useState<string>('');
   const [filterValue, setFilterValue] = useState<string>('');
   const [relations, setRelations] = useState<ERDRelation[]>([]);
+  const [highlightedRows, setHighlightedRows] = useState<Set<number>>(new Set());
+
+  // Edit modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editModalData, setEditModalData] = useState<{
+    rowIndex: number;
+    column: string;
+    value: string;
+    originalValue: any;
+  } | null>(null);
+
+  // Warning dialogs
+  const [showPkWarning, setShowPkWarning] = useState(false);
+  const [showFkWarning, setShowFkWarning] = useState(false);
+  const [pendingEdit, setPendingEdit] = useState<{
+    rowIndex: number;
+    column: string;
+    value: any;
+  } | null>(null);
+
+  // FK context menu / action dialog
+  const [fkMenuData, setFkMenuData] = useState<{
+    relation: ERDRelation;
+    value: any;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  // FK Action Dialog (left-click)
+  const [showFkActionDialog, setShowFkActionDialog] = useState(false);
+  const [fkActionData, setFkActionData] = useState<{
+    relation: ERDRelation;
+    value: any;
+    column: string;
+  } | null>(null);
+
+  // Click timer for distinguishing single vs double click
+  const clickTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const CLICK_DELAY = 200; // ms to wait before treating as single click
 
   // Add tab when component mounts or table changes
   useEffect(() => {
@@ -154,6 +218,50 @@ export default function TableView() {
     }
   }, [connectionId]);
 
+  // Close FK menu on click outside
+  useEffect(() => {
+    const handleClick = () => setFkMenuData(null);
+    if (fkMenuData) {
+      document.addEventListener('click', handleClick);
+      return () => document.removeEventListener('click', handleClick);
+    }
+  }, [fkMenuData]);
+
+  // Highlight rows when navigating from FK link
+  useEffect(() => {
+    if (highlightColumn && highlightValue && data?.rows) {
+      const decodedValue = decodeURIComponent(highlightValue);
+      const matchingIndices = new Set<number>();
+
+      data.rows.forEach((row, index) => {
+        const cellValue = row[highlightColumn];
+        if (cellValue !== null && cellValue !== undefined && String(cellValue) === decodedValue) {
+          matchingIndices.add(index);
+        }
+      });
+
+      setHighlightedRows(matchingIndices);
+
+      // Clear highlight params from URL after highlighting (optional - keeps URL clean)
+      if (matchingIndices.size > 0) {
+        // Show toast with match info
+        toast.success(`Found ${matchingIndices.size} matching row(s)`, { icon: '🎯' });
+
+        // Auto-clear highlight after 5 seconds
+        const timer = setTimeout(() => {
+          setHighlightedRows(new Set());
+          // Clear URL params
+          const newParams = new URLSearchParams(searchParams);
+          newParams.delete('highlightColumn');
+          newParams.delete('highlightValue');
+          setSearchParams(newParams, { replace: true });
+        }, 5000);
+
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [highlightColumn, highlightValue, data?.rows, searchParams, setSearchParams]);
+
   // Get primary key column
   const primaryKeyColumn = useMemo(() => {
     return columnsMetadata?.primaryKey || data?.primaryKeyColumn || 'id';
@@ -162,7 +270,7 @@ export default function TableView() {
   // Get foreign key columns for current table
   const foreignKeyColumns = useMemo(() => {
     if (!relations || !schemaName || !tableName) return new Map<string, ERDRelation>();
-    
+
     const fkMap = new Map<string, ERDRelation>();
     relations.forEach(rel => {
       if (rel.source_schema === schemaName && rel.source_table === tableName) {
@@ -190,20 +298,187 @@ export default function TableView() {
   // HANDLERS
   // ============================================
 
-  const handleCellDoubleClick = (rowIndex: number, column: string, value: any) => {
-    setEditingCell({ rowIndex, column });
-    setEditValue(value === null ? '' : String(value));
-  };
+  // Get column type helper - defined before usage
+  const getColumnType = useCallback((column: string): 'primary' | 'foreign' | 'normal' => {
+    if (column === primaryKeyColumn) return 'primary';
+    if (foreignKeyColumns.has(column)) return 'foreign';
+    return 'normal';
+  }, [primaryKeyColumn, foreignKeyColumns]);
 
-  const handleCellBlur = async () => {
-    if (!editingCell || !data) return;
+  // Copy cell value to clipboard (direct copy - used internally)
+  const copyToClipboard = useCallback((value: any) => {
+    if (value === null || value === undefined) {
+      toast('NULL value', { icon: '📋' });
+      return;
+    }
 
-    const row = data.rows[editingCell.rowIndex];
-    const originalValue = row[editingCell.column];
+    const textValue = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
+    navigator.clipboard.writeText(textValue).then(() => {
+      toast.success('Copied to clipboard');
+    }).catch(() => {
+      toast.error('Failed to copy');
+    });
+  }, []);
+
+  // Smart cell click handler - distinguishes single vs double click
+  const handleCellClick = useCallback((rowIndex: number, column: string, value: any) => {
+    // Clear any existing timer
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+
+    // Set a timer for single click action
+    clickTimerRef.current = setTimeout(() => {
+      const columnType = getColumnType(column);
+
+      // For FK columns, show action dialog instead of just copying
+      if (columnType === 'foreign' && value !== null && value !== undefined) {
+        const relation = foreignKeyColumns.get(column);
+        if (relation) {
+          setFkActionData({ relation, value, column });
+          setShowFkActionDialog(true);
+          return;
+        }
+      }
+
+      // For non-FK columns, copy to clipboard
+      copyToClipboard(value);
+    }, CLICK_DELAY);
+  }, [getColumnType, foreignKeyColumns, copyToClipboard]);
+
+  // Handle FK cell right-click
+  const handleFkRightClick = useCallback((
+    e: React.MouseEvent,
+    column: string,
+    value: any
+  ) => {
+    const relation = foreignKeyColumns.get(column);
+    if (!relation || value === null || value === undefined) return;
+
+    e.preventDefault();
+    setFkMenuData({
+      relation,
+      value,
+      x: e.clientX,
+      y: e.clientY,
+    });
+  }, [foreignKeyColumns]);
+
+  // Open FK value in new tab (from right-click context menu)
+  const handleOpenFkInNewTab = useCallback(() => {
+    if (!fkMenuData || !connectionId) return;
+
+    const { relation, value } = fkMenuData;
+    addTab({
+      connectionId,
+      schemaName: relation.target_schema,
+      tableName: relation.target_table,
+    });
+
+    // Navigate to the target table with a filter to highlight the row
+    navigate(`/dashboard/connection/${connectionId}/table/${relation.target_schema}/${relation.target_table}?highlightColumn=${relation.target_column}&highlightValue=${encodeURIComponent(value)}`);
+    setFkMenuData(null);
+  }, [fkMenuData, connectionId, addTab, navigate]);
+
+  // Open FK value in new tab (from FK action dialog)
+  const handleOpenFkFromDialog = useCallback(() => {
+    if (!fkActionData || !connectionId) return;
+
+    const { relation, value } = fkActionData;
+    addTab({
+      connectionId,
+      schemaName: relation.target_schema,
+      tableName: relation.target_table,
+    });
+
+    // Navigate to the target table with highlight params
+    navigate(`/dashboard/connection/${connectionId}/table/${relation.target_schema}/${relation.target_table}?highlightColumn=${relation.target_column}&highlightValue=${encodeURIComponent(value)}`);
+    setShowFkActionDialog(false);
+    setFkActionData(null);
+  }, [fkActionData, connectionId, addTab, navigate]);
+
+  // Copy FK value from dialog
+  const handleCopyFkFromDialog = useCallback(() => {
+    if (!fkActionData) return;
+    copyToClipboard(fkActionData.value);
+    setShowFkActionDialog(false);
+    setFkActionData(null);
+  }, [fkActionData, copyToClipboard]);
+
+  // Handle cell double-click for editing
+  const handleCellDoubleClick = useCallback((rowIndex: number, column: string, value: any) => {
+    const columnType = getColumnType(column);
+    const strValue = value === null ? '' : (typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value));
+
+    // Check if it's PK or FK - show warning first
+    if (columnType === 'primary') {
+      setPendingEdit({ rowIndex, column, value });
+      setShowPkWarning(true);
+      return;
+    }
+
+    if (columnType === 'foreign') {
+      setPendingEdit({ rowIndex, column, value });
+      setShowFkWarning(true);
+      return;
+    }
+
+    // Open modal for editing
+    setEditModalData({
+      rowIndex,
+      column,
+      value: strValue,
+      originalValue: value,
+    });
+    setShowEditModal(true);
+  }, [getColumnType]);
+
+  // Handle double click - cancel single click action and proceed with edit
+  const handleCellDoubleClickWrapper = useCallback((rowIndex: number, column: string, value: any) => {
+    // Cancel single click action
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+
+    // Proceed with double click action (edit)
+    handleCellDoubleClick(rowIndex, column, value);
+  }, [handleCellDoubleClick]);
+
+  // Proceed with edit after warning
+  const handleProceedEdit = useCallback(() => {
+    if (!pendingEdit) return;
+
+    const strValue = pendingEdit.value === null ? '' :
+      (typeof pendingEdit.value === 'object' ? JSON.stringify(pendingEdit.value, null, 2) : String(pendingEdit.value));
+
+    setEditModalData({
+      rowIndex: pendingEdit.rowIndex,
+      column: pendingEdit.column,
+      value: strValue,
+      originalValue: pendingEdit.value,
+    });
+    setShowEditModal(true);
+    setShowPkWarning(false);
+    setShowFkWarning(false);
+    setPendingEdit(null);
+  }, [pendingEdit]);
+
+  // Save edit from modal
+  const handleSaveEdit = async () => {
+    if (!editModalData || !data) return;
+
+    const row = data.rows[editModalData.rowIndex];
+    const originalValue = editModalData.originalValue;
+    const newValue = editModalData.value;
 
     // Skip if no change
-    if (String(originalValue) === editValue || (originalValue === null && editValue === '')) {
-      setEditingCell(null);
+    const originalStr = originalValue === null ? '' :
+      (typeof originalValue === 'object' ? JSON.stringify(originalValue) : String(originalValue));
+    if (originalStr === newValue) {
+      setShowEditModal(false);
+      setEditModalData(null);
       return;
     }
 
@@ -211,38 +486,50 @@ export default function TableView() {
     const pkValue = row[primaryKeyColumn];
     if (!pkValue) {
       toast.error('Cannot update: No primary key found');
-      setEditingCell(null);
+      setShowEditModal(false);
+      setEditModalData(null);
       return;
     }
 
     // Determine column type
-    const columnMeta = columnsMetadata?.columns?.find((c: any) => c.name === editingCell.column);
+    const columnMeta = columnsMetadata?.columns?.find((c: any) => c.name === editModalData.column);
     const columnType = columnMeta?.type || 'text';
+
+    // Parse value based on type
+    let parsedValue: any = newValue === '' ? null : newValue;
+    if (columnType.includes('json') && newValue) {
+      try {
+        parsedValue = JSON.parse(newValue);
+      } catch {
+        toast.error('Invalid JSON format');
+        return;
+      }
+    }
 
     // Build update
     const updates: ColumnUpdate[] = [{
-      column: editingCell.column,
-      value: editValue === '' ? null : editValue,
+      column: editModalData.column,
+      value: parsedValue,
       columnType,
     }];
 
     const success = await updateRow(pkValue, updates);
 
     if (success) {
-      setEditingCell(null);
+      setShowEditModal(false);
+      setEditModalData(null);
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleCellBlur();
-    } else if (e.key === 'Escape') {
-      setEditingCell(null);
-    }
-  };
+  // Copy from edit modal
+  const handleCopyFromModal = useCallback(() => {
+    if (!editModalData) return;
+    navigator.clipboard.writeText(editModalData.value).then(() => {
+      toast.success('Copied to clipboard');
+    });
+  }, [editModalData]);
 
   const handleInsertRow = async () => {
-    // Convert empty strings to null and parse numbers
     const values: Record<string, any> = {};
 
     for (const [key, val] of Object.entries(insertValues)) {
@@ -253,7 +540,12 @@ export default function TableView() {
       if (!isNaN(num) && val.trim() !== '') {
         values[key] = num;
       } else {
-        values[key] = val;
+        // Try to parse as JSON
+        try {
+          values[key] = JSON.parse(val);
+        } catch {
+          values[key] = val;
+        }
       }
     }
 
@@ -326,28 +618,24 @@ export default function TableView() {
 
   const renderCellValue = (value: any): string => {
     if (value === null || value === undefined) return 'NULL';
-    if (typeof value === 'object') return JSON.stringify(value);
+    if (typeof value === 'object') {
+      const json = JSON.stringify(value);
+      return json.length > 30 ? json.substring(0, 27) + '...' : json;
+    }
     const strValue = String(value);
-    // Truncate long values
-    if (strValue.length > 50) {
-      return strValue.substring(0, 47) + '...';
+    if (strValue.length > 40) {
+      return strValue.substring(0, 37) + '...';
     }
     return strValue;
   };
 
   const getSortIcon = (column: string) => {
     if (currentOptions.sortBy !== column) {
-      return <ArrowUpDown className="w-3 h-3 opacity-50" />;
+      return <ArrowUpDown className="w-3 h-3 opacity-50 shrink-0" />;
     }
     return currentOptions.sortOrder === 'ASC'
-      ? <ArrowUp className="w-3 h-3 text-blue-400" />
-      : <ArrowDown className="w-3 h-3 text-blue-400" />;
-  };
-
-  const getColumnType = (column: string): 'primary' | 'foreign' | 'normal' => {
-    if (column === primaryKeyColumn) return 'primary';
-    if (foreignKeyColumns.has(column)) return 'foreign';
-    return 'normal';
+      ? <ArrowUp className="w-3 h-3 text-blue-400 shrink-0" />
+      : <ArrowDown className="w-3 h-3 text-blue-400 shrink-0" />;
   };
 
   const getColumnHeaderStyles = (column: string) => {
@@ -368,7 +656,7 @@ export default function TableView() {
       case 'primary':
         return 'bg-yellow-500/5';
       case 'foreign':
-        return 'bg-purple-500/5';
+        return 'bg-purple-500/5 cursor-pointer';
       default:
         return '';
     }
@@ -547,10 +835,10 @@ export default function TableView() {
               <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
             </div>
           ) : (
-            <Table className="table-fixed">
+            <Table>
               <TableHeader className="sticky top-0 bg-[#273142] z-10">
                 <TableRow className="border-white/5 hover:bg-transparent">
-                  <TableHead className="w-12 text-center">
+                  <TableHead className="w-12 text-center sticky left-0 bg-[#273142]">
                     <input
                       type="checkbox"
                       checked={data?.rows && selectedRows.size === data.rows.length}
@@ -561,19 +849,20 @@ export default function TableView() {
                   {displayColumns.map((column) => {
                     const columnType = getColumnType(column);
                     const fkRelation = foreignKeyColumns.get(column);
-                    
+                    const columnWidth = calculateColumnWidth(column);
+
                     return (
                       <TableHead
                         key={column}
                         className={cn(
-                          'text-gray-400 font-medium cursor-pointer hover:bg-white/5 transition-colors',
+                          'text-gray-400 font-medium cursor-pointer hover:bg-white/5 transition-colors whitespace-nowrap',
                           getColumnHeaderStyles(column)
                         )}
-                        style={{ width: DEFAULT_COLUMN_WIDTH, minWidth: MIN_COLUMN_WIDTH, maxWidth: MAX_COLUMN_WIDTH }}
+                        style={{ minWidth: columnWidth }}
                         onClick={() => toggleSort(column)}
                       >
                         <div className="flex items-center gap-2">
-                          <span className="truncate">{column}</span>
+                          <span>{column}</span>
                           {getSortIcon(column)}
                           {columnType === 'primary' && (
                             <Tooltip>
@@ -612,11 +901,15 @@ export default function TableView() {
                     <TableRow
                       key={rowIndex}
                       className={cn(
-                        'border-white/5 hover:bg-white/5',
-                        selectedRows.has(rowIndex) ? 'bg-blue-500/10' : ''
+                        'border-white/5 hover:bg-white/5 transition-colors',
+                        selectedRows.has(rowIndex) && 'bg-blue-500/10',
+                        highlightedRows.has(rowIndex) && 'bg-green-500/20 animate-pulse border-l-4 border-l-green-500'
                       )}
                     >
-                      <TableCell className="text-center w-12">
+                      <TableCell className={cn(
+                        "text-center w-12 sticky left-0",
+                        highlightedRows.has(rowIndex) ? 'bg-green-500/20' : 'bg-[#1B2431]'
+                      )}>
                         <input
                           type="checkbox"
                           checked={selectedRows.has(rowIndex)}
@@ -625,44 +918,42 @@ export default function TableView() {
                         />
                       </TableCell>
                       {displayColumns.map((column) => {
-                        const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.column === column;
                         const value = row[column];
                         const isNull = value === null || value === undefined;
+                        const columnType = getColumnType(column);
+                        const columnWidth = calculateColumnWidth(column);
 
                         return (
                           <TableCell
                             key={column}
                             className={cn(
-                              'font-mono text-sm truncate',
+                              'font-mono text-sm cursor-pointer hover:bg-white/10 transition-colors',
                               getColumnCellStyles(column),
                               isNull ? 'text-gray-500 italic' : 'text-gray-300'
                             )}
-                            style={{ width: DEFAULT_COLUMN_WIDTH, minWidth: MIN_COLUMN_WIDTH, maxWidth: MAX_COLUMN_WIDTH }}
-                            onDoubleClick={() => handleCellDoubleClick(rowIndex, column, value)}
+                            style={{ minWidth: columnWidth, maxWidth: 300 }}
+                            onClick={() => handleCellClick(rowIndex, column, value)}
+                            onDoubleClick={() => handleCellDoubleClickWrapper(rowIndex, column, value)}
+                            onContextMenu={(e) => {
+                              if (columnType === 'foreign') {
+                                handleFkRightClick(e, column, value);
+                              }
+                            }}
                           >
-                            {isEditing ? (
-                              <Input
-                                value={editValue}
-                                onChange={(e) => setEditValue(e.target.value)}
-                                onBlur={handleCellBlur}
-                                onKeyDown={handleKeyDown}
-                                autoFocus
-                                className="h-7 py-1 px-2 text-sm bg-[#1B2431] border-blue-500"
-                              />
-                            ) : (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="block truncate cursor-default">
-                                    {renderCellValue(value)}
-                                  </span>
-                                </TooltipTrigger>
-                                {!isNull && String(value).length > 30 && (
-                                  <TooltipContent className="bg-[#1B2431] border-white/10 text-white max-w-md break-all">
-                                    {String(value)}
-                                  </TooltipContent>
-                                )}
-                              </Tooltip>
-                            )}
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="block truncate">
+                                  {renderCellValue(value)}
+                                </span>
+                              </TooltipTrigger>
+                              {!isNull && String(value).length > 30 && (
+                                <TooltipContent className="bg-[#1B2431] border-white/10 text-white max-w-md">
+                                  <p className="break-all font-mono text-xs">
+                                    {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                                  </p>
+                                </TooltipContent>
+                              )}
+                            </Tooltip>
                           </TableCell>
                         );
                       })}
@@ -682,6 +973,33 @@ export default function TableView() {
             </Table>
           )}
         </div>
+
+        {/* FK Context Menu */}
+        {fkMenuData && (
+          <div
+            className="fixed z-50 bg-[#273142] border border-white/10 rounded-lg shadow-xl py-1 min-w-[180px]"
+            style={{ left: fkMenuData.x, top: fkMenuData.y }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-white/10 flex items-center gap-2"
+              onClick={handleOpenFkInNewTab}
+            >
+              <ExternalLink className="w-4 h-4" />
+              Open in {fkMenuData.relation.target_table}
+            </button>
+            <button
+              className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-white/10 flex items-center gap-2"
+              onClick={() => {
+                handleCellClick(fkMenuData.value);
+                setFkMenuData(null);
+              }}
+            >
+              <Copy className="w-4 h-4" />
+              Copy value
+            </button>
+          </div>
+        )}
 
         {/* Pagination */}
         {data && (
@@ -746,43 +1064,236 @@ export default function TableView() {
           </div>
         )}
 
-        {/* Insert Dialog */}
-        <Dialog open={showInsertDialog} onOpenChange={setShowInsertDialog}>
-          <DialogContent className="bg-[#273142] border-white/10 text-white max-w-lg max-h-[80vh] overflow-y-auto scrollbar-thin">
+        {/* Edit Value Modal */}
+        <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+          <DialogContent className="bg-[#1B2431] border-white/10 text-white max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Insert New Row</DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                Edit Value
+                {editModalData && getColumnType(editModalData.column) === 'primary' && (
+                  <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+                    <Key className="w-3 h-3 mr-1" />
+                    Primary Key
+                  </Badge>
+                )}
+                {editModalData && getColumnType(editModalData.column) === 'foreign' && (
+                  <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">
+                    <Link2 className="w-3 h-3 mr-1" />
+                    Foreign Key
+                  </Badge>
+                )}
+              </DialogTitle>
               <DialogDescription className="text-gray-400">
-                Enter values for each column. Leave empty to skip.
+                Column: <span className="text-white font-mono">{editModalData?.column}</span>
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4 py-4">
-              {displayColumns
-                .filter(col => col !== primaryKeyColumn) // Skip primary key (usually auto-generated)
-                .map((column) => (
-                  <div key={column} className="space-y-2">
-                    <label className="text-sm font-medium text-gray-300 flex items-center gap-2">
-                      {column}
-                      {foreignKeyColumns.has(column) && (
-                        <Badge variant="outline" className="text-[10px] px-1 py-0 border-purple-500/30 text-purple-400">
-                          FK → {foreignKeyColumns.get(column)?.target_table}
-                        </Badge>
-                      )}
-                    </label>
-                    <Input
-                      value={insertValues[column] || ''}
-                      onChange={(e) => setInsertValues(prev => ({ ...prev, [column]: e.target.value }))}
-                      placeholder={`Enter ${column}...`}
-                      className="bg-[#1B2431] border-white/10"
-                    />
-                  </div>
-                ))}
+            <div className="py-4">
+              <Textarea
+                value={editModalData?.value || ''}
+                onChange={(e) => setEditModalData(prev => prev ? { ...prev, value: e.target.value } : null)}
+                className="bg-[#273142] border-white/10 min-h-[200px] font-mono text-sm"
+                placeholder="Enter value..."
+              />
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="flex gap-2">
               <Button
                 variant="outline"
-                onClick={() => setShowInsertDialog(false)}
+                onClick={handleCopyFromModal}
+                className="border-white/10"
+              >
+                <Copy className="w-4 h-4 mr-2" />
+                Copy
+              </Button>
+              <div className="flex-1" />
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditModalData(null);
+                }}
+                className="border-white/10"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveEdit}
+                disabled={mutating}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {mutating ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-2" /> Save</>}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* PK Warning Dialog */}
+        <AlertDialog open={showPkWarning} onOpenChange={setShowPkWarning}>
+          <AlertDialogContent className="bg-[#1B2431] border-white/10 text-white">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-yellow-400">
+                <AlertTriangle className="w-5 h-5" />
+                Editing Primary Key
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-gray-400">
+                You are about to edit a <span className="text-yellow-400 font-semibold">Primary Key</span> column.
+                This is a unique identifier and changing it may affect data integrity and relationships with other tables.
+                <br /><br />
+                Are you sure you want to proceed?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="bg-transparent border-white/10 text-gray-300 hover:bg-white/5">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleProceedEdit}
+                className="bg-yellow-600 hover:bg-yellow-700"
+              >
+                Proceed with Caution
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* FK Warning Dialog */}
+        <AlertDialog open={showFkWarning} onOpenChange={setShowFkWarning}>
+          <AlertDialogContent className="bg-[#1B2431] border-white/10 text-white">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-purple-400">
+                <AlertTriangle className="w-5 h-5" />
+                Editing Foreign Key
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-gray-400">
+                You are about to edit a <span className="text-purple-400 font-semibold">Foreign Key</span> column.
+                This value references another table and changing it may break the relationship or cause referential integrity errors.
+                <br /><br />
+                Are you sure you want to proceed?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="bg-transparent border-white/10 text-gray-300 hover:bg-white/5">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleProceedEdit}
+                className="bg-purple-600 hover:bg-purple-700"
+              >
+                Proceed with Caution
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* FK Action Dialog - Left Click on FK */}
+        <Dialog open={showFkActionDialog} onOpenChange={setShowFkActionDialog}>
+          <DialogContent className="bg-[#1B2431] border-white/10 text-white max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Link2 className="w-5 h-5 text-purple-400" />
+                Foreign Key Action
+              </DialogTitle>
+              <DialogDescription className="text-gray-400">
+                {fkActionData && (
+                  <>
+                    Column <span className="text-white font-mono">{fkActionData.column}</span> references{' '}
+                    <span className="text-purple-400 font-mono">
+                      {fkActionData.relation.target_schema}.{fkActionData.relation.target_table}.{fkActionData.relation.target_column}
+                    </span>
+                  </>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="py-4 space-y-3">
+              {/* Show the value */}
+              <div className="bg-[#273142] rounded-lg p-3 border border-white/10">
+                <p className="text-xs text-gray-400 mb-1">Value</p>
+                <p className="font-mono text-sm text-white break-all">
+                  {fkActionData?.value !== null && fkActionData?.value !== undefined
+                    ? String(fkActionData.value)
+                    : <span className="text-gray-500 italic">NULL</span>
+                  }
+                </p>
+              </div>
+
+              {/* Action buttons */}
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  variant="outline"
+                  onClick={handleCopyFkFromDialog}
+                  className="border-white/10 hover:bg-white/5"
+                >
+                  <Copy className="w-4 h-4 mr-2" />
+                  Copy Value
+                </Button>
+                <Button
+                  onClick={handleOpenFkFromDialog}
+                  className="bg-purple-600 hover:bg-purple-700"
+                  disabled={fkActionData?.value === null || fkActionData?.value === undefined}
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Open in {fkActionData?.relation.target_table}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Insert Dialog - Enhanced */}
+        <Dialog open={showInsertDialog} onOpenChange={setShowInsertDialog}>
+          <DialogContent className="bg-[#1B2431] border-white/10 text-white max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+            <DialogHeader className="border-b border-white/10 pb-4">
+              <DialogTitle className="flex items-center gap-3 text-xl">
+                <div className="w-10 h-10 rounded-lg bg-blue-600/20 flex items-center justify-center">
+                  <Plus className="w-5 h-5 text-blue-400" />
+                </div>
+                Insert New Row
+              </DialogTitle>
+              <DialogDescription className="text-gray-400">
+                Add a new record to <span className="text-white font-mono">{schemaName}.{tableName}</span>
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-y-auto py-4 scrollbar-thin">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {displayColumns
+                  .filter(col => col !== primaryKeyColumn)
+                  .map((column) => {
+                    const columnType = getColumnType(column);
+                    const fkRelation = foreignKeyColumns.get(column);
+
+                    return (
+                      <div key={column} className="space-y-2">
+                        <Label className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                          {column}
+                          {columnType === 'foreign' && fkRelation && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-purple-500/30 text-purple-400">
+                              <Link2 className="w-2.5 h-2.5 mr-1" />
+                              {fkRelation.target_table}
+                            </Badge>
+                          )}
+                        </Label>
+                        <Input
+                          value={insertValues[column] || ''}
+                          onChange={(e) => setInsertValues(prev => ({ ...prev, [column]: e.target.value }))}
+                          placeholder={`Enter ${column}...`}
+                          className="bg-[#273142] border-white/10 focus:border-blue-500/50 transition-colors"
+                        />
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+
+            <DialogFooter className="border-t border-white/10 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowInsertDialog(false);
+                  setInsertValues({});
+                }}
                 className="border-white/10"
               >
                 Cancel
@@ -790,9 +1301,16 @@ export default function TableView() {
               <Button
                 onClick={handleInsertRow}
                 disabled={mutating}
-                className="bg-blue-600 hover:bg-blue-700"
+                className="bg-blue-600 hover:bg-blue-700 min-w-[120px]"
               >
-                {mutating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Insert'}
+                {mutating ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Insert Row
+                  </>
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -800,15 +1318,21 @@ export default function TableView() {
 
         {/* Delete Confirmation Dialog */}
         <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-          <DialogContent className="bg-[#273142] border-white/10 text-white">
+          <DialogContent className="bg-[#1B2431] border-white/10 text-white">
             <DialogHeader>
-              <DialogTitle>Confirm Delete</DialogTitle>
+              <DialogTitle className="flex items-center gap-3 text-red-400">
+                <div className="w-10 h-10 rounded-lg bg-red-600/20 flex items-center justify-center">
+                  <Trash2 className="w-5 h-5 text-red-400" />
+                </div>
+                Confirm Delete
+              </DialogTitle>
               <DialogDescription className="text-gray-400">
-                Are you sure you want to delete {selectedRows.size} row(s)? This action cannot be undone.
+                Are you sure you want to delete <span className="text-white font-semibold">{selectedRows.size} row(s)</span>?
+                This action cannot be undone.
               </DialogDescription>
             </DialogHeader>
 
-            <DialogFooter>
+            <DialogFooter className="mt-4">
               <Button
                 variant="outline"
                 onClick={() => setShowDeleteDialog(false)}
@@ -820,6 +1344,7 @@ export default function TableView() {
                 variant="destructive"
                 onClick={handleDeleteSelected}
                 disabled={mutating}
+                className="min-w-[100px]"
               >
                 {mutating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Delete'}
               </Button>
