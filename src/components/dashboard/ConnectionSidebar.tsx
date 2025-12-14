@@ -320,7 +320,7 @@ export function ConnectionSidebar({ className, onClose }: ConnectionSidebarProps
           )}
 
           {/* Schemas Tree */}
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 scrollbar-thin">
             <div className="space-y-1 pb-4">
               {filteredData.schemas.length === 0 && !isLoading ? (
                 <div className="px-3 py-4 text-center text-gray-500 text-xs">
