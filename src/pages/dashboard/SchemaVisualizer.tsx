@@ -50,8 +50,8 @@ const nodeTypes = {
 const nodeWidth = 280;
 const nodeHeight = 300;
 
-// Color palette for different schemas (each schema gets a distinct color)
-const COLOR_PALETTE = [
+// Extended color palette for tables - each table gets a unique vibrant color
+const TABLE_COLOR_PALETTE = [
   '#3b82f6', // blue
   '#10b981', // emerald
   '#f59e0b', // amber
@@ -67,28 +67,50 @@ const COLOR_PALETTE = [
   '#22c55e', // green
   '#ef4444', // red
   '#0ea5e9', // sky
+  '#d946ef', // fuchsia
+  '#fb923c', // orange-400
+  '#4ade80', // green-400
+  '#38bdf8', // sky-400
+  '#c084fc', // purple-400
+  '#facc15', // yellow-400
+  '#2dd4bf', // teal-400
+  '#fb7185', // rose-400
+  '#818cf8', // indigo-400
+  '#34d399', // emerald-400
+  '#fbbf24', // amber-400
+  '#e879f9', // fuchsia-400
+  '#60a5fa', // blue-400
+  '#a3e635', // lime-400
+  '#f472b6', // pink-400
+];
+
+// Color palette for schemas (used for edges and badges)
+const SCHEMA_COLOR_PALETTE = [
+  '#3b82f6', // blue
+  '#10b981', // emerald
+  '#f59e0b', // amber
+  '#ec4899', // pink
+  '#8b5cf6', // violet
+  '#6366f1', // indigo
+  '#14b8a6', // teal
+  '#f43f5e', // rose
 ];
 
 // Get color for a schema based on its index
 const getSchemaColor = (index: number): string => {
-  return COLOR_PALETTE[index % COLOR_PALETTE.length];
+  return SCHEMA_COLOR_PALETTE[index % SCHEMA_COLOR_PALETTE.length];
 };
 
-// Get a slightly varied color for tables within a schema
-const getTableColor = (schemaColor: string, tableIndex: number): string => {
-  // Slight variation in brightness for tables within same schema
-  const variation = (tableIndex % 3) * 10 - 10; // -10, 0, or 10
-  return adjustColorBrightness(schemaColor, variation);
-};
-
-// Adjust color brightness
-const adjustColorBrightness = (hex: string, percent: number): string => {
-  const num = parseInt(hex.replace('#', ''), 16);
-  const amt = Math.round(2.55 * percent);
-  const R = Math.min(255, Math.max(0, (num >> 16) + amt));
-  const G = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + amt));
-  const B = Math.min(255, Math.max(0, (num & 0x0000FF) + amt));
-  return `#${(0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1)}`;
+// Get a unique color for each table using a seeded approach based on table name
+const getTableColor = (tableName: string, globalIndex: number): string => {
+  // Use a hash of the table name combined with index to get varied colors
+  let hash = 0;
+  for (let i = 0; i < tableName.length; i++) {
+    hash = tableName.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  // Combine hash with global index for even more variation
+  const colorIndex = Math.abs(hash + globalIndex * 7) % TABLE_COLOR_PALETTE.length;
+  return TABLE_COLOR_PALETTE[colorIndex];
 };
 
 const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'LR') => {
@@ -127,18 +149,11 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'LR') => 
   return { nodes: layoutedNodes, edges };
 };
 
-// Transform API data to ReactFlow nodes with vibrant colors
+// Transform API data to ReactFlow nodes with unique colors per table
 function transformTablesToNodes(tables: TableSchema[], schemaColors: Map<string, string>): Node[] {
-  // Group tables by schema to get index within schema
-  const schemaTableIndex = new Map<string, number>();
-
-  return tables.map((table) => {
-    const schemaColor = schemaColors.get(table.schema_name) || '#3b82f6';
-    const tableIndexInSchema = schemaTableIndex.get(table.schema_name) || 0;
-    schemaTableIndex.set(table.schema_name, tableIndexInSchema + 1);
-
-    // Vary color slightly for each table within a schema
-    const tableColor = getTableColor(schemaColor, tableIndexInSchema);
+  return tables.map((table, globalIndex) => {
+    // Each table gets a unique color based on its name and position
+    const tableColor = getTableColor(table.table_name, globalIndex);
 
     return {
       id: `${table.schema_name}.${table.table_name}`,

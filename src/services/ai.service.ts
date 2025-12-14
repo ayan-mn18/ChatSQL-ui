@@ -167,6 +167,76 @@ export const aiService = {
   },
 
   /**
+   * Wait for job result using SSE (Server-Sent Events)
+   * Falls back to polling if SSE fails
+   * @param jobId - Job ID to wait for
+   * @returns Final job result
+   */
+  waitForResultSSE: (jobId: string): Promise<AIJobResult> => {
+    return new Promise((resolve, reject) => {
+      const token = localStorage.getItem('auth_token');
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+      
+      console.log('[AI] Starting SSE connection for job:', jobId);
+      
+      // Create EventSource with auth token in URL (SSE doesn't support custom headers)
+      const eventSource = new EventSource(
+        `${baseUrl}/ai/stream/${jobId}?token=${encodeURIComponent(token || '')}`,
+        { withCredentials: true }
+      );
+      
+      let resolved = false;
+      
+      // Timeout after 60 seconds
+      const timeout = setTimeout(() => {
+        if (!resolved) {
+          console.log('[AI] SSE timeout, falling back to polling');
+          eventSource.close();
+          // Fall back to polling
+          aiService.pollForResult(jobId).then(resolve).catch(reject);
+        }
+      }, 60000);
+      
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('[AI] SSE message:', data.type);
+          
+          if (data.type === 'completed' && data.result) {
+            resolved = true;
+            clearTimeout(timeout);
+            eventSource.close();
+            resolve(data.result);
+          } else if (data.type === 'timeout') {
+            resolved = true;
+            clearTimeout(timeout);
+            eventSource.close();
+            reject(new Error('AI job timed out'));
+          } else if (data.type === 'error') {
+            resolved = true;
+            clearTimeout(timeout);
+            eventSource.close();
+            reject(new Error(data.message || 'AI job failed'));
+          }
+        } catch (e) {
+          console.error('[AI] SSE parse error:', e);
+        }
+      };
+      
+      eventSource.onerror = (error) => {
+        console.error('[AI] SSE error, falling back to polling:', error);
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeout);
+          eventSource.close();
+          // Fall back to polling on SSE error
+          aiService.pollForResult(jobId).then(resolve).catch(reject);
+        }
+      };
+    });
+  },
+
+  /**
    * Explain a SQL query in plain English
    * @param connectionId - Connection UUID
    * @param sql - SQL query to explain
@@ -218,10 +288,36 @@ export const aiService = {
       throw new Error(response.error || 'Failed to start SQL generation');
     }
 
-    console.log('[AI] Started job:', jobId, '- polling for result...');
+    console.log('[AI] Started job:', jobId, '- waiting via SSE...');
 
-    // Poll for result
-    return aiService.pollForResult(jobId);
+    // Use SSE for real-time updates (falls back to polling if SSE fails)
+    return aiService.waitForResultSSE(jobId);
+  },
+
+  /**
+   * Start SQL generation and return job ID immediately
+   * Use this when you want to close the modal and show loading in the editor
+   * @param connectionId - Connection UUID  
+   * @param prompt - Natural language prompt
+   * @param selectedSchemas - Optional schema filter
+   * @returns Job ID for tracking
+   */
+  startSqlGeneration: async (
+    connectionId: string,
+    prompt: string,
+    selectedSchemas: string[] = []
+  ): Promise<string> => {
+    const response = await aiService.generateSql(connectionId, prompt, selectedSchemas);
+
+    // Handle response - backend returns jobId at top level or nested in data
+    const responseData = (response.data || response) as any;
+    const jobId = responseData.jobId;
+
+    if (!response.success || !jobId) {
+      throw new Error(response.error || 'Failed to start SQL generation');
+    }
+
+    return jobId;
   },
 
   /**
@@ -244,7 +340,7 @@ export const aiService = {
       throw new Error(response.error || 'Failed to start query explanation');
     }
 
-    return aiService.pollForResult(jobId);
+    return aiService.waitForResultSSE(jobId);
   },
 };
 

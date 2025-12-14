@@ -258,16 +258,22 @@ export default function SQLEditor() {
   // AI SQL GENERATION
   // ============================================
 
-  // Typing animation effect
-  const typeText = async (text: string, delay: number = 15) => {
+  // Typing animation effect - faster chunked typing for better UX
+  const typeText = async (text: string) => {
     setIsTyping(true);
     setQuery('');
 
-    for (let i = 0; i <= text.length; i++) {
+    // Type in chunks for faster display (5-10 chars at a time)
+    const chunkSize = 8;
+    const delay = 10; // ms between chunks
+
+    for (let i = 0; i <= text.length; i += chunkSize) {
       await new Promise(resolve => setTimeout(resolve, delay));
-      setQuery(text.substring(0, i));
+      setQuery(text.substring(0, Math.min(i + chunkSize, text.length)));
     }
 
+    // Ensure final text is complete
+    setQuery(text);
     setIsTyping(false);
   };
 
@@ -282,16 +288,24 @@ export default function SQLEditor() {
       return;
     }
 
+    // Save prompt before clearing
+    const currentPrompt = aiPrompt;
+
+    // Immediately close modal and show loading animation in editor
+    setIsAiOpen(false);
+    setAiPrompt('');
     setIsGenerating(true);
     setAiReasoning(null);
     setError(null);
+    setQuery(''); // Clear editor to show loading state
 
     try {
-      console.log('[AI] Starting SQL generation for prompt:', aiPrompt);
+      console.log('[AI] Starting SQL generation for prompt:', currentPrompt);
 
+      // Start the job and wait for result via SSE
       const result = await aiService.generateSqlAndWait(
         connectionId,
-        aiPrompt,
+        currentPrompt,
         selectedSchemas
       );
 
@@ -312,26 +326,27 @@ export default function SQLEditor() {
       console.log('[AI] Extracted SQL:', sql);
 
       if (sql) {
-        // Format the generated SQL nicely
-        const generatedSQL = `-- AI Generated: "${aiPrompt}"\n-- Tables used: ${tablesUsed.join(', ') || 'unknown'}\n\n${sql}`;
+        // Stop the generating animation before typing
+        setIsGenerating(false);
 
-        setIsAiOpen(false);
-        setAiPrompt('');
+        // Format the generated SQL nicely
+        const generatedSQL = `-- AI Generated: "${currentPrompt}"\n-- Tables used: ${tablesUsed.join(', ') || 'unknown'}\n\n${sql}`;
+
         setAiReasoning(sqlResult as any);
 
-        // Type out the SQL with animation
+        // Type out the SQL with fast animation
         await typeText(generatedSQL);
 
         toast.success('SQL generated successfully!');
       } else {
         console.error('[AI] No SQL in result:', result);
+        setIsGenerating(false);
         toast.error('AI generated empty response - please try again');
       }
     } catch (err: any) {
       console.error('[AI] Generation Error:', err);
-      toast.error(err.message || 'Failed to generate SQL');
-    } finally {
       setIsGenerating(false);
+      toast.error(err.message || 'Failed to generate SQL');
     }
   };
 
