@@ -7,7 +7,7 @@ export { default as AnalyticsPage } from './dashboard/AnalyticsPage';
 export { default as SettingsPage } from './dashboard/SettingsPage';
 export { default as ConnectionOverview } from './dashboard/ConnectionOverview';
 export { default as TableView } from './dashboard/TableView';
-export { default as SQLEditor } from './dashboard/SQLEditor';
+export { default as SQLEditor } from './dashboard/SQLEditorNew';
 export { default as SchemaVisualizer } from './dashboard/SchemaVisualizer';
 export { default as SignInPage } from './auth/SignInPage';
 export { default as SignUpPage } from './auth/SignUpPage';

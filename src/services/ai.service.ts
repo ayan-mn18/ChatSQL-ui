@@ -101,7 +101,7 @@ export const aiService = {
    */
   pollForResult: async (
     jobId: string,
-    maxAttempts: number = 60,
+    maxAttempts: number = 120,
     intervalMs: number = 500
   ): Promise<AIJobResult> => {
     return new Promise((resolve, reject) => {
@@ -113,16 +113,33 @@ export const aiService = {
         try {
           const response = await aiService.getJobResult(jobId);
 
-          if (response.success && response.data) {
-            const { status, result } = response.data;
+          // Handle response - backend returns status/result at top level or nested in data
+          const responseData = (response.data || response) as any;
+          const status = responseData.status;
+          const result = responseData.result;
 
+          console.log(`[AI] Poll attempt ${attempts}/${maxAttempts} - Status: ${status}`);
+
+          if (response.success || responseData.success) {
             if (status === 'completed' && result) {
+              console.log('[AI] Job completed:', result);
               resolve(result);
               return;
             }
 
             if (status === 'failed') {
+              console.error('[AI] Job failed:', result?.error);
               reject(new Error(result?.error || 'AI job failed'));
+              return;
+            }
+
+            // Status is 'pending' - continue polling
+            if (status === 'pending') {
+              if (attempts >= maxAttempts) {
+                reject(new Error('AI job timed out - please try again'));
+                return;
+              }
+              setTimeout(poll, intervalMs);
               return;
             }
           }
@@ -132,9 +149,10 @@ export const aiService = {
             return;
           }
 
-          // Continue polling
+          // Continue polling for unknown status
           setTimeout(poll, intervalMs);
-        } catch (error) {
+        } catch (error: any) {
+          console.error(`[AI] Poll error (attempt ${attempts}):`, error.message);
           if (attempts >= maxAttempts) {
             reject(error);
             return;
@@ -192,12 +210,18 @@ export const aiService = {
     // Start generation job
     const response = await aiService.generateSql(connectionId, prompt, selectedSchemas);
 
-    if (!response.success || !response.data?.jobId) {
+    // Handle response - backend returns jobId at top level or nested in data
+    const responseData = (response.data || response) as any;
+    const jobId = responseData.jobId;
+
+    if (!response.success || !jobId) {
       throw new Error(response.error || 'Failed to start SQL generation');
     }
 
+    console.log('[AI] Started job:', jobId, '- polling for result...');
+
     // Poll for result
-    return aiService.pollForResult(response.data.jobId);
+    return aiService.pollForResult(jobId);
   },
 
   /**
@@ -212,11 +236,15 @@ export const aiService = {
   ): Promise<AIJobResult> => {
     const response = await aiService.explainQuery(connectionId, sql);
 
-    if (!response.success || !response.data?.jobId) {
+    // Handle response - backend returns jobId at top level or nested in data
+    const responseData = (response.data || response) as any;
+    const jobId = responseData.jobId;
+
+    if (!response.success || !jobId) {
       throw new Error(response.error || 'Failed to start query explanation');
     }
 
-    return aiService.pollForResult(response.data.jobId);
+    return aiService.pollForResult(jobId);
   },
 };
 

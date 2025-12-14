@@ -1,5 +1,5 @@
-import { createContext, useContext, ReactNode } from 'react';
-import { useJobProgress, JobProgress } from '../hooks/useJobProgress';
+import { createContext, useContext, ReactNode, useCallback } from 'react';
+import { useJobProgress, JobProgress, AIJobResult } from '../hooks/useJobProgress';
 import toast from 'react-hot-toast';
 
 // ============================================
@@ -28,36 +28,45 @@ interface JobProgressProviderProps {
 }
 
 export function JobProgressProvider({ children }: JobProgressProviderProps) {
-  const jobProgress = useJobProgress({
-    autoConnect: true,
-    onProgress: (job) => {
-      // Optional: Show toast for significant progress updates
-      if (job.progress === 50) {
-        // toast.loading(job.message, { id: job.jobId });
-      }
-    },
-    onComplete: (job) => {
-      toast.success(job.message || 'Job completed successfully', {
-        id: job.jobId,
-        duration: 3000,
-      });
-    },
-    onError: (job) => {
-      toast.error(job.error || 'Job failed', {
-        id: job.jobId,
+  // Memoize callbacks to prevent unnecessary reconnections
+  const handleProgress = useCallback((job: JobProgress) => {
+    // Optional: Show toast for significant progress updates
+    if (job.progress === 50) {
+      // toast.loading(job.message, { id: job.jobId });
+    }
+  }, []);
+
+  const handleComplete = useCallback((job: JobProgress) => {
+    toast.success(job.message || 'Job completed successfully', {
+      id: job.jobId,
+      duration: 3000,
+    });
+  }, []);
+
+  const handleError = useCallback((job: JobProgress) => {
+    toast.error(job.error || 'Job failed', {
+      id: job.jobId,
+      duration: 5000,
+    });
+  }, []);
+
+  const handleAIResult = useCallback((result: AIJobResult) => {
+    if (result.success) {
+      // AI results are typically handled by the component that initiated the request
+      console.log('[AI] Result received:', result.jobId);
+    } else {
+      toast.error(result.error || 'AI operation failed', {
         duration: 5000,
       });
-    },
-    onAIResult: (result) => {
-      if (result.success) {
-        // AI results are typically handled by the component that initiated the request
-        console.log('[AI] Result received:', result.jobId);
-      } else {
-        toast.error(result.error || 'AI operation failed', {
-          duration: 5000,
-        });
-      }
-    },
+    }
+  }, []);
+
+  const jobProgress = useJobProgress({
+    autoConnect: true,
+    onProgress: handleProgress,
+    onComplete: handleComplete,
+    onError: handleError,
+    onAIResult: handleAIResult,
   });
 
   return (

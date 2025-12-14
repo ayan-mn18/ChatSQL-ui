@@ -55,6 +55,20 @@ export function useJobProgress(options: UseJobProgressOptions = {}) {
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
   
+  // Store callbacks in refs to avoid dependency issues causing reconnection loops
+  const onProgressRef = useRef(onProgress);
+  const onCompleteRef = useRef(onComplete);
+  const onErrorRef = useRef(onError);
+  const onAIResultRef = useRef(onAIResult);
+  
+  // Update refs when callbacks change
+  useEffect(() => {
+    onProgressRef.current = onProgress;
+    onCompleteRef.current = onComplete;
+    onErrorRef.current = onError;
+    onAIResultRef.current = onAIResult;
+  }, [onProgress, onComplete, onError, onAIResult]);
+  
   // Cleanup function
   const disconnect = useCallback(() => {
     if (eventSourceRef.current) {
@@ -74,11 +88,21 @@ export function useJobProgress(options: UseJobProgressOptions = {}) {
       return;
     }
     
+    // Don't connect if already connected
+    if (eventSourceRef.current && eventSourceRef.current.readyState === EventSource.OPEN) {
+      console.log('[SSE] Already connected, skipping');
+      return;
+    }
+    
     // Cleanup existing connection
     disconnect();
     
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-    const url = `${apiUrl}/api/jobs/progress`;
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+    // Remove trailing /api if present to avoid double /api/api
+    const baseUrl = apiUrl.replace(/\/api\/?$/, '');
+    const url = `${baseUrl}/api/jobs/progress`;
+    
+    console.log('[SSE] Connecting to:', url);
     
     try {
       const eventSource = new EventSource(url, { withCredentials: true });
@@ -124,7 +148,7 @@ export function useJobProgress(options: UseJobProgressOptions = {}) {
           return next;
         });
         
-        onProgress?.(data);
+        onProgressRef.current?.(data);
       });
       
       eventSource.addEventListener('complete', (event) => {
@@ -139,7 +163,7 @@ export function useJobProgress(options: UseJobProgressOptions = {}) {
           return next;
         });
         
-        onComplete?.(data);
+        onCompleteRef.current?.(data);
         
         // Auto-remove completed jobs after 5 seconds
         setTimeout(() => {
@@ -165,19 +189,19 @@ export function useJobProgress(options: UseJobProgressOptions = {}) {
           return next;
         });
         
-        onError?.(data);
+        onErrorRef.current?.(data);
       });
       
       eventSource.addEventListener('ai-result', (event) => {
         const result = JSON.parse(event.data) as AIJobResult;
-        onAIResult?.(result);
+        onAIResultRef.current?.(result);
       });
       
     } catch (error) {
       console.error('[SSE] Failed to create EventSource:', error);
       setConnectionError('Failed to connect to job progress stream');
     }
-  }, [isAuthenticated, user, disconnect, onProgress, onComplete, onError, onAIResult]);
+  }, [isAuthenticated, user, disconnect]);
   
   // Auto-connect on mount
   useEffect(() => {

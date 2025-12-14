@@ -9,6 +9,7 @@ interface Column {
 
 interface TableNodeData {
   label: string;
+  schemaName?: string;
   columns: Column[];
   color?: string;
 }
@@ -20,62 +21,113 @@ export default function TableNode({ data }: { data: TableNodeData }) {
     <div className="relative group">
       {/* Glow effect behind the node */}
       <div
-        className="absolute -inset-0.5 rounded-lg opacity-20 group-hover:opacity-40 transition duration-500 blur"
+        className="absolute -inset-1 rounded-xl opacity-30 group-hover:opacity-50 transition duration-500 blur-md"
         style={{ backgroundColor: color }}
       ></div>
 
-      <div className="relative bg-[#0f172a]/95 backdrop-blur-md border border-white/10 rounded-lg shadow-2xl min-w-[240px] overflow-hidden">
-        {/* Header with colored accent line */}
-        <div className="relative bg-white/5 px-4 py-3 border-b border-white/10 flex items-center justify-between">
+      <div className="relative bg-[#0f172a]/95 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl min-w-[260px] overflow-hidden">
+        {/* Header with colored accent */}
+        <div
+          className="relative px-4 py-3 border-b border-white/10 flex items-center justify-between"
+          style={{
+            background: `linear-gradient(135deg, ${color}15 0%, transparent 50%)`,
+          }}
+        >
+          {/* Colored left bar */}
           <div
-            className="absolute left-0 top-0 bottom-0 w-1"
-            style={{ backgroundColor: color, boxShadow: `0 0 10px ${color}` }}
+            className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl"
+            style={{ backgroundColor: color, boxShadow: `0 0 12px ${color}80` }}
           ></div>
-          <span className="font-semibold text-slate-100 text-sm pl-2">{data.label}</span>
-          <div className="flex gap-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-white/20"></div>
-            <div className="w-1.5 h-1.5 rounded-full bg-white/20"></div>
+
+          <div className="pl-3">
+            <span className="font-bold text-slate-100 text-sm block">{data.label}</span>
+            {data.schemaName && (
+              <span className="text-[10px] text-slate-400 font-medium">{data.schemaName}</span>
+            )}
+          </div>
+
+          {/* Decorative dots with color */}
+          <div className="flex gap-1.5">
+            <div
+              className="w-2 h-2 rounded-full opacity-60"
+              style={{ backgroundColor: color }}
+            ></div>
+            <div className="w-2 h-2 rounded-full bg-white/20"></div>
+            <div className="w-2 h-2 rounded-full bg-white/10"></div>
           </div>
         </div>
 
         {/* Columns */}
-        <div className="py-2 max-h-[300px] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-white/20">
+        <div className="py-2 max-h-[280px] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-white/20">
           {data.columns.map((col, index) => (
-            <div key={index} className="group/row flex items-center justify-between text-xs px-4 py-1.5 hover:bg-white/5 transition-colors cursor-default">
+            <div
+              key={index}
+              className="group/row flex items-center justify-between text-xs px-4 py-1.5 hover:bg-white/5 transition-colors cursor-default"
+            >
               <div className="flex items-center gap-2">
-                {/* Connection handle for each row (optional, but good for detailed ERDs) */}
-                <span className={`text-slate-300 font-medium group-hover/row:text-white transition-colors ${col.isPrimary ? 'text-white' : ''}`}>
+                <span className={`font-medium group-hover/row:text-white transition-colors ${col.isPrimary ? 'text-yellow-400' : col.isForeign ? 'text-blue-400' : 'text-slate-300'
+                  }`}>
                   {col.name}
                 </span>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <span className="text-slate-500 font-mono text-[10px]">{col.type}</span>
-                <div className="w-8 flex justify-end">
-                  {col.isPrimary && (
-                    <span className="text-[10px] font-bold text-yellow-500/80 bg-yellow-500/10 px-1 rounded">PK</span>
-                  )}
-                  {col.isForeign && (
-                    <span className="text-[10px] font-bold text-blue-400/80 bg-blue-400/10 px-1 rounded">FK</span>
-                  )}
-                </div>
+                {col.isPrimary && (
+                  <span
+                    className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                    style={{
+                      color: '#fbbf24',
+                      backgroundColor: 'rgba(251, 191, 36, 0.15)',
+                      border: '1px solid rgba(251, 191, 36, 0.3)'
+                    }}
+                  >
+                    PK
+                  </span>
+                )}
+                {col.isForeign && (
+                  <span
+                    className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                    style={{
+                      color: color,
+                      backgroundColor: `${color}20`,
+                      border: `1px solid ${color}40`
+                    }}
+                  >
+                    FK
+                  </span>
+                )}
               </div>
             </div>
           ))}
         </div>
+
+        {/* Bottom accent line */}
+        <div
+          className="h-0.5 w-full opacity-50"
+          style={{ background: `linear-gradient(90deg, ${color}, transparent)` }}
+        ></div>
       </div>
 
-      {/* Main Handles */}
+      {/* Main Handles with colored ring on hover */}
       <Handle
         type="target"
         position={Position.Left}
-        className="!w-2 !h-2 !bg-[#1e293b] !border-2 !border-slate-500"
-        style={{ left: -5 }}
+        className="!w-3 !h-3 !bg-[#1e293b] !border-2 transition-all duration-200"
+        style={{
+          left: -6,
+          borderColor: color,
+          boxShadow: `0 0 0 2px ${color}30`
+        }}
       />
       <Handle
         type="source"
         position={Position.Right}
-        className="!w-2 !h-2 !bg-[#1e293b] !border-2 !border-slate-500"
-        style={{ right: -5 }}
+        className="!w-3 !h-3 !bg-[#1e293b] !border-2 transition-all duration-200"
+        style={{
+          right: -6,
+          borderColor: color,
+          boxShadow: `0 0 0 2px ${color}30`
+        }}
       />
     </div>
   );
