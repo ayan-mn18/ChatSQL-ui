@@ -1204,7 +1204,19 @@ export default function TableView() {
                     defaultLanguage="json"
                     value={editModalData?.value || ''}
                     onChange={(value) => setEditModalData(prev => prev ? { ...prev, value: value || '' } : null)}
-                    theme="vs-dark"
+                    beforeMount={(monaco) => {
+                      monaco.editor.defineTheme('chatsql-dark', {
+                        base: 'vs-dark',
+                        inherit: true,
+                        rules: [],
+                        colors: {
+                          'editor.background': '#273142',
+                          'editor.lineHighlightBackground': '#ffffff0a',
+                          'editorGutter.background': '#273142',
+                        }
+                      });
+                    }}
+                    theme="chatsql-dark"
                     options={{
                       minimap: { enabled: false },
                       fontSize: 14,
