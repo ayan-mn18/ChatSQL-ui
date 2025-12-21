@@ -153,6 +153,17 @@ export const connectionService = {
     return response.data;
   },
 
+  /**
+   * Enable a PostgreSQL extension on the database
+   * @param id - Connection UUID
+   * @param extensionName - Name of the extension (e.g., 'pg_stat_statements')
+   * @returns Success status and message
+   */
+  enableExtension: async (id: string, extensionName: string): Promise<ApiResponse<any>> => {
+    const response = await api.post<ApiResponse<any>>(`/connections/${id}/extensions`, { extensionName });
+    return response.data;
+  },
+
   // ============================================
   // TABLE DATA OPERATIONS
   // ============================================
