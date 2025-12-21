@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Table,
@@ -18,7 +18,15 @@ import {
   MessageSquare,
   Database,
   History,
-  Info
+  Info,
+  ChevronUp,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  Copy,
+  Check,
+  Download
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import {
@@ -88,6 +96,14 @@ export default function ConnectionOverview() {
   const [activeTab, setActiveTab] = useState<'chatsql' | 'database'>('chatsql');
   const [enablingExtension, setEnablingExtension] = useState(false);
 
+  // Query Performance table state
+  const [queryPerfPage, setQueryPerfPage] = useState(0);
+  const [queryPerfSort, setQueryPerfSort] = useState<{ field: 'calls' | 'avg_time_ms' | 'total_time_ms' | 'rows'; direction: 'asc' | 'desc' }>({ field: 'total_time_ms', direction: 'desc' });
+  const [selectedQuery, setSelectedQuery] = useState<any>(null);
+  const [copiedQuery, setCopiedQuery] = useState(false);
+  const [queryFilter, setQueryFilter] = useState<'table' | 'all'>('table');
+  const QUERIES_PER_PAGE = 5;
+
   useEffect(() => {
     if (connectionId) {
       fetchAnalytics();
@@ -125,6 +141,248 @@ export default function ConnectionOverview() {
     }
   };
 
+  // Extract data for memoization (must be before early returns due to React hooks rules)
+  const databaseHealth = analytics?.databaseHealth;
+  const chatSqlActivity = analytics?.chatSqlActivity;
+  const pgStatStatements = databaseHealth?.pgStatStatements;
+  const pgStatStatementsStatus = databaseHealth?.pgStatStatementsStatus;
+  const dbSize = databaseHealth?.dbSize;
+  const activeConnections = databaseHealth?.activeConnections;
+  const cacheHitRatio = databaseHealth?.cacheHitRatio;
+  const tableStats = databaseHealth?.tableStats;
+  const summary = chatSqlActivity?.summary;
+  const recentQueries = chatSqlActivity?.recentQueries;
+  const slowestQueries = chatSqlActivity?.slowestQueries;
+  const topAiPrompts = chatSqlActivity?.topAiPrompts;
+  const topSqlQueries = chatSqlActivity?.topSqlQueries;
+  const queryTrends = chatSqlActivity?.queryTrends;
+  const mostQueriedTables = chatSqlActivity?.mostQueriedTables;
+
+  // Filter function to identify table/schema queries vs system queries
+  const isTableQuery = (query: string): boolean => {
+    const lowerQuery = query.toLowerCase().trim();
+
+    // Exclude if query starts with these transaction/session commands
+    const startsWithExclusions = [
+      'begin', 'commit', 'rollback', 'start transaction',
+      'set ', 'show ', 'reset ', 'deallocate', 'prepare ',
+      'execute ', 'discard', 'listen', 'notify', 'unlisten',
+      'move', 'fetch', 'close', 'declare', 'copy ',
+      'vacuum', 'analyze', 'cluster', 'reindex', 'lock', 'checkpoint'
+    ];
+
+    for (const prefix of startsWithExclusions) {
+      if (lowerQuery.startsWith(prefix)) {
+        return false;
+      }
+    }
+
+    // Exclude simple SELECT $1 placeholder queries (internal)
+    if (/^select\s+\$\d+\s*$/.test(lowerQuery)) {
+      return false;
+    }
+
+    // Exclude if query contains references to system catalogs/schemas anywhere
+    const containsExclusions = [
+      // PostgreSQL system catalogs
+      'pg_catalog.',
+      'information_schema.',
+      'pg_stat_',
+      'pg_statio_',
+      ' pg_class',
+      ' pg_namespace',
+      ' pg_attribute',
+      ' pg_type',
+      ' pg_index',
+      ' pg_constraint',
+      ' pg_tables',
+      ' pg_views',
+      ' pg_matviews',
+      ' pg_sequences',
+      ' pg_indexes',
+      ' pg_roles',
+      ' pg_user',
+      ' pg_database',
+      ' pg_settings',
+      ' pg_extension',
+      ' pg_available_extensions',
+      ' pg_proc',
+      ' pg_trigger',
+      ' pg_depend',
+      ' pg_description',
+      ' pg_am',
+      ' pg_opclass',
+      ' pg_operator',
+      ' pg_aggregate',
+      ' pg_rewrite',
+      ' pg_statistic',
+      ' pg_inherits',
+      ' pg_locks',
+      ' pg_backend',
+      'from pg_',
+      'join pg_',
+
+      // PostgreSQL system functions
+      'pg_get_',
+      'pg_total_relation_size',
+      'pg_relation_size',
+      'pg_table_size',
+      'pg_indexes_size',
+      'pg_database_size',
+      'pg_size_pretty',
+      'pg_switch_wal',
+      'pg_current_wal',
+      'pg_wal_lsn',
+      'pg_advisory_',
+      'pg_terminate_',
+      'pg_cancel_',
+      'pg_sleep',
+      'pg_notify',
+      'pg_listen',
+      'pg_is_',
+      'pg_create_',
+      'pg_drop_',
+      'pg_logical_',
+      'pg_replication_',
+
+      // Type casting to system types
+      '::regclass',
+      '::regtype',
+      '::regproc',
+      '::regnamespace',
+
+      // System info functions
+      'current_setting',
+      'has_table_privilege',
+      'has_schema_privilege',
+      'obj_description',
+      'col_description',
+      'format_type',
+      'version()',
+      'current_database()',
+      'current_user',
+      'current_schema',
+      'session_user',
+      'inet_server',
+      'inet_client',
+
+      // AWS RDS specific internal queries
+      'rds_heartbeat',
+      'rds_replication',
+      'rds_get_stat',
+      'rds_set_',
+      'rds_aws_creds',
+      'aurora_',
+
+      // Replication related
+      'wal_',
+      'xlog',
+      'replication',
+      'slot',
+      'snapshot',
+    ];
+
+    for (const pattern of containsExclusions) {
+      if (lowerQuery.includes(pattern)) {
+        return false;
+      }
+    }
+
+    // Must be a data manipulation or DDL query
+    const validQueryStarts = [
+      'select ', 'insert ', 'update ', 'delete ',
+      'create ', 'alter ', 'drop ', 'truncate ',
+      'with '
+    ];
+
+    const startsWithValid = validQueryStarts.some(prefix => lowerQuery.startsWith(prefix));
+
+    if (!startsWithValid) {
+      return false;
+    }
+
+    return true;
+  };
+
+  // Sorted and paginated query performance data (must be before early returns)
+  const filteredPgStatStatements = useMemo(() => {
+    if (!pgStatStatements || pgStatStatements.length === 0) return [];
+
+    if (queryFilter === 'all') {
+      return pgStatStatements;
+    }
+
+    // Filter to only table/schema queries
+    return pgStatStatements.filter((q: any) => isTableQuery(q.query));
+  }, [pgStatStatements, queryFilter]);
+
+  const sortedPgStatStatements = useMemo(() => {
+    if (!filteredPgStatStatements || filteredPgStatStatements.length === 0) return [];
+
+    return [...filteredPgStatStatements].sort((a: any, b: any) => {
+      const aVal = parseFloat(a[queryPerfSort.field]) || 0;
+      const bVal = parseFloat(b[queryPerfSort.field]) || 0;
+      return queryPerfSort.direction === 'desc' ? bVal - aVal : aVal - bVal;
+    });
+  }, [filteredPgStatStatements, queryPerfSort]);
+
+  const paginatedPgStatStatements = useMemo(() => {
+    const start = queryPerfPage * QUERIES_PER_PAGE;
+    return sortedPgStatStatements.slice(start, start + QUERIES_PER_PAGE);
+  }, [sortedPgStatStatements, queryPerfPage]);
+
+  const totalQueryPages = Math.ceil((filteredPgStatStatements?.length || 0) / QUERIES_PER_PAGE);
+
+  const handleQuerySort = (field: 'calls' | 'avg_time_ms' | 'total_time_ms' | 'rows') => {
+    setQueryPerfSort(prev => ({
+      field,
+      direction: prev.field === field && prev.direction === 'desc' ? 'asc' : 'desc'
+    }));
+    setQueryPerfPage(0); // Reset to first page on sort
+  };
+
+  const handleQueryFilterChange = (filter: 'table' | 'all') => {
+    setQueryFilter(filter);
+    setQueryPerfPage(0); // Reset to first page on filter change
+  };
+
+  const copyQueryToClipboard = async (query: string) => {
+    await navigator.clipboard.writeText(query);
+    setCopiedQuery(true);
+    setTimeout(() => setCopiedQuery(false), 2000);
+  };
+
+  const exportQueriesToCSV = () => {
+    if (!filteredPgStatStatements || filteredPgStatStatements.length === 0) return;
+
+    // CSV header
+    const headers = ['Query', 'Calls', 'Avg Time (ms)', 'Total Time (ms)', 'Rows'];
+
+    // CSV rows
+    const rows = filteredPgStatStatements.map((q: any) => {
+      // Escape quotes in query and wrap in quotes
+      const escapedQuery = `"${(q.query || '').replace(/"/g, '""')}"`;
+      return [
+        escapedQuery,
+        q.calls || 0,
+        parseFloat(q.avg_time_ms || 0).toFixed(2),
+        parseFloat(q.total_time_ms || 0).toFixed(2),
+        q.rows || 0
+      ].join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `query_performance_${queryFilter}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   if (loading && !analytics) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -137,10 +395,6 @@ export default function ConnectionOverview() {
   }
 
   if (!analytics) return null;
-
-  const { databaseHealth, chatSqlActivity } = analytics;
-  const { dbSize, activeConnections, cacheHitRatio, tableStats, pgStatStatements } = databaseHealth || {};
-  const { summary, recentQueries, slowestQueries, topAiPrompts, topSqlQueries, queryTrends, mostQueriedTables } = chatSqlActivity || {};
 
   // Query Trends Chart Data
   const trendLabels = queryTrends?.map((t: any) => formatDate(t.date)) || [];
@@ -847,50 +1101,195 @@ export default function ConnectionOverview() {
                       Top queries by total execution time across your entire database
                     </CardDescription>
                   </div>
-                  {!pgStatStatements || pgStatStatements.length === 0 ? (
-                    <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-400 w-fit">
-                      <AlertTriangle className="w-3 h-3" />
-                      Extension not enabled
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-400 w-fit">
-                      <Activity className="w-3 h-3" />
-                      Monitoring Active
-                    </div>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {/* Query Filter Dropdown */}
+                    {pgStatStatementsStatus === 'active' && (
+                      <>
+                        <select
+                          value={queryFilter}
+                          onChange={(e) => handleQueryFilterChange(e.target.value as 'table' | 'all')}
+                          className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-300 focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer hover:bg-white/10 transition-colors"
+                        >
+                          <option value="table" className="bg-slate-800">Table Queries Only</option>
+                          <option value="all" className="bg-slate-800">All Queries</option>
+                        </select>
+                        <button
+                          onClick={exportQueriesToCSV}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-300 hover:bg-white/10 hover:text-white transition-colors"
+                          title="Export to CSV"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          Export CSV
+                        </button>
+                      </>
+                    )}
+
+                    {pgStatStatementsStatus === 'active' ? (
+                      <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-400 w-fit">
+                        <Activity className="w-3 h-3" />
+                        Monitoring Active
+                      </div>
+                    ) : pgStatStatementsStatus === 'installed_not_loaded' ? (
+                      <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-[10px] text-blue-400 w-fit">
+                        <RefreshCw className="w-3 h-3" />
+                        Restart Required
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-400 w-fit">
+                        <AlertTriangle className="w-3 h-3" />
+                        Extension not enabled
+                      </div>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
                 {pgStatStatements && pgStatStatements.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                      <thead className="bg-white/5 text-slate-400 font-medium">
-                        <tr>
-                          <th className="px-6 py-3">Query</th>
-                          <th className="px-6 py-3 text-right">Calls</th>
-                          <th className="px-6 py-3 text-right">Avg Time</th>
-                          <th className="px-6 py-3 text-right">Total Time</th>
-                          <th className="px-6 py-3 text-right">Rows</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5">
-                        {pgStatStatements.map((q: any, idx: number) => (
-                          <tr key={idx} className="hover:bg-white/5 transition-colors">
-                            <td className="px-6 py-3">
-                              <code className="text-xs text-slate-300 font-mono block max-w-[500px] truncate">
-                                {q.query}
-                              </code>
-                            </td>
-                            <td className="px-6 py-3 text-right text-slate-400">{q.calls}</td>
-                            <td className="px-6 py-3 text-right text-slate-300 font-medium">{Math.round(q.avg_time_ms)}ms</td>
-                            <td className="px-6 py-3 text-right text-orange-400 font-bold">
-                              {q.total_time_ms > 1000 ? `${(q.total_time_ms / 1000).toFixed(1)}s` : `${Math.round(q.total_time_ms)}ms`}
-                            </td>
-                            <td className="px-6 py-3 text-right text-slate-400">{q.rows}</td>
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm">
+                        <thead className="bg-white/5 text-slate-400 font-medium">
+                          <tr>
+                            <th className="px-6 py-3">Query</th>
+                            <th
+                              className="px-6 py-3 text-right cursor-pointer hover:text-white transition-colors select-none"
+                              onClick={() => handleQuerySort('calls')}
+                            >
+                              <div className="flex items-center justify-end gap-1">
+                                Calls
+                                {queryPerfSort.field === 'calls' && (
+                                  queryPerfSort.direction === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />
+                                )}
+                              </div>
+                            </th>
+                            <th
+                              className="px-6 py-3 text-right cursor-pointer hover:text-white transition-colors select-none"
+                              onClick={() => handleQuerySort('avg_time_ms')}
+                            >
+                              <div className="flex items-center justify-end gap-1">
+                                Avg Time
+                                {queryPerfSort.field === 'avg_time_ms' && (
+                                  queryPerfSort.direction === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />
+                                )}
+                              </div>
+                            </th>
+                            <th
+                              className="px-6 py-3 text-right cursor-pointer hover:text-white transition-colors select-none"
+                              onClick={() => handleQuerySort('total_time_ms')}
+                            >
+                              <div className="flex items-center justify-end gap-1">
+                                Total Time
+                                {queryPerfSort.field === 'total_time_ms' && (
+                                  queryPerfSort.direction === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />
+                                )}
+                              </div>
+                            </th>
+                            <th
+                              className="px-6 py-3 text-right cursor-pointer hover:text-white transition-colors select-none"
+                              onClick={() => handleQuerySort('rows')}
+                            >
+                              <div className="flex items-center justify-end gap-1">
+                                Rows
+                                {queryPerfSort.field === 'rows' && (
+                                  queryPerfSort.direction === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />
+                                )}
+                              </div>
+                            </th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {paginatedPgStatStatements.map((q: any, idx: number) => (
+                            <tr
+                              key={idx}
+                              className="hover:bg-white/5 transition-colors cursor-pointer"
+                              onClick={() => setSelectedQuery(q)}
+                            >
+                              <td className="px-6 py-3">
+                                <code className="text-xs text-slate-300 font-mono block max-w-[500px] truncate hover:text-blue-400 transition-colors">
+                                  {q.query}
+                                </code>
+                              </td>
+                              <td className="px-6 py-3 text-right text-slate-400">{parseInt(q.calls).toLocaleString()}</td>
+                              <td className="px-6 py-3 text-right text-slate-300 font-medium">{parseFloat(q.avg_time_ms).toFixed(2)}ms</td>
+                              <td className="px-6 py-3 text-right text-orange-400 font-bold">
+                                {parseFloat(q.total_time_ms) > 1000 ? `${(parseFloat(q.total_time_ms) / 1000).toFixed(1)}s` : `${parseFloat(q.total_time_ms).toFixed(0)}ms`}
+                              </td>
+                              <td className="px-6 py-3 text-right text-slate-400">{parseInt(q.rows).toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Pagination */}
+                    {totalQueryPages > 1 && (
+                      <div className="flex items-center justify-between px-6 py-3 border-t border-white/5 bg-white/[0.02]">
+                        <p className="text-xs text-slate-500">
+                          Showing {queryPerfPage * QUERIES_PER_PAGE + 1}-{Math.min((queryPerfPage + 1) * QUERIES_PER_PAGE, filteredPgStatStatements.length)} of {filteredPgStatStatements.length} queries{queryFilter === 'table' && pgStatStatements && pgStatStatements.length !== filteredPgStatStatements.length && ` (${pgStatStatements.length - filteredPgStatStatements.length} system queries hidden)`}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setQueryPerfPage(p => Math.max(0, p - 1))}
+                            disabled={queryPerfPage === 0}
+                            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                          >
+                            <ChevronLeft className="w-4 h-4 text-slate-400" />
+                          </button>
+                          <span className="text-xs text-slate-400 min-w-[60px] text-center">
+                            {queryPerfPage + 1} / {totalQueryPages}
+                          </span>
+                          <button
+                            onClick={() => setQueryPerfPage(p => Math.min(totalQueryPages - 1, p + 1))}
+                            disabled={queryPerfPage >= totalQueryPages - 1}
+                            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                          >
+                            <ChevronRight className="w-4 h-4 text-slate-400" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : pgStatStatementsStatus === 'installed_not_loaded' ? (
+                  <div className="p-8 md:p-12 text-center space-y-6">
+                    <div className="inline-flex p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20">
+                      <RefreshCw className="w-8 h-8 text-blue-500" />
+                    </div>
+                    <div className="max-w-md mx-auto space-y-4">
+                      <div>
+                        <h3 className="text-white font-semibold text-lg">Database Restart Required</h3>
+                        <p className="text-slate-400 text-sm mt-2">
+                          The <code className="mx-1 px-1 py-0.5 bg-white/5 rounded text-purple-400">pg_stat_statements</code> extension
+                          has been installed, but it requires a database server restart to begin collecting query statistics.
+                        </p>
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20 text-left">
+                        <div className="flex gap-3">
+                          <Info className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+                          <div className="text-xs space-y-2">
+                            <p className="text-blue-400 font-bold uppercase tracking-wider">Next Steps</p>
+                            <p className="text-slate-400 leading-relaxed">
+                              For the extension to work, you need to add it to <code className="px-1 py-0.5 bg-white/5 rounded text-purple-400">shared_preload_libraries</code> in your PostgreSQL configuration and restart the server.
+                            </p>
+                            <div className="bg-black/30 rounded-lg p-3 font-mono text-[11px] text-slate-300">
+                              <p className="text-slate-500"># In postgresql.conf:</p>
+                              <p>shared_preload_libraries = 'pg_stat_statements'</p>
+                            </div>
+                            <p className="text-slate-500 text-[10px]">
+                              If you're using a managed database service (AWS RDS, Supabase, Neon, etc.), this may already be configured. Run a few queries and refresh this page.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => fetchAnalytics()}
+                        className="w-full md:w-auto px-8 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-xl font-medium transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        Refresh Analytics
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="p-8 md:p-12 text-center space-y-6">
@@ -1048,6 +1447,98 @@ export default function ConnectionOverview() {
                 </div>
               </CardContent>
             </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Query Details Modal */}
+      {selectedQuery && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setSelectedQuery(null)}
+        >
+          <div
+            className="bg-[#1e293b] border border-white/10 rounded-2xl shadow-2xl max-w-4xl w-full mx-4 max-h-[80vh] flex flex-col animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+              <div>
+                <h3 className="text-lg font-semibold text-white">Query Details</h3>
+                <p className="text-sm text-slate-400">Full query text and performance metrics</p>
+              </div>
+              <button
+                onClick={() => setSelectedQuery(null)}
+                className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              {/* Stats Grid */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white/5 rounded-xl p-4">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Calls</p>
+                  <p className="text-2xl font-bold text-white">{parseInt(selectedQuery.calls).toLocaleString()}</p>
+                </div>
+                <div className="bg-white/5 rounded-xl p-4">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Avg Time</p>
+                  <p className="text-2xl font-bold text-blue-400">{parseFloat(selectedQuery.avg_time_ms).toFixed(2)}ms</p>
+                </div>
+                <div className="bg-white/5 rounded-xl p-4">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Total Time</p>
+                  <p className="text-2xl font-bold text-orange-400">
+                    {parseFloat(selectedQuery.total_time_ms) > 1000
+                      ? `${(parseFloat(selectedQuery.total_time_ms) / 1000).toFixed(2)}s`
+                      : `${parseFloat(selectedQuery.total_time_ms).toFixed(0)}ms`}
+                  </p>
+                </div>
+                <div className="bg-white/5 rounded-xl p-4">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Rows Returned</p>
+                  <p className="text-2xl font-bold text-emerald-400">{parseInt(selectedQuery.rows).toLocaleString()}</p>
+                </div>
+              </div>
+
+              {/* Query Text */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium text-slate-300">SQL Query</p>
+                  <button
+                    onClick={() => copyQueryToClipboard(selectedQuery.query)}
+                    className="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                  >
+                    {copiedQuery ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        Copy Query
+                      </>
+                    )}
+                  </button>
+                </div>
+                <div className="bg-black/40 rounded-xl p-4 border border-white/5 overflow-x-auto">
+                  <pre className="text-sm text-slate-300 font-mono whitespace-pre-wrap break-words">
+                    {selectedQuery.query}
+                  </pre>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-white/10 flex justify-end">
+              <button
+                onClick={() => setSelectedQuery(null)}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
