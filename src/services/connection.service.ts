@@ -138,8 +138,18 @@ export const connectionService = {
    * @param connectionId - Connection UUID
    * @returns List of foreign key relationships for ERD visualization
    */
-  getRelations: async (connectionId: string): Promise<ApiResponse<ERDRelation[]>> => {
-    const response = await api.get<ApiResponse<ERDRelation[]>>(`/connections/${connectionId}/relations`);
+  getRelations: async (id: string): Promise<ApiResponse<ERDRelation[]>> => {
+    const response = await api.get<ApiResponse<ERDRelation[]>>(`/connections/${id}/relations`);
+    return response.data;
+  },
+
+  /**
+   * Get real-time database analytics and statistics
+   * @param id - Connection UUID
+   * @returns Analytics data including DB size, connections, and query stats
+   */
+  getConnectionAnalytics: async (id: string): Promise<ApiResponse<any>> => {
+    const response = await api.get<ApiResponse<any>>(`/connections/${id}/analytics`);
     return response.data;
   },
 
