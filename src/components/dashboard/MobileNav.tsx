@@ -1,11 +1,11 @@
 import { NavLink } from 'react-router-dom';
-import { Database, Settings, BarChart3, User } from 'lucide-react';
+import { Database, Users, BarChart3, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { icon: Database, label: 'Connections', href: '/dashboard/connections' },
   { icon: BarChart3, label: 'Analytics', href: '/dashboard/analytics' },
-  { icon: Settings, label: 'Settings', href: '/dashboard/settings' },
+  { icon: Users, label: 'Users', href: '/dashboard/users' },
   { icon: User, label: 'Profile', href: '/dashboard/profile' },
 ];
 

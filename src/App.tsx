@@ -14,12 +14,12 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import {
   ConnectionsPage,
   AnalyticsPage,
-  SettingsPage,
   ConnectionOverview,
   TableView,
   SQLEditor,
   SchemaVisualizer
 } from './pages';
+import UserManagementPage from './pages/dashboard/UserManagementPage';
 
 function App() {
   return (
@@ -41,7 +41,7 @@ function App() {
           <Route index element={<Navigate to="/dashboard/connections" replace />} />
           <Route path="connections" element={<ConnectionsPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
-          <Route path="settings" element={<SettingsPage />} />
+          <Route path="users" element={<UserManagementPage />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>
 

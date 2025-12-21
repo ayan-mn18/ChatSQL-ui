@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Database, Settings, BarChart3, LogOut, User as UserIcon, ChevronUp } from 'lucide-react';
+import { Database, Users, BarChart3, LogOut, User as UserIcon, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
@@ -16,7 +16,7 @@ import {
 const navItems = [
   { icon: Database, label: 'Connections', href: '/dashboard/connections' },
   { icon: BarChart3, label: 'Analytics', href: '/dashboard/analytics' },
-  { icon: Settings, label: 'Settings', href: '/dashboard/settings' },
+  { icon: Users, label: 'User Management', href: '/dashboard/users' },
 ];
 
 interface SidebarProps {
