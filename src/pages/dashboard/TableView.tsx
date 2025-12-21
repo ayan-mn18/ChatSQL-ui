@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   ChevronLeft,
   ChevronRight,
@@ -14,6 +15,7 @@ import {
   Plus,
   Trash2,
   Filter,
+  Columns,
   X,
   ArrowUpDown,
   ArrowUp,
@@ -280,8 +282,8 @@ export default function TableView() {
     return fkMap;
   }, [relations, schemaName, tableName]);
 
-  // Get columns from data or metadata
-  const displayColumns = useMemo(() => {
+  // Get all available columns
+  const allColumns = useMemo(() => {
     if (data?.columns && data.columns.length > 0) {
       return data.columns;
     }
@@ -293,6 +295,51 @@ export default function TableView() {
     }
     return [];
   }, [data, columnsMetadata]);
+
+  // Local state for hidden columns
+  const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
+
+  // Load hidden columns from local storage
+  useEffect(() => {
+    if (connectionId && schemaName && tableName) {
+      const key = `hidden_columns_${connectionId}_${schemaName}_${tableName}`;
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        try {
+          setHiddenColumns(new Set(JSON.parse(saved)));
+        } catch (e) {
+          console.error('Failed to parse hidden columns', e);
+        }
+      } else {
+        setHiddenColumns(new Set());
+      }
+    }
+  }, [connectionId, schemaName, tableName]);
+
+  // Save hidden columns to local storage
+  const toggleColumnVisibility = useCallback((column: string) => {
+    setHiddenColumns(prev => {
+      const next = new Set(prev);
+      if (next.has(column)) {
+        next.delete(column);
+      } else {
+        next.add(column);
+      }
+
+      // Save to local storage
+      if (connectionId && schemaName && tableName) {
+        const key = `hidden_columns_${connectionId}_${schemaName}_${tableName}`;
+        localStorage.setItem(key, JSON.stringify(Array.from(next)));
+      }
+
+      return next;
+    });
+  }, [connectionId, schemaName, tableName]);
+
+  // Filter columns for display
+  const displayColumns = useMemo(() => {
+    return allColumns.filter(col => !hiddenColumns.has(col));
+  }, [allColumns, hiddenColumns]);
 
   // ============================================
   // HANDLERS
@@ -739,6 +786,44 @@ export default function TableView() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Columns Visibility */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="border-white/10 bg-transparent text-gray-400 hover:bg-white/5">
+                  <Columns className="w-4 h-4 mr-2" />
+                  Columns
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56 bg-[#273142] border-white/10 p-2" align="end">
+                <div className="text-xs font-medium text-gray-400 mb-2 px-2">Toggle Columns</div>
+                <div className="max-h-64 overflow-y-auto space-y-1 scrollbar-thin">
+                  {allColumns.map((col) => (
+                    <div
+                      key={col}
+                      className="flex items-center space-x-2 px-2 py-1.5 hover:bg-white/5 rounded cursor-pointer"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        toggleColumnVisibility(col);
+                      }}
+                    >
+                      <Checkbox
+                        id={`col-${col}`}
+                        checked={!hiddenColumns.has(col)}
+                        onCheckedChange={() => toggleColumnVisibility(col)}
+                        className="border-white/20 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                      />
+                      <label
+                        htmlFor={`col-${col}`}
+                        className="text-sm text-gray-300 cursor-pointer flex-1 truncate select-none"
+                      >
+                        {col}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             {/* Filter */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -754,7 +839,7 @@ export default function TableView() {
                       <SelectValue placeholder="Select column" />
                     </SelectTrigger>
                     <SelectContent className="bg-[#273142] border-white/10">
-                      {displayColumns.map((col) => (
+                      {allColumns.map((col) => (
                         <SelectItem key={col} value={col}>{col}</SelectItem>
                       ))}
                     </SelectContent>
