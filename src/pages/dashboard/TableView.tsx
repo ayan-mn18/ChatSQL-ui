@@ -17,6 +17,7 @@ import {
   Filter,
   Columns,
   X,
+  Code,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -81,6 +82,7 @@ import { ColumnUpdate, FilterCondition, connectionService } from '@/services/con
 import { ERDRelation } from '@/types';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
+import Editor from '@monaco-editor/react';
 
 // ============================================
 // CONSTANTS
@@ -162,6 +164,21 @@ export default function TableView() {
     value: string;
     originalValue: any;
   } | null>(null);
+
+  // Calculate modal size based on content
+  const isJsonEdit = useMemo(() => {
+    if (!editModalData) return false;
+    const columnMeta = columnsMetadata?.columns?.find((c: any) => c.name === editModalData.column);
+    const value = editModalData.value || '';
+    return columnMeta?.type?.includes('json') ||
+      (value.trim().startsWith('{') || value.trim().startsWith('['));
+  }, [editModalData, columnsMetadata]);
+
+  const isLargeEdit = useMemo(() => {
+    if (!editModalData) return false;
+    const value = editModalData.value || '';
+    return isJsonEdit || value.length > 150 || value.split('\n').length > 3;
+  }, [editModalData, isJsonEdit]);
 
   // Warning dialogs
   const [showPkWarning, setShowPkWarning] = useState(false);
@@ -1151,7 +1168,10 @@ export default function TableView() {
 
         {/* Edit Value Modal */}
         <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-          <DialogContent className="bg-[#1B2431] border-white/10 text-white max-w-2xl">
+          <DialogContent className={cn(
+            "bg-[#1B2431] border-white/10 text-white flex flex-col transition-all duration-200",
+            isLargeEdit ? "max-w-5xl h-[80vh]" : "max-w-xl"
+          )}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 Edit Value
@@ -1173,16 +1193,62 @@ export default function TableView() {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="py-4">
-              <Textarea
-                value={editModalData?.value || ''}
-                onChange={(e) => setEditModalData(prev => prev ? { ...prev, value: e.target.value } : null)}
-                className="bg-[#273142] border-white/10 min-h-[200px] font-mono text-sm"
-                placeholder="Enter value..."
-              />
+            <div className={cn(
+              "py-4 flex flex-col",
+              isLargeEdit ? "flex-1 min-h-0" : ""
+            )}>
+              {isJsonEdit ? (
+                <div className="flex-1 border border-white/10 rounded-md overflow-hidden h-full">
+                  <Editor
+                    height="100%"
+                    defaultLanguage="json"
+                    value={editModalData?.value || ''}
+                    onChange={(value) => setEditModalData(prev => prev ? { ...prev, value: value || '' } : null)}
+                    theme="vs-dark"
+                    options={{
+                      minimap: { enabled: false },
+                      fontSize: 14,
+                      scrollBeyondLastLine: false,
+                      automaticLayout: true,
+                      formatOnPaste: true,
+                      formatOnType: true,
+                    }}
+                  />
+                </div>
+              ) : (
+                <Textarea
+                  value={editModalData?.value || ''}
+                  onChange={(e) => setEditModalData(prev => prev ? { ...prev, value: e.target.value } : null)}
+                  className={cn(
+                    "bg-[#273142] border-white/10 font-mono text-sm resize-none",
+                    isLargeEdit ? "h-full" : "min-h-[150px]"
+                  )}
+                  placeholder="Enter value..."
+                />
+              )}
             </div>
 
-            <DialogFooter className="flex gap-2">
+            <DialogFooter className="flex gap-2 items-center">
+              {isJsonEdit && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    try {
+                      const parsed = JSON.parse(editModalData?.value || '');
+                      const formatted = JSON.stringify(parsed, null, 2);
+                      setEditModalData(prev => prev ? { ...prev, value: formatted } : null);
+                      toast.success('Formatted JSON');
+                    } catch (e) {
+                      toast.error('Invalid JSON');
+                    }
+                  }}
+                  className="border-white/10 mr-2"
+                >
+                  <Code className="w-4 h-4 mr-2" />
+                  Format JSON
+                </Button>
+              )}
+
               <Button
                 variant="outline"
                 onClick={handleCopyFromModal}
@@ -1211,9 +1277,7 @@ export default function TableView() {
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
-
-        {/* PK Warning Dialog */}
+        </Dialog>        {/* PK Warning Dialog */}
         <AlertDialog open={showPkWarning} onOpenChange={setShowPkWarning}>
           <AlertDialogContent className="bg-[#1B2431] border-white/10 text-white">
             <AlertDialogHeader>
