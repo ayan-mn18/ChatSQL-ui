@@ -88,19 +88,27 @@ export default function UserManagementPage() {
 
   const loadData = async () => {
     setLoading(true);
+
+    // Load connections first (always needed)
     try {
-      const [viewersData, connectionsResponse] = await Promise.all([
-        viewerService.getViewers(),
-        connectionService.getAllConnections()
-      ]);
-      setViewers(viewersData);
+      const connectionsResponse = await connectionService.getAllConnections();
+      console.log('Connections response:', connectionsResponse);
       setConnections(connectionsResponse.data || []);
     } catch (error) {
-      console.error('Failed to load data:', error);
-      toast.error('Failed to load user data');
-    } finally {
-      setLoading(false);
+      console.error('Failed to load connections:', error);
+      toast.error('Failed to load connections');
     }
+
+    // Load viewers (may fail if schema not applied)
+    try {
+      const viewersData = await viewerService.getViewers();
+      setViewers(viewersData);
+    } catch (error) {
+      console.error('Failed to load viewers:', error);
+      // Don't show error - viewers API may not be available yet
+    }
+
+    setLoading(false);
   };
 
   // Create viewer
@@ -379,14 +387,20 @@ export default function UserManagementPage() {
                       <SelectValue placeholder="Add connection" />
                     </SelectTrigger>
                     <SelectContent className="bg-[#273142] border-[#3A4553]">
-                      {connections.map((conn) => (
-                        <SelectItem key={conn.id} value={conn.id}>
-                          <span className="flex items-center gap-2">
-                            <Database className="h-4 w-4" />
-                            {conn.name}
-                          </span>
-                        </SelectItem>
-                      ))}
+                      {connections.length === 0 ? (
+                        <div className="px-2 py-4 text-sm text-gray-400 text-center">
+                          No connections available
+                        </div>
+                      ) : (
+                        connections.map((conn) => (
+                          <SelectItem key={conn.id} value={conn.id}>
+                            <span className="flex items-center gap-2">
+                              <Database className="h-4 w-4" />
+                              {conn.name}
+                            </span>
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
