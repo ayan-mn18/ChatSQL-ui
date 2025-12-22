@@ -30,6 +30,14 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
+  const isViewer = user?.role === 'viewer';
+
+  const filteredNavItems = navItems.filter(item => {
+    // Viewers can see Connections and Analytics (if they have permission)
+    // and now User Management as requested
+    return true;
+  });
+
   // The sidebar is "expanded" visually if it's NOT collapsed OR if it IS collapsed but currently hovered OR if the dropdown is open
   const isExpanded = !isCollapsed || isHovered || isDropdownOpen;
 
@@ -63,7 +71,7 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
 
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-2 overflow-hidden flex flex-col">
-        {navItems.map((item) => (
+        {filteredNavItems.map((item) => (
           <NavLink
             key={item.href}
             to={item.href}

@@ -11,7 +11,10 @@ import {
   Database,
   Loader2,
   Key,
-  Link2
+  Link2,
+  User as UserIcon,
+  LogOut,
+  ChevronUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect, useMemo, useRef } from 'react';
@@ -21,6 +24,16 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { TableSchema } from '@/types';
 import useConnections from '@/hooks/useConnections';
 import useSchemas from '@/hooks/useSchemas';
+import { useAuth } from '@/contexts/AuthContext';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface ConnectionSidebarProps {
   className?: string;
@@ -31,6 +44,8 @@ export function ConnectionSidebar({ className, onClose }: ConnectionSidebarProps
   const { connectionId } = useParams();
   const id = connectionId; // Keep using id locally for easier transition
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const { connections, fetchConnections } = useConnections();
   const {
     schemas,
@@ -47,6 +62,15 @@ export function ConnectionSidebar({ className, onClose }: ConnectionSidebarProps
   const [searchQuery, setSearchQuery] = useState('');
 
   const connection = connections.find(c => c.id === id);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/auth/signin');
+    } catch (error) {
+      console.error('Logout failed', error);
+    }
+  };
 
   // Fetch connection if not loaded
   useEffect(() => {
@@ -389,6 +413,43 @@ export function ConnectionSidebar({ className, onClose }: ConnectionSidebarProps
           </ScrollArea>
         </div>
       </nav>
+
+      {/* User Profile */}
+      <div className="p-4 border-t border-white/5 bg-[#0f172a]">
+        <DropdownMenu onOpenChange={setIsDropdownOpen}>
+          <DropdownMenuTrigger asChild>
+            <button className="flex items-center gap-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer group w-full outline-none px-3 py-2">
+              <Avatar className="w-8 h-8 border border-white/10 shrink-0">
+                <AvatarImage src={user?.profile_url || "https://github.com/shadcn.png"} />
+                <AvatarFallback>{user?.username?.substring(0, 2).toUpperCase() || 'US'}</AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0 text-left overflow-hidden">
+                <p className="text-sm font-medium text-white truncate">{user?.username || 'User'}</p>
+                <p className="text-xs text-gray-500 truncate">{user?.email || 'user@chatsql.app'}</p>
+              </div>
+              <ChevronUp className="w-4 h-4 text-gray-500 group-hover:text-white transition-colors shrink-0" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56 bg-[#1B2431] border-gray-800 text-white">
+            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+            <DropdownMenuSeparator className="bg-gray-800" />
+            <DropdownMenuItem
+              className="cursor-pointer hover:bg-white/5 focus:bg-white/5 focus:text-white"
+              onClick={() => navigate('/dashboard/profile')}
+            >
+              <UserIcon className="mr-2 h-4 w-4" />
+              <span>Profile</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer hover:bg-white/5 focus:bg-white/5 text-red-400 hover:text-red-400 focus:text-red-400"
+              onClick={handleLogout}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              <span>Log out</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
   );
 }

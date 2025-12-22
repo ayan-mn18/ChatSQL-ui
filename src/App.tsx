@@ -20,6 +20,7 @@ import {
   SchemaVisualizer
 } from './pages';
 import UserManagementPage from './pages/dashboard/UserManagementPage';
+import ForceChangePasswordPage from './pages/auth/ForceChangePasswordPage';
 
 function App() {
   return (
@@ -37,6 +38,7 @@ function App() {
 
       {/* Dashboard Routes */}
       <Route element={<ProtectedRoute />}>
+        <Route path="/auth/force-change-password" element={<ForceChangePasswordPage />} />
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<Navigate to="/dashboard/connections" replace />} />
           <Route path="connections" element={<ConnectionsPage />} />

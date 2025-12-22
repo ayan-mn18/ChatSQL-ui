@@ -44,7 +44,11 @@ export interface User {
   email: string;
   username: string | null;
   profile_url: string | null;
+  role: 'super_admin' | 'viewer';
   is_verified: boolean;
+  is_temporary: boolean;
+  expires_at: string | null;
+  must_change_password: boolean;
   created_at: string;
 }
 

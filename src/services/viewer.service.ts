@@ -32,6 +32,7 @@ export interface CreateViewerRequest {
   username?: string;
   isTemporary: boolean;
   expiresInHours?: number;
+  mustChangePassword?: boolean;
   permissions: ViewerPermission[];
   sendEmail?: boolean;
 }
