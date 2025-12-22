@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from '@/components/ui/skeleton';
+import { ViewerExpiryBanner } from '@/components/dashboard/ViewerExpiryBanner';
 
 export default function ConnectionsPage() {
   const navigate = useNavigate();
@@ -111,6 +112,7 @@ export default function ConnectionsPage() {
 
   return (
     <div className="space-y-8">
+      <ViewerExpiryBanner />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Connections</h1>
