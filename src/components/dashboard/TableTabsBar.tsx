@@ -31,7 +31,6 @@ export function TableTabsBar() {
 
   const handleCloseTab = (e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
-    const tabToClose = tabs.find(t => t.id === tabId);
     const remainingTabs = connectionTabs.filter(t => t.id !== tabId);
 
     removeTab(tabId);

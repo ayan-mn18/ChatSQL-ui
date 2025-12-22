@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useConnections } from '@/hooks/useConnections';
+import { connectionService } from '@/services/connection.service';
 import { ConnectionPublic } from '@/types';
 import {
   AlertDialog,
@@ -34,6 +35,7 @@ export default function ConnectionsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [connectionToDelete, setConnectionToDelete] = useState<ConnectionPublic | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
 
   // Fetch connections on mount
   useEffect(() => {
@@ -41,6 +43,22 @@ export default function ConnectionsPage() {
       console.error('Failed to fetch connections:', err);
     });
   }, [fetchConnections]);
+
+  // Handle sync schema
+  const handleSyncSchema = async (id: string, name: string) => {
+    setSyncingId(id);
+    try {
+      const response = await connectionService.syncSchema(id);
+      if (response.success) {
+        toast.success(`Schema sync started for "${name}"`);
+      }
+    } catch (err: any) {
+      console.error('Failed to sync schema:', err);
+      toast.error(err.response?.data?.error || `Failed to sync schema for "${name}"`);
+    } finally {
+      setSyncingId(null);
+    }
+  };
 
   // Handle refresh
   const handleRefresh = useCallback(async () => {
@@ -255,6 +273,16 @@ export default function ConnectionsPage() {
                     <Server className="w-5 h-5" />
                   </div>
                   <div className="flex gap-1 -mr-2 -mt-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`text-gray-500 hover:text-blue-400 hover:bg-blue-400/10 ${syncingId === conn.id ? 'animate-pulse' : ''}`}
+                      onClick={() => handleSyncSchema(conn.id, conn.name)}
+                      disabled={syncingId === conn.id}
+                      title="Sync Schema"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${syncingId === conn.id ? 'animate-spin' : ''}`} />
+                    </Button>
                     <AddConnectionDialog
                       onConnectionAdded={handleRefresh}
                       connectionToEdit={conn}

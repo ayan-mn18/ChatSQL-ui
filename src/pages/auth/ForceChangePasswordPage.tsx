@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, ShieldCheck, ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react';
+import { ShieldCheck, ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react';
 import { authService } from '@/services/auth.service';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';

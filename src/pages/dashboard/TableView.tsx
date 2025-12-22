@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef, type MouseEvent } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -84,12 +84,6 @@ import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import Editor from '@monaco-editor/react';
 import { Skeleton } from '@/components/ui/skeleton';
-
-// ============================================
-// CONSTANTS
-// ============================================
-
-const LONG_VALUE_THRESHOLD = 50; // Characters before showing in modal
 
 // ============================================
 // HELPER: Calculate column width based on column name
@@ -207,7 +201,7 @@ export default function TableView() {
   } | null>(null);
 
   // Click timer for distinguishing single vs double click
-  const clickTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const CLICK_DELAY = 200; // ms to wait before treating as single click
 
   // Add tab when component mounts or table changes
@@ -229,8 +223,8 @@ export default function TableView() {
   useEffect(() => {
     if (connectionId) {
       connectionService.getRelations(connectionId).then(res => {
-        if (res.success && res.relations) {
-          setRelations(res.relations);
+        if (res.success && res.data) {
+          setRelations(res.data);
         }
       }).catch(() => {
         // Silently fail - FK highlighting is optional
@@ -386,7 +380,7 @@ export default function TableView() {
   }, []);
 
   // Smart cell click handler - distinguishes single vs double click
-  const handleCellClick = useCallback((rowIndex: number, column: string, value: any) => {
+  const handleCellClick = useCallback((_rowIndex: number, column: string, value: any) => {
     // Clear any existing timer
     if (clickTimerRef.current) {
       clearTimeout(clickTimerRef.current);
@@ -414,7 +408,7 @@ export default function TableView() {
 
   // Handle FK cell right-click
   const handleFkRightClick = useCallback((
-    e: React.MouseEvent,
+    e: MouseEvent,
     column: string,
     value: any
   ) => {
@@ -1112,7 +1106,7 @@ export default function TableView() {
             <button
               className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-white/10 flex items-center gap-2"
               onClick={() => {
-                handleCellClick(fkMenuData.value);
+                copyToClipboard(fkMenuData.value);
                 setFkMenuData(null);
               }}
             >

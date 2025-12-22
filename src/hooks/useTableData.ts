@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { connectionService, TableDataOptions, TableDataResponse, MutationResult, ColumnUpdate, FilterCondition, TableColumnsResponse } from '../services/connection.service';
+import { connectionService, TableDataOptions, TableDataResponse, ColumnUpdate, FilterCondition, TableColumnsResponse } from '../services/connection.service';
 import toast from 'react-hot-toast';
 
 // ============================================

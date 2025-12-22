@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 import {
   Table,
   HardDrive,
   Activity,
   Zap,
-  Clock,
   BarChart3,
   TrendingUp,
   RefreshCw,
@@ -51,7 +51,6 @@ import {
 } from 'chart.js';
 import { Line, Doughnut, Bar } from 'react-chartjs-2';
 import { connectionService } from '@/services/connection.service';
-import { toast } from 'react-hot-toast';
 
 ChartJS.register(
   CategoryScale,
@@ -123,6 +122,23 @@ export default function ConnectionOverview() {
       toast.error('Failed to load database analytics');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const [syncingSchema, setSyncingSchema] = useState(false);
+
+  const handleSyncSchema = async () => {
+    try {
+      setSyncingSchema(true);
+      const response = await connectionService.syncSchema(connectionId!);
+      if (response.success) {
+        toast.success('Schema sync job started successfully');
+      }
+    } catch (error: any) {
+      console.error('Failed to sync schema:', error);
+      toast.error(error.response?.data?.error || 'Failed to start schema sync');
+    } finally {
+      setSyncingSchema(false);
     }
   };
 
@@ -544,13 +560,23 @@ export default function ConnectionOverview() {
           <h1 className="text-2xl md:text-3xl font-bold text-white">Analytics Dashboard</h1>
           <p className="text-slate-400 text-sm mt-1">ChatSQL activity & database health insights</p>
         </div>
-        <button
-          onClick={fetchAnalytics}
-          className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm text-slate-300 transition-colors w-fit"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSyncSchema}
+            disabled={syncingSchema}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-lg text-sm text-blue-400 transition-colors w-fit disabled:opacity-50"
+          >
+            <Database className={`w-4 h-4 ${syncingSchema ? 'animate-pulse' : ''}`} />
+            Sync Schema
+          </button>
+          <button
+            onClick={fetchAnalytics}
+            className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm text-slate-300 transition-colors w-fit"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Tab Navigation */}

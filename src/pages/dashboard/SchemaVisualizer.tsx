@@ -149,10 +149,10 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'LR') => 
   return { nodes: layoutedNodes, edges };
 };
 
+
 // Transform API data to ReactFlow nodes with unique colors per table
-function transformTablesToNodes(tables: TableSchema[], schemaColors: Map<string, string>): Node[] {
+function transformTablesToNodes(tables: TableSchema[]): Node[] {
   return tables.map((table, globalIndex) => {
-    // Each table gets a unique color based on its name and position
     const tableColor = getTableColor(table.table_name, globalIndex);
 
     return {
@@ -163,12 +163,13 @@ function transformTablesToNodes(tables: TableSchema[], schemaColors: Map<string,
         label: table.table_name,
         schemaName: table.schema_name,
         color: tableColor,
-        columns: table.columns?.map(col => ({
-          name: col.name,
-          type: col.data_type,
-          isPrimary: col.is_primary_key,
-          isForeign: col.is_foreign_key,
-        })) || [],
+        columns:
+          table.columns?.map((col) => ({
+            name: col.name,
+            type: col.data_type,
+            isPrimary: col.is_primary_key,
+            isForeign: col.is_foreign_key,
+          })) || [],
       },
     };
   });
@@ -208,8 +209,8 @@ function transformRelationsToEdges(relations: ERDRelation[], schemaColors: Map<s
 
 function SchemaVisualizerContent() {
   const { connectionId } = useParams();
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -269,7 +270,7 @@ function SchemaVisualizerContent() {
       return;
     }
 
-    const newNodes = transformTablesToNodes(tables, schemaColors);
+    const newNodes = transformTablesToNodes(tables);
     const newEdges = transformRelationsToEdges(relations, schemaColors);
 
     const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(newNodes, newEdges, 'LR');
@@ -334,7 +335,18 @@ function SchemaVisualizerContent() {
   }, [fetchERDData]);
 
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge({ ...params, type: 'smoothstep', animated: true, style: { stroke: '#64748b', strokeWidth: 1.5 } }, eds)),
+    (params: Connection) =>
+      setEdges((eds) =>
+        addEdge(
+          {
+            ...params,
+            type: 'smoothstep',
+            animated: true,
+            style: { stroke: '#64748b', strokeWidth: 1.5 },
+          } as Edge,
+          eds
+        )
+      ),
     [setEdges]
   );
 

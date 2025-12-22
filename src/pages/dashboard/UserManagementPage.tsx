@@ -45,7 +45,6 @@ import {
   Shield,
   MoreVertical,
   Trash2,
-  RefreshCw,
   Key,
   Copy,
   Check,
@@ -57,7 +56,7 @@ import {
 } from 'lucide-react';
 import { viewerService, Viewer, ViewerPermission, CreateViewerRequest } from '@/services/viewer.service';
 import { connectionService } from '@/services/connection.service';
-import { ConnectionPublic } from '@/types';
+import { ConnectionPublic, DatabaseSchemaPublic, TableSchema } from '@/types';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
@@ -345,35 +344,6 @@ export default function UserManagementPage() {
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Failed to create viewer');
     }
-  };
-
-  // Add connection permission
-  const handleAddConnectionPermission = (connectionId: string) => {
-    const connection = connections.find(c => c.id === connectionId);
-    if (!connection) return;
-
-    // Check if already added
-    if (selectedPermissions.some(p => p.connectionId === connectionId && !p.schemaName)) {
-      toast.error('This connection is already added');
-      return;
-    }
-
-    setSelectedPermissions([
-      ...selectedPermissions,
-      {
-        connectionId,
-        connectionName: connection.name,
-        schemaName: null, // null = all schemas
-        tableName: null, // null = all tables
-        canSelect: true,
-        canInsert: false,
-        canUpdate: false,
-        canDelete: false,
-        canUseAi: true,
-        canViewAnalytics: true,
-        canExport: true,
-      }
-    ]);
   };
 
   // Remove permission
