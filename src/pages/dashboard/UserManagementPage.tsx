@@ -52,7 +52,11 @@ import {
   X,
   Database,
   Eye,
-  Ban
+  Ban,
+  Sparkles,
+  BarChart3,
+  PenLine,
+  Download
 } from 'lucide-react';
 import { connectionService } from '@/services/connection.service';
 import { ConnectionPublic, DatabaseSchemaPublic, TableSchema } from '@/types';
@@ -876,23 +880,34 @@ export default function UserManagementPage() {
       {!isViewer && (
         <Card className="bg-[#273142] border-none">
           <CardHeader>
-            <CardTitle className="text-white">Access Requests</CardTitle>
-            <CardDescription className="text-gray-400">
-              Approve or deny viewer requests for extensions and permissions.
-            </CardDescription>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <CardTitle className="text-white">Access Requests</CardTitle>
+                <CardDescription className="text-gray-400">
+                  Review viewer requests for time extensions and capability upgrades.
+                </CardDescription>
+              </div>
+              <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20">
+                {accessRequests.filter((r) => r.status === 'pending').length} pending
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent>
             {loadingRequests ? (
               <div className="text-gray-400">Loading requests…</div>
             ) : accessRequests.filter((r) => r.status === 'pending').length === 0 ? (
-              <div className="text-gray-400">No pending requests.</div>
+              <div className="rounded-lg border border-dashed border-white/10 bg-white/5 p-8 text-center">
+                <Shield className="h-10 w-10 mx-auto text-gray-500 mb-3" />
+                <p className="text-white font-medium">No pending requests</p>
+                <p className="text-sm text-gray-500 mt-1">New viewer requests will appear here for approval.</p>
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow className="border-[#3A4553]">
                       <TableHead className="text-gray-400">Viewer</TableHead>
-                      <TableHead className="text-gray-400">Requested</TableHead>
+                      <TableHead className="text-gray-400">Request</TableHead>
                       <TableHead className="text-gray-400">Created</TableHead>
                       <TableHead className="text-gray-400 text-right">Actions</TableHead>
                     </TableRow>
@@ -909,16 +924,18 @@ export default function UserManagementPage() {
                             </div>
                           </TableCell>
                           <TableCell className="text-gray-300">
-                            <div className="space-y-1">
+                            <div className="flex flex-wrap gap-2">
                               {r.requestedAdditionalHours ? (
-                                <div className="text-sm">+{r.requestedAdditionalHours} hours</div>
+                                <Badge className="bg-yellow-500/10 text-yellow-400 border-yellow-500/20">
+                                  +{r.requestedAdditionalHours}h
+                                </Badge>
                               ) : (
-                                <div className="text-sm text-gray-500">No time extension</div>
+                                <Badge variant="outline" className="border-white/10 text-gray-400">No time</Badge>
                               )}
                               {r.requestedPermissions ? (
-                                <div className="text-xs text-blue-400">Permissions change requested</div>
+                                <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20">Capabilities</Badge>
                               ) : (
-                                <div className="text-xs text-gray-500">No permission change</div>
+                                <Badge variant="outline" className="border-white/10 text-gray-400">No change</Badge>
                               )}
                             </div>
                           </TableCell>
@@ -1237,12 +1254,27 @@ export default function UserManagementPage() {
       <Dialog open={isViewPermissionsOpen} onOpenChange={setIsViewPermissionsOpen}>
         <DialogContent className="bg-[#1B2431] border-[#273142] text-white max-w-3xl">
           <DialogHeader>
-            <DialogTitle className="text-white">
-              Permissions for {selectedViewer?.email}
-            </DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Viewer permissions and activity
-            </DialogDescription>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <DialogTitle className="text-white">{selectedViewer?.email}</DialogTitle>
+                <DialogDescription className="text-gray-400">
+                  Permissions, activity, and query history
+                </DialogDescription>
+              </div>
+              {selectedViewer && (
+                <div className="flex items-center gap-2">
+                  {selectedViewer.isTemporary && (
+                    <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">Temporary</Badge>
+                  )}
+                  {!selectedViewer.isActive && (
+                    <Badge className="bg-red-500/20 text-red-400 border-red-500/30">Revoked</Badge>
+                  )}
+                  <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20">
+                    {selectedViewer.permissions.length} rules
+                  </Badge>
+                </div>
+              )}
+            </div>
           </DialogHeader>
 
           {selectedViewer && (
@@ -1253,32 +1285,40 @@ export default function UserManagementPage() {
               </TabsList>
 
               <TabsContent value="permissions" className="max-h-[420px] overflow-y-auto">
-                <div className="space-y-4 py-4">
+                <div className="space-y-3 py-4">
                   {selectedViewer.permissions.map((perm, index) => (
                     <Card key={index} className="bg-[#273142] border-[#3A4553]">
                       <CardContent className="p-4">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Database className="h-4 w-4 text-blue-400" />
-                          <span className="text-white font-medium">{perm.connectionName || perm.connectionId}</span>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                          <div className={`flex items-center gap-2 ${perm.canSelect ? 'text-green-400' : 'text-gray-500'}`}>
-                            {perm.canSelect ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} Read
+                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <Database className="h-4 w-4 text-blue-400" />
+                              <span className="text-white font-medium truncate">{perm.connectionName || perm.connectionId}</span>
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <Badge variant="outline" className="border-white/10 text-gray-300">
+                                {perm.schemaName ? perm.schemaName : 'All schemas'}
+                                {perm.tableName ? `.${perm.tableName}` : perm.schemaName ? '.*' : ''}
+                              </Badge>
+                            </div>
                           </div>
-                          <div className={`flex items-center gap-2 ${perm.canInsert ? 'text-green-400' : 'text-gray-500'}`}>
-                            {perm.canInsert ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} Insert
-                          </div>
-                          <div className={`flex items-center gap-2 ${perm.canUpdate ? 'text-green-400' : 'text-gray-500'}`}>
-                            {perm.canUpdate ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} Update
-                          </div>
-                          <div className={`flex items-center gap-2 ${perm.canDelete ? 'text-green-400' : 'text-gray-500'}`}>
-                            {perm.canDelete ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} Delete
-                          </div>
-                          <div className={`flex items-center gap-2 ${perm.canUseAi ? 'text-green-400' : 'text-gray-500'}`}>
-                            {perm.canUseAi ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} AI
-                          </div>
-                          <div className={`flex items-center gap-2 ${perm.canViewAnalytics ? 'text-green-400' : 'text-gray-500'}`}>
-                            {perm.canViewAnalytics ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} Analytics
+
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                            <div className={`flex items-center gap-2 ${perm.canSelect ? 'text-green-400' : 'text-gray-500'}`}>
+                              {perm.canSelect ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} Read
+                            </div>
+                            <div className={`flex items-center gap-2 ${perm.canInsert || perm.canUpdate || perm.canDelete ? 'text-yellow-400' : 'text-gray-500'}`}>
+                              {perm.canInsert || perm.canUpdate || perm.canDelete ? <PenLine className="h-3 w-3" /> : <X className="h-3 w-3" />} Write
+                            </div>
+                            <div className={`flex items-center gap-2 ${perm.canUseAi ? 'text-green-400' : 'text-gray-500'}`}>
+                              {perm.canUseAi ? <Sparkles className="h-3 w-3" /> : <X className="h-3 w-3" />} AI
+                            </div>
+                            <div className={`flex items-center gap-2 ${perm.canViewAnalytics ? 'text-green-400' : 'text-gray-500'}`}>
+                              {perm.canViewAnalytics ? <BarChart3 className="h-3 w-3" /> : <X className="h-3 w-3" />} Analytics
+                            </div>
+                            <div className={`flex items-center gap-2 ${perm.canExport ? 'text-green-400' : 'text-gray-500'}`}>
+                              {perm.canExport ? <Download className="h-3 w-3" /> : <X className="h-3 w-3" />} Export
+                            </div>
                           </div>
                         </div>
                       </CardContent>
@@ -1294,7 +1334,10 @@ export default function UserManagementPage() {
                   ) : (
                     <>
                       <div className="space-y-2">
-                        <p className="text-sm font-medium text-white">Activity</p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium text-white">Activity</p>
+                          <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20">{activityLog.length}</Badge>
+                        </div>
                         {activityLog.length === 0 ? (
                           <div className="text-gray-400">No activity yet.</div>
                         ) : (
@@ -1322,7 +1365,10 @@ export default function UserManagementPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <p className="text-sm font-medium text-white">Queries</p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium text-white">Queries</p>
+                          <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20">{viewerQueries.length}</Badge>
+                        </div>
                         {viewerQueries.length === 0 ? (
                           <div className="text-gray-400">No queries recorded.</div>
                         ) : (

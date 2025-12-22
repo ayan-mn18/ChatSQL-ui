@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Clock, Shield, Database } from 'lucide-react';
+import { Clock, Shield, Database, Sparkles, BarChart3, PenLine, Download, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { viewerService, Viewer, ViewerPermission } from '@/services/viewer.service';
 
 function formatRemaining(ms: number): string {
@@ -25,6 +25,7 @@ export default function MyAccessPage() {
   const [loading, setLoading] = useState(true);
   const [viewer, setViewer] = useState<Viewer | null>(null);
   const [isRequestOpen, setIsRequestOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const [additionalHours, setAdditionalHours] = useState<number>(0);
   const [requestWrite, setRequestWrite] = useState(false);
@@ -99,7 +100,9 @@ export default function MyAccessPage() {
   };
 
   const submitRequest = async () => {
+    if (submitting) return;
     try {
+      setSubmitting(true);
       const requestedPermissions = buildRequestedPermissions();
       const payload: any = {};
       if (additionalHours > 0) payload.additionalHours = additionalHours;
@@ -120,48 +123,233 @@ export default function MyAccessPage() {
       setRequestExport(false);
     } catch (err: any) {
       toast.error(err?.response?.data?.error || 'Failed to submit request');
+    } finally {
+      setSubmitting(false);
     }
   };
 
+  const requestHasChanges = additionalHours > 0 || requestWrite || requestAnalytics || requestAi || requestExport;
+  const permissionSummary = useMemo(() => {
+    if (!viewer?.permissions?.length) return null;
+    const connectionCount = new Set(viewer.permissions.map((p) => p.connectionId)).size;
+    const anyWrite = viewer.permissions.some((p) => p.canInsert || p.canUpdate || p.canDelete);
+    const anyAi = viewer.permissions.some((p) => p.canUseAi);
+    const anyAnalytics = viewer.permissions.some((p) => p.canViewAnalytics);
+    const anyExport = viewer.permissions.some((p) => p.canExport);
+    return { connectionCount, anyWrite, anyAi, anyAnalytics, anyExport };
+  }, [viewer?.permissions]);
+
   return (
     <div className="p-4 md:p-8 space-y-6 md:space-y-8 pb-24 md:pb-8 overflow-y-auto h-full">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold text-white mb-2 flex items-center gap-3">
-          <Shield className="h-8 w-8 text-blue-400" />
-          My Access
-        </h1>
-        <p className="text-sm md:text-base text-gray-400">
-          View your allowed permissions and request extensions.
-        </p>
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-white mb-2 flex items-center gap-3">
+            <Shield className="h-8 w-8 text-blue-400" />
+            My Access
+          </h1>
+          <p className="text-sm md:text-base text-gray-400">
+            Review your current access and request changes.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={load}
+            className="border-white/10 text-white hover:bg-white/5"
+            disabled={loading}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+          <Dialog open={isRequestOpen} onOpenChange={setIsRequestOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-blue-600 hover:bg-blue-700 text-white">Request changes</Button>
+            </DialogTrigger>
+            <DialogContent className="bg-[#1B2431] border-[#273142] text-white max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="text-white">Request access changes</DialogTitle>
+                <DialogDescription className="text-gray-400">
+                  Request more time and/or additional capabilities. Your admin will review.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-5 py-2">
+                <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-white">Time extension</p>
+                      <p className="text-xs text-gray-500">Enter hours to extend your temporary access.</p>
+                    </div>
+                    <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20">Optional</Badge>
+                  </div>
+                  <div className="mt-3 grid gap-2">
+                    <Label className="text-gray-300">Additional hours</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={additionalHours}
+                      onChange={(e) => setAdditionalHours(parseInt(e.target.value || '0', 10) || 0)}
+                      className="bg-[#273142] border-[#3A4553] text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-white">Capability upgrades</p>
+                      <p className="text-xs text-gray-500">Applies to your existing scope (connections/schemas/tables).</p>
+                    </div>
+                    <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20">Optional</Badge>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    <div className="flex items-center justify-between rounded-md border border-white/10 bg-[#273142]/40 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <PenLine className="h-4 w-4 text-yellow-400" />
+                        <div>
+                          <p className="text-sm text-white">Write access</p>
+                          <p className="text-xs text-gray-500">Insert / Update / Delete</p>
+                        </div>
+                      </div>
+                      <Switch checked={requestWrite} onCheckedChange={setRequestWrite} />
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-md border border-white/10 bg-[#273142]/40 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <BarChart3 className="h-4 w-4 text-green-400" />
+                        <p className="text-sm text-white">Analytics</p>
+                      </div>
+                      <Switch checked={requestAnalytics} onCheckedChange={setRequestAnalytics} />
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-md border border-white/10 bg-[#273142]/40 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-blue-400" />
+                        <p className="text-sm text-white">AI</p>
+                      </div>
+                      <Switch checked={requestAi} onCheckedChange={setRequestAi} />
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-md border border-white/10 bg-[#273142]/40 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <Download className="h-4 w-4 text-purple-400" />
+                        <p className="text-sm text-white">Export</p>
+                      </div>
+                      <Switch checked={requestExport} onCheckedChange={setRequestExport} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-white/10 bg-[#273142]/30 p-4">
+                  <p className="text-sm font-medium text-white">Review</p>
+                  <div className="mt-2 space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">Additional hours</span>
+                      <span className="text-white">{additionalHours > 0 ? `+${additionalHours}h` : '—'}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">Write</span>
+                      <span className={requestWrite ? 'text-green-400' : 'text-gray-500'}>{requestWrite ? 'Requested' : '—'}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">Analytics</span>
+                      <span className={requestAnalytics ? 'text-green-400' : 'text-gray-500'}>{requestAnalytics ? 'Requested' : '—'}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">AI</span>
+                      <span className={requestAi ? 'text-green-400' : 'text-gray-500'}>{requestAi ? 'Requested' : '—'}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">Export</span>
+                      <span className={requestExport ? 'text-green-400' : 'text-gray-500'}>{requestExport ? 'Requested' : '—'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsRequestOpen(false)}
+                  className="border-white/10 text-white hover:bg-white/5"
+                  disabled={submitting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={submitRequest}
+                  className="bg-blue-600 hover:bg-blue-700"
+                  disabled={!requestHasChanges || submitting}
+                >
+                  {submitting ? 'Submitting…' : 'Submit request'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      {viewer?.isTemporary && expiresAtMs && (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="bg-[#1B2431] border-[#273142]">
-          <CardContent className="p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-blue-600/20 flex items-center justify-center">
-                <Clock className="h-5 w-5 text-blue-400" />
-              </div>
-              <div>
-                <p className="text-white font-medium">Temporary access</p>
-                <p className="text-sm text-gray-400">
-                  {remainingMs !== null && remainingMs > 0
-                    ? `Expires in ${formatRemaining(remainingMs)}`
-                    : 'Expired'}
-                </p>
-              </div>
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="h-10 w-10 rounded-lg bg-blue-600/20 flex items-center justify-center">
+              <Shield className="h-5 w-5 text-blue-400" />
             </div>
-            <div className="flex items-center gap-2">
-              <Badge className={remainingMs !== null && remainingMs > 0 ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'}>
-                {remainingMs !== null && remainingMs > 0 ? 'Limited time' : 'Expired'}
-              </Badge>
-              {viewer.expiresAt && (
-                <span className="text-xs text-gray-500">{new Date(viewer.expiresAt).toLocaleString()}</span>
+            <div className="min-w-0">
+              <p className="text-sm text-gray-400">Account</p>
+              <p className="text-white font-semibold truncate">{viewer?.isTemporary ? 'Viewer (temporary)' : 'Viewer'}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-[#1B2431] border-[#273142]">
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="h-10 w-10 rounded-lg bg-yellow-500/10 flex items-center justify-center">
+              <Clock className="h-5 w-5 text-yellow-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm text-gray-400">Expiry</p>
+              {viewer?.isTemporary && expiresAtMs ? (
+                <>
+                  <p className="text-white font-semibold">
+                    {remainingMs !== null && remainingMs > 0 ? formatRemaining(remainingMs) : 'Expired'}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">{viewer.expiresAt ? new Date(viewer.expiresAt).toLocaleString() : ''}</p>
+                </>
+              ) : (
+                <p className="text-white font-semibold">No expiry</p>
               )}
             </div>
           </CardContent>
         </Card>
-      )}
+
+        <Card className="bg-[#1B2431] border-[#273142]">
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="h-10 w-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+              <CheckCircle2 className="h-5 w-5 text-green-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm text-gray-400">Coverage</p>
+              <p className="text-white font-semibold">
+                {permissionSummary ? `${permissionSummary.connectionCount} connection${permissionSummary.connectionCount === 1 ? '' : 's'}` : '—'}
+              </p>
+              <p className="text-xs text-gray-500">
+                {permissionSummary
+                  ? [
+                    permissionSummary.anyWrite ? 'Write' : null,
+                    permissionSummary.anyAi ? 'AI' : null,
+                    permissionSummary.anyAnalytics ? 'Analytics' : null,
+                    permissionSummary.anyExport ? 'Export' : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' • ') || 'Read-only'
+                  : ''}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       <Card className="bg-[#1B2431] border-[#273142]">
         <CardHeader>
@@ -175,9 +363,13 @@ export default function MyAccessPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="text-gray-400">Loading…</div>
+            <div className="text-gray-400">Loading your access…</div>
           ) : groupedPermissions.length === 0 ? (
-            <div className="text-gray-400">No permissions assigned.</div>
+            <div className="rounded-lg border border-dashed border-white/10 bg-white/5 p-8 text-center">
+              <Database className="h-10 w-10 mx-auto text-gray-500 mb-3" />
+              <p className="text-white font-medium">No permissions assigned</p>
+              <p className="text-sm text-gray-500 mt-1">Ask your admin to grant access, or submit a request.</p>
+            </div>
           ) : (
             <div className="space-y-6">
               {groupedPermissions.map((group) => (
@@ -223,69 +415,6 @@ export default function MyAccessPage() {
           )}
         </CardContent>
       </Card>
-
-      <div>
-        <Dialog open={isRequestOpen} onOpenChange={setIsRequestOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white">Request Access Change</Button>
-          </DialogTrigger>
-          <DialogContent className="bg-[#1B2431] border-[#273142] text-white max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="text-white">Request Access</DialogTitle>
-              <DialogDescription className="text-gray-400">
-                Request more time and/or additional permissions. Your admin will review.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-5 py-2">
-              <div className="space-y-2">
-                <Label className="text-gray-300">Additional hours</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={additionalHours}
-                  onChange={(e) => setAdditionalHours(parseInt(e.target.value || '0', 10) || 0)}
-                  className="bg-[#273142] border-[#3A4553] text-white"
-                />
-              </div>
-
-              <div className="space-y-3">
-                <Label className="text-gray-300">Permission upgrades (applies to your existing scope)</Label>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-white text-sm">Write access</p>
-                      <p className="text-xs text-gray-500">Insert / Update / Delete</p>
-                    </div>
-                    <Switch checked={requestWrite} onCheckedChange={setRequestWrite} />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-white text-sm">Analytics</p>
-                    <Switch checked={requestAnalytics} onCheckedChange={setRequestAnalytics} />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-white text-sm">AI</p>
-                    <Switch checked={requestAi} onCheckedChange={setRequestAi} />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-white text-sm">Export</p>
-                    <Switch checked={requestExport} onCheckedChange={setRequestExport} />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsRequestOpen(false)} className="border-white/10 text-white hover:bg-white/5">
-                Cancel
-              </Button>
-              <Button onClick={submitRequest} className="bg-blue-600 hover:bg-blue-700">
-                Submit
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
     </div>
   );
 }
