@@ -83,6 +83,7 @@ import { ERDRelation } from '@/types';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import Editor from '@monaco-editor/react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // ============================================
 // CONSTANTS
@@ -933,8 +934,26 @@ export default function TableView() {
         {/* Table */}
         <div className="flex-1 overflow-auto scrollbar-thin">
           {loading && !data ? (
-            <div className="h-full flex items-center justify-center">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+            <div className="w-full h-full">
+              {/* Header Skeleton */}
+              <div className="sticky top-0 z-10 flex items-center gap-4 px-4 py-3 bg-[#273142] border-b border-white/5 min-w-max">
+                <Skeleton className="h-5 w-5 rounded bg-white/10 shrink-0" />
+                {[...Array(8)].map((_, i) => (
+                  <Skeleton key={i} className="h-6 w-48 bg-white/10 shrink-0" />
+                ))}
+              </div>
+
+              {/* Rows Skeleton */}
+              <div className="divide-y divide-white/5 min-w-max">
+                {[...Array(20)].map((_, i) => (
+                  <div key={i} className="flex items-center gap-4 px-4 py-3">
+                    <Skeleton className="h-4 w-5 rounded bg-white/5 shrink-0" />
+                    {[...Array(8)].map((_, j) => (
+                      <Skeleton key={j} className="h-5 w-48 bg-white/5 shrink-0" />
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
             <Table>

@@ -29,6 +29,7 @@ import {
   Download
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Tooltip,
   TooltipContent,
@@ -385,10 +386,42 @@ export default function ConnectionOverview() {
 
   if (loading && !analytics) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="flex flex-col items-center gap-4">
-          <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
-          <p className="text-slate-400 animate-pulse">Analyzing database performance...</p>
+      <div className="p-4 md:p-8 space-y-6 pb-24 md:pb-8 overflow-y-auto h-full custom-scrollbar">
+        {/* Header Skeleton */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-64" />
+            <Skeleton className="h-4 w-48" />
+          </div>
+          <Skeleton className="h-10 w-24" />
+        </div>
+
+        {/* Tabs Skeleton */}
+        <div className="flex gap-2 p-1 bg-white/5 rounded-xl w-fit">
+          <Skeleton className="h-9 w-40" />
+          <Skeleton className="h-9 w-40" />
+        </div>
+
+        {/* Content Skeleton */}
+        <div className="space-y-6">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-24 w-full rounded-xl bg-white/5" />
+            ))}
+          </div>
+
+          {/* Charts Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Skeleton className="h-[350px] w-full rounded-xl bg-white/5" />
+            <Skeleton className="h-[350px] w-full rounded-xl bg-white/5" />
+          </div>
+
+          {/* Bottom Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Skeleton className="h-[300px] w-full rounded-xl bg-white/5 lg:col-span-2" />
+            <Skeleton className="h-[300px] w-full rounded-xl bg-white/5" />
+          </div>
         </div>
       </div>
     );
