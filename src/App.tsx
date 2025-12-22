@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './contexts/AuthContext';
 import LandingPage from './pages/LandingPage';
 import ChatPage from './pages/ChatPage';
 import FuturisticLanding from './pages/FuturisticLanding';
@@ -21,6 +22,13 @@ import {
 } from './pages';
 import UserManagementPage from './pages/dashboard/UserManagementPage';
 import ForceChangePasswordPage from './pages/auth/ForceChangePasswordPage';
+import MyAccessPage from './pages/dashboard/MyAccessPage';
+
+function AdminOnlyUserManagement() {
+  const { user } = useAuth();
+  if (user?.role === 'viewer') return <Navigate to="/dashboard/access" replace />;
+  return <UserManagementPage />;
+}
 
 function App() {
   return (
@@ -43,7 +51,8 @@ function App() {
           <Route index element={<Navigate to="/dashboard/connections" replace />} />
           <Route path="connections" element={<ConnectionsPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
-          <Route path="users" element={<UserManagementPage />} />
+          <Route path="users" element={<AdminOnlyUserManagement />} />
+          <Route path="access" element={<MyAccessPage />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>
 

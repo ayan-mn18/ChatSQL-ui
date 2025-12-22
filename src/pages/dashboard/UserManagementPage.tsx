@@ -54,12 +54,13 @@ import {
   Eye,
   Ban
 } from 'lucide-react';
-import { viewerService, Viewer, ViewerPermission, CreateViewerRequest } from '@/services/viewer.service';
 import { connectionService } from '@/services/connection.service';
 import { ConnectionPublic, DatabaseSchemaPublic, TableSchema } from '@/types';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { viewerService, Viewer, ViewerPermission, CreateViewerRequest, ViewerAccessRequest, ViewerActivityLogEntry, QueryHistoryEntry } from '@/services/viewer.service';
 
 export default function UserManagementPage() {
   const { user } = useAuth();
@@ -74,6 +75,12 @@ export default function UserManagementPage() {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [selectedViewer, setSelectedViewer] = useState<Viewer | null>(null);
   const [isViewPermissionsOpen, setIsViewPermissionsOpen] = useState(false);
+  const [accessRequests, setAccessRequests] = useState<ViewerAccessRequest[]>([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
+  const [auditTab, setAuditTab] = useState<'permissions' | 'activity'>('permissions');
+  const [activityLog, setActivityLog] = useState<ViewerActivityLogEntry[]>([]);
+  const [viewerQueries, setViewerQueries] = useState<QueryHistoryEntry[]>([]);
+  const [loadingAudit, setLoadingAudit] = useState(false);
 
   // Granular permission state
   const [availableSchemas, setAvailableSchemas] = useState<DatabaseSchemaPublic[]>([]);
@@ -138,7 +145,58 @@ export default function UserManagementPage() {
       // Don't show error - viewers API may not be available yet
     }
 
+    if (!isViewer) {
+      setLoadingRequests(true);
+      try {
+        const requests = await viewerService.getAccessRequests();
+        setAccessRequests(requests);
+      } catch (error) {
+        console.error('Failed to load access requests:', error);
+      } finally {
+        setLoadingRequests(false);
+      }
+    }
+
     setLoading(false);
+  };
+
+  useEffect(() => {
+    if (!isViewPermissionsOpen || !selectedViewer || isViewer) return;
+
+    setAuditTab('permissions');
+    setLoadingAudit(true);
+    Promise.all([
+      viewerService.getViewerActivity(selectedViewer.id, 50),
+      viewerService.getViewerQueries(selectedViewer.id, 50),
+    ])
+      .then(([activity, queries]) => {
+        setActivityLog(activity);
+        setViewerQueries(queries);
+      })
+      .catch((error) => {
+        console.error('Failed to load viewer audit:', error);
+      })
+      .finally(() => setLoadingAudit(false));
+  }, [isViewPermissionsOpen, selectedViewer, isViewer]);
+
+  const handleApproveAccessRequest = async (requestId: string) => {
+    try {
+      await viewerService.approveAccessRequest(requestId);
+      toast.success('Request approved');
+      await loadData();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || 'Failed to approve request');
+    }
+  };
+
+  const handleDenyAccessRequest = async (requestId: string) => {
+    try {
+      await viewerService.denyAccessRequest(requestId);
+      toast.success('Request denied');
+      await loadData();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || 'Failed to deny request');
+    }
   };
 
   // Handle connection selection for permission
@@ -815,6 +873,85 @@ export default function UserManagementPage() {
         )}
       </div>
 
+      {!isViewer && (
+        <Card className="bg-[#273142] border-none">
+          <CardHeader>
+            <CardTitle className="text-white">Access Requests</CardTitle>
+            <CardDescription className="text-gray-400">
+              Approve or deny viewer requests for extensions and permissions.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loadingRequests ? (
+              <div className="text-gray-400">Loading requests…</div>
+            ) : accessRequests.filter((r) => r.status === 'pending').length === 0 ? (
+              <div className="text-gray-400">No pending requests.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-[#3A4553]">
+                      <TableHead className="text-gray-400">Viewer</TableHead>
+                      <TableHead className="text-gray-400">Requested</TableHead>
+                      <TableHead className="text-gray-400">Created</TableHead>
+                      <TableHead className="text-gray-400 text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {accessRequests
+                      .filter((r) => r.status === 'pending')
+                      .map((r) => (
+                        <TableRow key={r.id} className="border-[#3A4553]">
+                          <TableCell className="text-white">
+                            <div>
+                              <div className="font-medium">{r.viewerEmail || r.viewerUserId}</div>
+                              {r.viewerUsername && <div className="text-xs text-gray-500">@{r.viewerUsername}</div>}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-gray-300">
+                            <div className="space-y-1">
+                              {r.requestedAdditionalHours ? (
+                                <div className="text-sm">+{r.requestedAdditionalHours} hours</div>
+                              ) : (
+                                <div className="text-sm text-gray-500">No time extension</div>
+                              )}
+                              {r.requestedPermissions ? (
+                                <div className="text-xs text-blue-400">Permissions change requested</div>
+                              ) : (
+                                <div className="text-xs text-gray-500">No permission change</div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-gray-400">{formatDate(r.createdAt)}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                size="sm"
+                                className="bg-blue-600 hover:bg-blue-700"
+                                onClick={() => handleApproveAccessRequest(r.id)}
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-white/10 text-white hover:bg-white/5"
+                                onClick={() => handleDenyAccessRequest(r.id)}
+                              >
+                                Deny
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="bg-[#273142] border-none">
@@ -1098,49 +1235,128 @@ export default function UserManagementPage() {
 
       {/* View Permissions Dialog */}
       <Dialog open={isViewPermissionsOpen} onOpenChange={setIsViewPermissionsOpen}>
-        <DialogContent className="bg-[#1B2431] border-[#273142] text-white max-w-lg">
+        <DialogContent className="bg-[#1B2431] border-[#273142] text-white max-w-3xl">
           <DialogHeader>
             <DialogTitle className="text-white">
               Permissions for {selectedViewer?.email}
             </DialogTitle>
             <DialogDescription className="text-gray-400">
-              View and manage this viewer's access permissions
+              Viewer permissions and activity
             </DialogDescription>
           </DialogHeader>
 
           {selectedViewer && (
-            <div className="space-y-4 py-4 max-h-[400px] overflow-y-auto">
-              {selectedViewer.permissions.map((perm, index) => (
-                <Card key={index} className="bg-[#273142] border-[#3A4553]">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Database className="h-4 w-4 text-blue-400" />
-                      <span className="text-white font-medium">{perm.connectionName || perm.connectionId}</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div className={`flex items-center gap-2 ${perm.canSelect ? 'text-green-400' : 'text-gray-500'}`}>
-                        {perm.canSelect ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} Read
+            <Tabs value={auditTab} onValueChange={(v) => setAuditTab(v as any)}>
+              <TabsList className="bg-[#273142] border border-white/10">
+                <TabsTrigger value="permissions">Permissions</TabsTrigger>
+                <TabsTrigger value="activity">Activity</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="permissions" className="max-h-[420px] overflow-y-auto">
+                <div className="space-y-4 py-4">
+                  {selectedViewer.permissions.map((perm, index) => (
+                    <Card key={index} className="bg-[#273142] border-[#3A4553]">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Database className="h-4 w-4 text-blue-400" />
+                          <span className="text-white font-medium">{perm.connectionName || perm.connectionId}</span>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                          <div className={`flex items-center gap-2 ${perm.canSelect ? 'text-green-400' : 'text-gray-500'}`}>
+                            {perm.canSelect ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} Read
+                          </div>
+                          <div className={`flex items-center gap-2 ${perm.canInsert ? 'text-green-400' : 'text-gray-500'}`}>
+                            {perm.canInsert ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} Insert
+                          </div>
+                          <div className={`flex items-center gap-2 ${perm.canUpdate ? 'text-green-400' : 'text-gray-500'}`}>
+                            {perm.canUpdate ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} Update
+                          </div>
+                          <div className={`flex items-center gap-2 ${perm.canDelete ? 'text-green-400' : 'text-gray-500'}`}>
+                            {perm.canDelete ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} Delete
+                          </div>
+                          <div className={`flex items-center gap-2 ${perm.canUseAi ? 'text-green-400' : 'text-gray-500'}`}>
+                            {perm.canUseAi ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} AI
+                          </div>
+                          <div className={`flex items-center gap-2 ${perm.canViewAnalytics ? 'text-green-400' : 'text-gray-500'}`}>
+                            {perm.canViewAnalytics ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} Analytics
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="activity" className="max-h-[420px] overflow-y-auto">
+                <div className="py-4 space-y-4">
+                  {loadingAudit ? (
+                    <div className="text-gray-400">Loading activity…</div>
+                  ) : (
+                    <>
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-white">Activity</p>
+                        {activityLog.length === 0 ? (
+                          <div className="text-gray-400">No activity yet.</div>
+                        ) : (
+                          <div className="rounded-lg border border-white/10 overflow-hidden">
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="border-white/10">
+                                  <TableHead className="text-gray-400">When</TableHead>
+                                  <TableHead className="text-gray-400">Action</TableHead>
+                                  <TableHead className="text-gray-400">Connection</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {activityLog.map((e) => (
+                                  <TableRow key={e.id} className="border-white/10">
+                                    <TableCell className="text-gray-300">{formatDate(e.createdAt)}</TableCell>
+                                    <TableCell className="text-white">{e.actionType}</TableCell>
+                                    <TableCell className="text-gray-300">{e.connectionName || e.connectionId || '-'}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        )}
                       </div>
-                      <div className={`flex items-center gap-2 ${perm.canInsert ? 'text-green-400' : 'text-gray-500'}`}>
-                        {perm.canInsert ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} Insert
+
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-white">Queries</p>
+                        {viewerQueries.length === 0 ? (
+                          <div className="text-gray-400">No queries recorded.</div>
+                        ) : (
+                          <div className="rounded-lg border border-white/10 overflow-hidden">
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="border-white/10">
+                                  <TableHead className="text-gray-400">When</TableHead>
+                                  <TableHead className="text-gray-400">Status</TableHead>
+                                  <TableHead className="text-gray-400">Query</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {viewerQueries.map((q) => (
+                                  <TableRow key={q.id} className="border-white/10">
+                                    <TableCell className="text-gray-300">{formatDate(q.createdAt)}</TableCell>
+                                    <TableCell className={q.status === 'success' ? 'text-green-400' : 'text-red-400'}>
+                                      {q.status}
+                                    </TableCell>
+                                    <TableCell className="text-gray-200 font-mono text-xs max-w-[520px] truncate">
+                                      {q.queryText}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        )}
                       </div>
-                      <div className={`flex items-center gap-2 ${perm.canUpdate ? 'text-green-400' : 'text-gray-500'}`}>
-                        {perm.canUpdate ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} Update
-                      </div>
-                      <div className={`flex items-center gap-2 ${perm.canDelete ? 'text-green-400' : 'text-gray-500'}`}>
-                        {perm.canDelete ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} Delete
-                      </div>
-                      <div className={`flex items-center gap-2 ${perm.canUseAi ? 'text-green-400' : 'text-gray-500'}`}>
-                        {perm.canUseAi ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} AI Chat
-                      </div>
-                      <div className={`flex items-center gap-2 ${perm.canViewAnalytics ? 'text-green-400' : 'text-gray-500'}`}>
-                        {perm.canViewAnalytics ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} Analytics
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    </>
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
           )}
 
           <DialogFooter>

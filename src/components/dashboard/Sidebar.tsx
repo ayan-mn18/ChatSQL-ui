@@ -32,11 +32,13 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
 
   const isViewer = user?.role === 'viewer';
 
-  const filteredNavItems = navItems.filter(item => {
-    // Viewers can see Connections and Analytics (if they have permission)
-    // and now User Management as requested
-    return true;
-  });
+  const filteredNavItems = isViewer
+    ? navItems.map((item) =>
+      item.href === '/dashboard/users'
+        ? { ...item, label: 'My Access', href: '/dashboard/access' }
+        : item
+    )
+    : navItems;
 
   // The sidebar is "expanded" visually if it's NOT collapsed OR if it IS collapsed but currently hovered OR if the dropdown is open
   const isExpanded = !isCollapsed || isHovered || isDropdownOpen;
