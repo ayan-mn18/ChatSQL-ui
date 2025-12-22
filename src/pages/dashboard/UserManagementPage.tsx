@@ -249,19 +249,46 @@ export default function UserManagementPage() {
       canInsert: false,
       canUpdate: false,
       canDelete: false,
-      canUseAi: true,
-      canViewAnalytics: true,
-      canExport: true,
+      canUseAi: formData.canUseAi,
+      canViewAnalytics: formData.canViewAnalytics,
+      canExport: formData.canExport,
     });
 
     setLoadingSchemas(true);
     try {
       const response = await connectionService.getSchemas(connectionId);
-      if (response.success && response.data) {
-        setAvailableSchemas(response.data);
+      // Backend returns { success, schemas } (not { success, data })
+      const schemas = (response as any).schemas ?? response.data ?? [];
+      if (response.success) {
+        setAvailableSchemas(schemas);
+
+        const schemaNames = (schemas as DatabaseSchemaPublic[]).map(s => s.schema_name);
+        // Default: everything selected
+        setCurrentPermission(prev => (prev ? { ...prev, selectedSchemas: schemaNames, selectedTables: [] } : prev));
+
+        if (schemaNames.length > 0) {
+          setLoadingTables(true);
+          try {
+            const tablesResponses = await Promise.all(
+              schemaNames.map(schema => connectionService.getTablesBySchema(connectionId, schema))
+            );
+            const allTables: TableSchema[] = tablesResponses.flatMap(r => ((r as any).tables ?? r.data ?? []) as TableSchema[]);
+            setAvailableTables(allTables);
+            const allTableKeys = allTables.map(t => `${t.schema_name}.${t.table_name}`);
+            setCurrentPermission(prev => (prev ? { ...prev, selectedTables: allTableKeys } : prev));
+          } finally {
+            setLoadingTables(false);
+          }
+        } else {
+          setAvailableTables([]);
+        }
+      } else {
+        setAvailableSchemas([]);
+        toast.error((response as any).error || 'Failed to load schemas');
       }
     } catch (error) {
       console.error('Failed to load schemas:', error);
+      setAvailableSchemas([]);
       toast.error('Failed to load schemas');
     } finally {
       setLoadingSchemas(false);
@@ -269,65 +296,132 @@ export default function UserManagementPage() {
   };
 
   // Handle schema selection
-  const handleSchemaToggle = async (schemaName: string) => {
+  const handleSchemaChecked = async (schemaName: string, checked: boolean) => {
     if (!currentPermission) return;
 
     const isSelected = currentPermission.selectedSchemas.includes(schemaName);
-    const newSchemas = isSelected
-      ? currentPermission.selectedSchemas.filter(s => s !== schemaName)
-      : [...currentPermission.selectedSchemas, schemaName];
+    if (checked === isSelected) return;
 
-    setCurrentPermission({
-      ...currentPermission,
-      selectedSchemas: newSchemas,
-      selectedTables: [], // Reset tables when schemas change
-    });
+    if (!checked) {
+      const newSchemas = currentPermission.selectedSchemas.filter(s => s !== schemaName);
+      const filteredTables = availableTables.filter(t => t.schema_name !== schemaName);
+      const filteredTableKeys = currentPermission.selectedTables.filter(k => !k.startsWith(`${schemaName}.`));
+      setAvailableTables(filteredTables);
+      setCurrentPermission({
+        ...currentPermission,
+        selectedSchemas: newSchemas,
+        selectedTables: filteredTableKeys,
+      });
+      return;
+    }
 
-    if (newSchemas.length > 0) {
-      setLoadingTables(true);
-      try {
-        // Fetch tables for all selected schemas
-        const allTables: TableSchema[] = [];
-        for (const schema of newSchemas) {
-          const response = await connectionService.getTablesBySchema(currentPermission.connectionId, schema);
-          if (response.success && response.data) {
-            allTables.push(...response.data);
-          }
-        }
-        setAvailableTables(allTables);
-      } catch (error) {
-        console.error('Failed to load tables:', error);
-      } finally {
-        setLoadingTables(false);
-      }
-    } else {
-      setAvailableTables([]);
+    // Add schema + default-select its tables
+    const newSchemas = [...currentPermission.selectedSchemas, schemaName];
+    setCurrentPermission({ ...currentPermission, selectedSchemas: newSchemas });
+    setLoadingTables(true);
+    try {
+      const response = await connectionService.getTablesBySchema(currentPermission.connectionId, schemaName);
+      const tables = ((response as any).tables ?? response.data ?? []) as TableSchema[];
+
+      const merged = [...availableTables, ...tables].filter((t, idx, arr) => {
+        const key = `${t.schema_name}.${t.table_name}`;
+        return arr.findIndex(x => `${x.schema_name}.${x.table_name}` === key) === idx;
+      });
+      setAvailableTables(merged);
+
+      const selected = new Set(currentPermission.selectedTables);
+      tables.forEach(t => selected.add(`${t.schema_name}.${t.table_name}`));
+      setCurrentPermission(prev => (prev ? { ...prev, selectedTables: Array.from(selected) } : prev));
+    } catch (error) {
+      console.error('Failed to load tables:', error);
+      toast.error('Failed to load tables');
+    } finally {
+      setLoadingTables(false);
     }
   };
 
+  const handleSelectAllSchemas = async () => {
+    if (!currentPermission) return;
+    const schemaNames = availableSchemas.map(s => s.schema_name);
+    setCurrentPermission({ ...currentPermission, selectedSchemas: schemaNames, selectedTables: [] });
+    if (schemaNames.length === 0) {
+      setAvailableTables([]);
+      return;
+    }
+    setLoadingTables(true);
+    try {
+      const tablesResponses = await Promise.all(
+        schemaNames.map(schema => connectionService.getTablesBySchema(currentPermission.connectionId, schema))
+      );
+      const allTables: TableSchema[] = tablesResponses.flatMap(r => ((r as any).tables ?? r.data ?? []) as TableSchema[]);
+      setAvailableTables(allTables);
+      setCurrentPermission(prev => (prev ? { ...prev, selectedTables: allTables.map(t => `${t.schema_name}.${t.table_name}`) } : prev));
+    } catch (error) {
+      console.error('Failed to load tables:', error);
+      toast.error('Failed to load tables');
+    } finally {
+      setLoadingTables(false);
+    }
+  };
+
+  const handleClearAllSchemas = () => {
+    if (!currentPermission) return;
+    setAvailableTables([]);
+    setCurrentPermission({ ...currentPermission, selectedSchemas: [], selectedTables: [] });
+  };
+
   // Handle table selection
-  const handleTableToggle = (tableKey: string) => {
+  const handleTableChecked = (tableKey: string, checked: boolean) => {
     if (!currentPermission) return;
 
     const isSelected = currentPermission.selectedTables.includes(tableKey);
-    const newTables = isSelected
-      ? currentPermission.selectedTables.filter(t => t !== tableKey)
-      : [...currentPermission.selectedTables, tableKey];
+    if (checked === isSelected) return;
 
+    const newTables = checked
+      ? [...currentPermission.selectedTables, tableKey]
+      : currentPermission.selectedTables.filter(t => t !== tableKey);
+
+    setCurrentPermission({ ...currentPermission, selectedTables: newTables });
+  };
+
+  const handleSelectAllTables = () => {
+    if (!currentPermission) return;
     setCurrentPermission({
       ...currentPermission,
-      selectedTables: newTables,
+      selectedTables: availableTables.map(t => `${t.schema_name}.${t.table_name}`),
     });
+  };
+
+  const handleClearAllTables = () => {
+    if (!currentPermission) return;
+    setCurrentPermission({ ...currentPermission, selectedTables: [] });
   };
 
   // Add the configured permission
   const handleAddConfiguredPermission = () => {
     if (!currentPermission) return;
 
+    if (currentPermission.selectedSchemas.length === 0) {
+      toast.error('Select at least one schema');
+      return;
+    }
+
+    if (availableTables.length > 0 && currentPermission.selectedTables.length === 0) {
+      toast.error('Select at least one table');
+      return;
+    }
+
     const newPermissions: ViewerPermission[] = [];
 
-    // If no schemas selected, add for all schemas
-    if (currentPermission.selectedSchemas.length === 0) {
+    const allSchemaNames = availableSchemas.map(s => s.schema_name);
+    const allTableKeys = availableTables.map(t => `${t.schema_name}.${t.table_name}`);
+    const selectedTableSet = new Set(currentPermission.selectedTables);
+
+    const allSchemasSelected = allSchemaNames.length > 0 && currentPermission.selectedSchemas.length === allSchemaNames.length;
+    const allTablesSelected = allTableKeys.length > 0 && currentPermission.selectedTables.length === allTableKeys.length;
+
+    // If everything is selected, store a single "all" scoped permission (avoids per-table explosion)
+    if (allSchemasSelected && allTablesSelected) {
       newPermissions.push({
         connectionId: currentPermission.connectionId,
         connectionName: currentPermission.connectionName,
@@ -342,15 +436,19 @@ export default function UserManagementPage() {
         canExport: currentPermission.canExport,
       });
     } else {
-      // For each selected schema
       for (const schema of currentPermission.selectedSchemas) {
-        // Filter tables for this schema
-        const schemaTables = currentPermission.selectedTables
-          .filter((k) => k.startsWith(`${schema}.`))
-          .map((k) => k.slice(schema.length + 1));
+        const schemaKeys = availableTables
+          .filter(t => t.schema_name === schema)
+          .map(t => `${t.schema_name}.${t.table_name}`);
 
-        if (schemaTables.length === 0) {
-          // Add for all tables in this schema
+        const selectedKeysInSchema = schemaKeys.filter(k => selectedTableSet.has(k));
+
+        // If user selected a schema but none of its tables, skip it (no access)
+        if (schemaKeys.length > 0 && selectedKeysInSchema.length === 0) continue;
+
+        const schemaFullySelected = schemaKeys.length === 0 || selectedKeysInSchema.length === schemaKeys.length;
+
+        if (schemaFullySelected) {
           newPermissions.push({
             connectionId: currentPermission.connectionId,
             connectionName: currentPermission.connectionName,
@@ -364,25 +462,31 @@ export default function UserManagementPage() {
             canViewAnalytics: currentPermission.canViewAnalytics,
             canExport: currentPermission.canExport,
           });
-        } else {
-          // Add for each selected table in this schema
-          for (const table of schemaTables) {
-            newPermissions.push({
-              connectionId: currentPermission.connectionId,
-              connectionName: currentPermission.connectionName,
-              schemaName: schema,
-              tableName: table,
-              canSelect: currentPermission.canSelect,
-              canInsert: currentPermission.canInsert,
-              canUpdate: currentPermission.canUpdate,
-              canDelete: currentPermission.canDelete,
-              canUseAi: currentPermission.canUseAi,
-              canViewAnalytics: currentPermission.canViewAnalytics,
-              canExport: currentPermission.canExport,
-            });
-          }
+          continue;
+        }
+
+        for (const key of selectedKeysInSchema) {
+          const [, table] = key.split('.', 2);
+          newPermissions.push({
+            connectionId: currentPermission.connectionId,
+            connectionName: currentPermission.connectionName,
+            schemaName: schema,
+            tableName: table,
+            canSelect: currentPermission.canSelect,
+            canInsert: currentPermission.canInsert,
+            canUpdate: currentPermission.canUpdate,
+            canDelete: currentPermission.canDelete,
+            canUseAi: currentPermission.canUseAi,
+            canViewAnalytics: currentPermission.canViewAnalytics,
+            canExport: currentPermission.canExport,
+          });
         }
       }
+    }
+
+    if (newPermissions.length === 0) {
+      toast.error('No permissions selected');
+      return;
     }
 
     setSelectedPermissions([...selectedPermissions, ...newPermissions]);
@@ -393,6 +497,8 @@ export default function UserManagementPage() {
 
   const handleIdentityNext = async () => {
     const email = formData.email.trim();
+    const username = formData.username.trim();
+
     if (!email) {
       toast.error('Email is required');
       return;
@@ -402,47 +508,49 @@ export default function UserManagementPage() {
     try {
       const result = await viewerService.checkViewerIdentity({
         email,
-        username: formData.username.trim() || undefined,
+        username: username ? username : undefined,
       });
       setIdentityCheck(result);
-      if (result.action === 'blocked') {
-        toast.error(result.reason || 'Cannot use these details');
-        return;
-      }
+      if (result.action === 'blocked') return;
       setCreateStep(2);
     } catch (error: any) {
-      toast.error(error?.response?.data?.error || 'Failed to validate user details');
+      toast.error(error?.response?.data?.error || 'Failed to check identity');
     } finally {
       setCheckingIdentity(false);
     }
   };
 
   const handleSubmitWizard = async () => {
-    if (!formData.email.trim()) {
+    const email = formData.email.trim();
+    const username = formData.username.trim();
+
+    if (!email) {
       toast.error('Email is required');
       return;
     }
+
     if (selectedPermissions.length === 0) {
-      toast.error('Please add at least one connection permission');
+      toast.error('Add at least one permission entry');
       return;
     }
 
-    const permissionsWithFeatures = selectedPermissions.map((p) => ({
-      ...p,
-      canUseAi: !!formData.canUseAi,
-      canViewAnalytics: !!formData.canViewAnalytics,
-      canExport: !!formData.canExport,
-    }));
-
+    setCheckingIdentity(true);
     try {
+      const permissionsWithFeatures = selectedPermissions.map(p => ({
+        ...p,
+        canUseAi: formData.canUseAi,
+        canViewAnalytics: formData.canViewAnalytics,
+        canExport: formData.canExport,
+      }));
+
       const result = await viewerService.upsertViewer({
-        email: formData.email.trim(),
-        username: formData.username.trim() || undefined,
-        isTemporary: !!formData.isTemporary,
+        email,
+        username: username ? username : undefined,
+        isTemporary: formData.isTemporary,
         expiresInHours: formData.isTemporary ? formData.expiresInHours : undefined,
-        mustChangePassword: !!formData.mustChangePassword,
+        mustChangePassword: formData.mustChangePassword,
         permissions: permissionsWithFeatures,
-        sendEmail: !!formData.sendEmail,
+        sendEmail: formData.sendEmail,
       });
 
       if (result.created && result.credentials) {
@@ -457,6 +565,8 @@ export default function UserManagementPage() {
       toast.success(result.created ? 'Viewer created successfully' : 'Viewer access updated successfully');
     } catch (error: any) {
       toast.error(error?.response?.data?.error || 'Failed to save viewer access');
+    } finally {
+      setCheckingIdentity(false);
     }
   };
 
@@ -572,392 +682,599 @@ export default function UserManagementPage() {
                 Create Viewer
               </Button>
             </DialogTrigger>
-            <DialogContent className="bg-[#1B2431] border-[#273142] text-white max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle className="text-white">
-                  {identityCheck?.action === 'use_existing_viewer' ? 'Add Viewer Access' : 'Create Viewer'}
-                </DialogTitle>
-                <DialogDescription className="text-gray-400">
-                  Step {createStep} of 3 — {createStep === 1 ? 'User details' : createStep === 2 ? 'Schema/table access' : 'Features & settings'}
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-6 py-4">
-                {createStep === 1 && (
-                  <div className="space-y-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="email" className="text-gray-300">Email *</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="viewer@example.com"
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="bg-[#273142] border-[#3A4553] text-white"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="username" className="text-gray-300">Username (optional)</Label>
-                      <Input
-                        id="username"
-                        placeholder="john_doe"
-                        value={formData.username}
-                        onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                        className="bg-[#273142] border-[#3A4553] text-white"
-                      />
-                    </div>
-
-                    {identityCheck?.action === 'use_existing_viewer' && identityCheck.existingUser && (
-                      <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/5 p-3">
-                        <AlertCircle className="h-4 w-4 text-blue-400 mt-0.5" />
-                        <div className="text-sm">
-                          <p className="text-white font-medium">Existing viewer found</p>
-                          <p className="text-gray-400">
-                            Access will be added to <span className="text-gray-200">{identityCheck.existingUser.email}</span>.
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                    {identityCheck?.action === 'blocked' && (
-                      <div className="flex items-start gap-3 rounded-lg border border-red-500/20 bg-red-500/10 p-3">
-                        <AlertCircle className="h-4 w-4 text-red-400 mt-0.5" />
-                        <div className="text-sm">
-                          <p className="text-red-200 font-medium">Cannot continue</p>
-                          <p className="text-red-300/80">{identityCheck.reason || 'Please use a different email/username.'}</p>
-                        </div>
-                      </div>
-                    )}
+            <DialogContent className="bg-[#1B2431] border-[#273142] text-white p-0 max-w-5xl h-[82vh] overflow-hidden">
+              <div className="grid grid-cols-[280px_1fr] h-full">
+                {/* Left stepper */}
+                <div className="bg-[#273142] border-r border-white/10 p-6 flex flex-col">
+                  <div className="mb-6">
+                    <p className="text-xs tracking-wider text-gray-400 uppercase">Access Wizard</p>
+                    <h2 className="text-lg font-semibold text-white mt-1">
+                      {identityCheck?.action === 'use_existing_viewer' ? 'Add Viewer Access' : 'Create Viewer'}
+                    </h2>
+                    <p className="text-sm text-gray-400 mt-1">Step {createStep} of 3</p>
                   </div>
-                )}
 
-                {createStep === 2 && (
-                  <div className="space-y-4">
-                    {identityCheck?.action === 'use_existing_viewer' && identityCheck.existingUser && (
-                      <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/5 p-3">
-                        <AlertCircle className="h-4 w-4 text-blue-400 mt-0.5" />
-                        <div className="text-sm">
-                          <p className="text-white font-medium">Updating existing viewer</p>
-                          <p className="text-gray-400">Access will be added to <span className="text-gray-200">{identityCheck.existingUser.email}</span>.</p>
-                        </div>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between">
-                      <Label className="text-gray-300 font-medium">Connections, schemas & tables</Label>
-                      {!currentPermission && (
-                        <Select onValueChange={handleConnectionSelect}>
-                          <SelectTrigger className="w-[220px] bg-[#273142] border-[#3A4553] text-white">
-                            <SelectValue placeholder="Add connection" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-[#273142] border-[#3A4553]">
-                            {connections.length === 0 ? (
-                              <div className="px-2 py-4 text-sm text-gray-400 text-center">No connections available</div>
-                            ) : (
-                              connections.map((conn) => (
-                                <SelectItem key={conn.id} value={conn.id}>
-                                  <span className="flex items-center gap-2">
-                                    <Database className="h-4 w-4" />
-                                    {conn.name}
-                                  </span>
-                                </SelectItem>
-                              ))
-                            )}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
-
-                    {currentPermission && (
-                      <Card className="bg-[#1B2431] border-blue-500/50 border-2">
-                        <CardHeader className="pb-2">
-                          <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm font-bold text-blue-400 flex items-center gap-2">
-                              <Database className="h-4 w-4" />
-                              Configuring: {currentPermission.connectionName}
-                            </CardTitle>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setCurrentPermission(null)}
-                              className="h-8 w-8 p-0 text-gray-400"
+                  <div className="space-y-5">
+                    {[
+                      { step: 1 as const, icon: Mail, title: 'User details', desc: 'Email + identity check' },
+                      { step: 2 as const, icon: Database, title: 'Database access', desc: 'Connections, schemas & tables' },
+                      { step: 3 as const, icon: Shield, title: 'Features & settings', desc: 'Capabilities and account rules' },
+                    ].map((s, idx, arr) => {
+                      const isActive = createStep === s.step;
+                      const isDone = createStep > s.step;
+                      const Icon = s.icon;
+                      return (
+                        <div key={s.step} className="flex gap-3">
+                          <div className="flex flex-col items-center">
+                            <div
+                              className={
+                                "h-9 w-9 rounded-full border flex items-center justify-center transition-colors " +
+                                (isActive
+                                  ? "border-blue-500/50 bg-blue-500/15"
+                                  : isDone
+                                    ? "border-green-500/40 bg-green-500/10"
+                                    : "border-white/10 bg-white/5")
+                              }
                             >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="space-y-2">
-                            <Label className="text-xs text-gray-400 uppercase tracking-wider">Select Schemas (optional — defaults to all)</Label>
-                            {loadingSchemas ? (
-                              <div className="flex flex-wrap gap-2">
-                                {[...Array(3)].map((_, i) => (
-                                  <Skeleton key={i} className="h-6 w-20 bg-slate-700 rounded-full" />
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="flex flex-wrap gap-2">
-                                {availableSchemas.map(schema => (
-                                  <Badge
-                                    key={schema.schema_name}
-                                    variant={currentPermission.selectedSchemas.includes(schema.schema_name) ? "default" : "outline"}
-                                    className={`cursor-pointer ${currentPermission.selectedSchemas.includes(schema.schema_name)
-                                      ? "bg-blue-600 hover:bg-blue-700"
-                                      : "border-[#3A4553] text-gray-400 hover:bg-[#273142]"}`}
-                                    onClick={() => handleSchemaToggle(schema.schema_name)}
-                                  >
-                                    {schema.schema_name}
-                                  </Badge>
-                                ))}
-                                {availableSchemas.length === 0 && <p className="text-sm text-gray-500 italic">No schemas found</p>}
-                              </div>
-                            )}
-                          </div>
-
-                          {currentPermission.selectedSchemas.length > 0 && (
-                            <div className="space-y-2">
-                              <Label className="text-xs text-gray-400 uppercase tracking-wider">Select Tables (optional — defaults to all in schema)</Label>
-                              {loadingTables ? (
-                                <div className="flex flex-wrap gap-2 p-1">
-                                  {[...Array(5)].map((_, i) => (
-                                    <Skeleton key={i} className="h-6 w-32 bg-slate-700 rounded-full" />
-                                  ))}
-                                </div>
+                              {isDone ? (
+                                <Check className="h-4 w-4 text-green-400" />
                               ) : (
-                                <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-1">
-                                  {availableTables.map(table => (
-                                    <Badge
-                                      key={`${table.schema_name}.${table.table_name}`}
-                                      variant={currentPermission.selectedTables.includes(`${table.schema_name}.${table.table_name}`) ? "default" : "outline"}
-                                      className={`cursor-pointer ${currentPermission.selectedTables.includes(`${table.schema_name}.${table.table_name}`)
-                                        ? "bg-green-600 hover:bg-green-700"
-                                        : "border-[#3A4553] text-gray-400 hover:bg-[#273142]"}`}
-                                      onClick={() => handleTableToggle(`${table.schema_name}.${table.table_name}`)}
-                                    >
-                                      {table.schema_name}.{table.table_name}
-                                    </Badge>
-                                  ))}
-                                  {availableTables.length === 0 && <p className="text-sm text-gray-500 italic">No tables found for selected schemas</p>}
-                                </div>
+                                <Icon className={"h-4 w-4 " + (isActive ? "text-blue-400" : "text-gray-400")} />
                               )}
                             </div>
-                          )}
+                            {idx !== arr.length - 1 && (
+                              <div className={"w-px flex-1 mt-2 " + (isDone ? "bg-green-500/30" : "bg-white/10")} />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className={"text-sm font-medium " + (isActive ? "text-white" : "text-gray-200")}>{s.title}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{s.desc}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
 
-                          <div className="space-y-3 pt-2 border-t border-[#3A4553]">
-                            <Label className="text-xs text-gray-400 uppercase tracking-wider">CRUD permissions</Label>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                              <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-                                <Checkbox checked={currentPermission.canSelect} onCheckedChange={(c) => setCurrentPermission({ ...currentPermission, canSelect: !!c })} />
-                                Read
-                              </label>
-                              <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-                                <Checkbox checked={currentPermission.canInsert} onCheckedChange={(c) => setCurrentPermission({ ...currentPermission, canInsert: !!c })} />
-                                Insert
-                              </label>
-                              <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-                                <Checkbox checked={currentPermission.canUpdate} onCheckedChange={(c) => setCurrentPermission({ ...currentPermission, canUpdate: !!c })} />
-                                Update
-                              </label>
-                              <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-                                <Checkbox checked={currentPermission.canDelete} onCheckedChange={(c) => setCurrentPermission({ ...currentPermission, canDelete: !!c })} />
-                                Delete
-                              </label>
+                  <div className="mt-auto pt-6">
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                      <p className="text-xs text-gray-400">Tip</p>
+                      <p className="text-sm text-gray-200 mt-1">You can scope access down to a single table.</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right content */}
+                <div className="flex flex-col h-full">
+                  <div className="px-6 py-5 border-b border-white/10 flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-xs tracking-wider text-gray-400 uppercase">
+                        {createStep === 1 ? 'Step 1 — User' : createStep === 2 ? 'Step 2 — Access' : 'Step 3 — Settings'}
+                      </p>
+                      <h3 className="text-xl font-semibold text-white mt-1">
+                        {createStep === 1
+                          ? 'Viewer identity'
+                          : createStep === 2
+                            ? 'Grant database access'
+                            : 'Configure features'}
+                      </h3>
+                      <p className="text-sm text-gray-400 mt-1">
+                        {createStep === 1
+                          ? 'Enter an email and optionally a username. Next will validate whether we create a new viewer or update an existing one.'
+                          : createStep === 2
+                            ? 'Choose a connection, then scope to schemas and tables. Add at least one permission entry to continue.'
+                            : 'Enable capabilities and set account rules like expiry and password change.'}
+                      </p>
+                    </div>
+
+                    {createStep > 1 ? (
+                      <Button
+                        variant="outline"
+                        className="border-white/10 text-white hover:bg-white/5"
+                        onClick={() => setCreateStep((s) => (s - 1) as 1 | 2 | 3)}
+                      >
+                        Back
+                      </Button>
+                    ) : (
+                      <div />
+                    )}
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto px-6 py-6">
+                    {createStep === 1 && (
+                      <div className="space-y-4">
+                        <Card className="bg-[#273142] border-[#3A4553]">
+                          <CardHeader>
+                            <CardTitle className="text-white text-base">User details</CardTitle>
+                            <CardDescription className="text-gray-400">We use email as the unique identity for viewers.</CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            <div className="grid gap-2">
+                              <Label htmlFor="email" className="text-gray-300">Email *</Label>
+                              <Input
+                                id="email"
+                                type="email"
+                                placeholder="viewer@example.com"
+                                value={formData.email}
+                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                className="bg-[#1B2431] border-[#3A4553] text-white"
+                              />
+                            </div>
+                            <div className="grid gap-2">
+                              <Label htmlFor="username" className="text-gray-300">Username (optional)</Label>
+                              <Input
+                                id="username"
+                                placeholder="john_doe"
+                                value={formData.username}
+                                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                                className="bg-[#1B2431] border-[#3A4553] text-white"
+                              />
+                            </div>
+
+                            {identityCheck?.action === 'use_existing_viewer' && identityCheck.existingUser && (
+                              <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/5 p-3">
+                                <AlertCircle className="h-4 w-4 text-blue-400 mt-0.5" />
+                                <div className="text-sm">
+                                  <p className="text-white font-medium">Existing viewer found</p>
+                                  <p className="text-gray-400">Access will be added to <span className="text-gray-200">{identityCheck.existingUser.email}</span>.</p>
+                                </div>
+                              </div>
+                            )}
+                            {identityCheck?.action === 'blocked' && (
+                              <div className="flex items-start gap-3 rounded-lg border border-red-500/20 bg-red-500/10 p-3">
+                                <AlertCircle className="h-4 w-4 text-red-400 mt-0.5" />
+                                <div className="text-sm">
+                                  <p className="text-red-200 font-medium">Cannot continue</p>
+                                  <p className="text-red-300/80">{identityCheck.reason || 'Please use a different email/username.'}</p>
+                                </div>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </div>
+                    )}
+
+                    {createStep === 2 && (
+                      <div className="space-y-4">
+                        {identityCheck?.action === 'use_existing_viewer' && identityCheck.existingUser && (
+                          <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/5 p-3">
+                            <AlertCircle className="h-4 w-4 text-blue-400 mt-0.5" />
+                            <div className="text-sm">
+                              <p className="text-white font-medium">Updating existing viewer</p>
+                              <p className="text-gray-400">Access will be added to <span className="text-gray-200">{identityCheck.existingUser.email}</span>.</p>
                             </div>
                           </div>
+                        )}
 
-                          <Button className="w-full bg-blue-600 hover:bg-blue-700 mt-2" onClick={handleAddConfiguredPermission}>
-                            Add Permission Entry
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {selectedPermissions.length === 0 && !currentPermission ? (
-                      <div className="border border-dashed border-[#3A4553] rounded-lg p-8 text-center">
-                        <Database className="h-12 w-12 mx-auto text-gray-500 mb-3" />
-                        <p className="text-gray-400">No access configured yet</p>
-                        <p className="text-sm text-gray-500">Select a connection above to add schema/table permissions</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {selectedPermissions.map((perm, index) => (
-                          <Card key={index} className="bg-[#273142] border-[#3A4553]">
-                            <CardContent className="p-4">
-                              <div className="flex items-center justify-between mb-3">
-                                <div className="flex flex-col gap-1">
-                                  <div className="flex items-center gap-2">
-                                    <Database className="h-4 w-4 text-blue-400" />
-                                    <span className="text-white font-medium">{perm.connectionName}</span>
+                        <Card className="bg-[#273142] border-[#3A4553]">
+                          <CardHeader>
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <CardTitle className="text-white text-base">Scope access</CardTitle>
+                                <CardDescription className="text-gray-400">Add one or more permission entries for the viewer.</CardDescription>
+                              </div>
+                              {!currentPermission && (
+                                <Select onValueChange={handleConnectionSelect}>
+                                  <SelectTrigger className="w-[240px] bg-[#1B2431] border-[#3A4553] text-white">
+                                    <SelectValue placeholder="Add connection" />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-[#273142] border-[#3A4553]">
+                                    {connections.length === 0 ? (
+                                      <div className="px-2 py-4 text-sm text-gray-400 text-center">No connections available</div>
+                                    ) : (
+                                      connections.map((conn) => (
+                                        <SelectItem key={conn.id} value={conn.id}>
+                                          <span className="flex items-center gap-2">
+                                            <Database className="h-4 w-4" />
+                                            {conn.name}
+                                          </span>
+                                        </SelectItem>
+                                      ))
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            </div>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            {currentPermission && (
+                              <Card className="bg-[#1B2431] border-blue-500/40">
+                                <CardHeader className="pb-2">
+                                  <div className="flex items-center justify-between">
+                                    <CardTitle className="text-sm font-semibold text-blue-300 flex items-center gap-2">
+                                      <Database className="h-4 w-4" />
+                                      {currentPermission.connectionName}
+                                    </CardTitle>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => setCurrentPermission(null)}
+                                      className="h-8 w-8 p-0 text-gray-400 hover:bg-white/5"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
                                   </div>
-                                  <div className="flex flex-wrap gap-1">
-                                    <Badge variant="secondary" className="bg-blue-500/20 text-blue-400 text-[10px] py-0">
-                                      {perm.schemaName || 'All schemas'}
-                                    </Badge>
-                                    {perm.tableName && (
-                                      <Badge variant="secondary" className="bg-green-500/20 text-green-400 text-[10px] py-0">
-                                        {perm.tableName}
-                                      </Badge>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                  <div className="space-y-2">
+                                    <Label className="text-xs text-gray-400 uppercase tracking-wider">Schemas</Label>
+                                    {loadingSchemas ? (
+                                      <div className="flex flex-wrap gap-2">
+                                        {[...Array(3)].map((_, i) => (
+                                          <Skeleton key={i} className="h-6 w-20 bg-slate-700 rounded-full" />
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-2">
+                                        <div className="flex items-center gap-2">
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 text-xs text-gray-400 hover:text-white hover:bg-white/10"
+                                            onClick={handleSelectAllSchemas}
+                                            disabled={availableSchemas.length === 0}
+                                          >
+                                            Select all
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 text-xs text-gray-400 hover:text-white hover:bg-white/10"
+                                            onClick={handleClearAllSchemas}
+                                            disabled={availableSchemas.length === 0}
+                                          >
+                                            Clear all
+                                          </Button>
+                                        </div>
+
+                                        <div className="max-h-40 overflow-y-auto rounded-md border border-white/10 bg-[#0f172a]/30">
+                                          {availableSchemas.length === 0 ? (
+                                            <div className="px-3 py-3 text-sm text-gray-500 italic">No schemas found</div>
+                                          ) : (
+                                            <div className="py-1">
+                                              {availableSchemas.map((schema) => (
+                                                <button
+                                                  type="button"
+                                                  key={schema.schema_name}
+                                                  onClick={() =>
+                                                    handleSchemaChecked(
+                                                      schema.schema_name,
+                                                      !currentPermission.selectedSchemas.includes(schema.schema_name)
+                                                    )
+                                                  }
+                                                  className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/5"
+                                                >
+                                                  <Checkbox
+                                                    checked={currentPermission.selectedSchemas.includes(schema.schema_name)}
+                                                    onCheckedChange={(c) => handleSchemaChecked(schema.schema_name, !!c)}
+                                                  />
+                                                  <span className="flex-1 text-sm text-gray-200">{schema.schema_name}</span>
+                                                  {typeof (schema as any).table_count === 'number' && (
+                                                    <span className="text-xs text-gray-500">{(schema as any).table_count} tables</span>
+                                                  )}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
                                     )}
                                   </div>
-                                </div>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleRemovePermission(index)}
-                                  className="text-red-400 hover:text-red-300 hover:bg-red-500/20 h-8 w-8 p-0"
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
+
+                                  {currentPermission.selectedSchemas.length > 0 && (
+                                    <div className="space-y-2">
+                                      <Label className="text-xs text-gray-400 uppercase tracking-wider">Tables</Label>
+                                      <div className="flex items-center gap-2">
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 text-xs text-gray-400 hover:text-white hover:bg-white/10"
+                                          onClick={handleSelectAllTables}
+                                          disabled={availableTables.length === 0}
+                                        >
+                                          Select all
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 text-xs text-gray-400 hover:text-white hover:bg-white/10"
+                                          onClick={handleClearAllTables}
+                                          disabled={availableTables.length === 0}
+                                        >
+                                          Clear all
+                                        </Button>
+                                      </div>
+                                      {loadingTables ? (
+                                        <div className="flex flex-wrap gap-2 p-1">
+                                          {[...Array(5)].map((_, i) => (
+                                            <Skeleton key={i} className="h-6 w-32 bg-slate-700 rounded-full" />
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <div className="max-h-56 overflow-y-auto rounded-md border border-white/10 bg-[#0f172a]/30">
+                                          {availableTables.length === 0 ? (
+                                            <div className="px-3 py-3 text-sm text-gray-500 italic">
+                                              No tables found for selected schemas
+                                            </div>
+                                          ) : (
+                                            <div className="py-1">
+                                              {Object.entries(
+                                                availableTables.reduce<Record<string, TableSchema[]>>((acc, t) => {
+                                                  acc[t.schema_name] = acc[t.schema_name] || [];
+                                                  acc[t.schema_name].push(t);
+                                                  return acc;
+                                                }, {})
+                                              )
+                                                .sort(([a], [b]) => a.localeCompare(b))
+                                                .map(([schemaName, tables]) => (
+                                                  <div key={schemaName} className="py-1">
+                                                    <div className="px-3 py-1 text-xs font-medium text-gray-400 uppercase tracking-wider">
+                                                      {schemaName}
+                                                    </div>
+                                                    {tables
+                                                      .slice()
+                                                      .sort((a, b) => a.table_name.localeCompare(b.table_name))
+                                                      .map((table) => {
+                                                        const key = `${table.schema_name}.${table.table_name}`;
+                                                        return (
+                                                          <button
+                                                            type="button"
+                                                            key={key}
+                                                            onClick={() => handleTableChecked(key, !currentPermission.selectedTables.includes(key))}
+                                                            className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/5"
+                                                          >
+                                                            <Checkbox
+                                                              checked={currentPermission.selectedTables.includes(key)}
+                                                              onCheckedChange={(c) => handleTableChecked(key, !!c)}
+                                                            />
+                                                            <span className="text-sm text-gray-200">{table.table_name}</span>
+                                                          </button>
+                                                        );
+                                                      })}
+                                                  </div>
+                                                ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  <div className="space-y-3 pt-2 border-t border-white/10">
+                                    <Label className="text-xs text-gray-400 uppercase tracking-wider">CRUD permissions</Label>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                      <label className="flex items-center gap-2 text-sm text-gray-200 cursor-pointer">
+                                        <Checkbox checked={currentPermission.canSelect} onCheckedChange={(c) => setCurrentPermission({ ...currentPermission, canSelect: !!c })} />
+                                        Read
+                                      </label>
+                                      <label className="flex items-center gap-2 text-sm text-gray-200 cursor-pointer">
+                                        <Checkbox checked={currentPermission.canInsert} onCheckedChange={(c) => setCurrentPermission({ ...currentPermission, canInsert: !!c })} />
+                                        Insert
+                                      </label>
+                                      <label className="flex items-center gap-2 text-sm text-gray-200 cursor-pointer">
+                                        <Checkbox checked={currentPermission.canUpdate} onCheckedChange={(c) => setCurrentPermission({ ...currentPermission, canUpdate: !!c })} />
+                                        Update
+                                      </label>
+                                      <label className="flex items-center gap-2 text-sm text-gray-200 cursor-pointer">
+                                        <Checkbox checked={currentPermission.canDelete} onCheckedChange={(c) => setCurrentPermission({ ...currentPermission, canDelete: !!c })} />
+                                        Delete
+                                      </label>
+                                    </div>
+                                  </div>
+
+                                  <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={handleAddConfiguredPermission}>
+                                    Add permission entry
+                                  </Button>
+                                </CardContent>
+                              </Card>
+                            )}
+
+                            {selectedPermissions.length === 0 && !currentPermission ? (
+                              <div className="border border-dashed border-white/10 rounded-lg p-8 text-center bg-white/5">
+                                <Database className="h-12 w-12 mx-auto text-gray-500 mb-3" />
+                                <p className="text-white font-medium">No permissions yet</p>
+                                <p className="text-sm text-gray-500 mt-1">Add a connection to start scoping schemas and tables.</p>
                               </div>
-                              <div className="grid grid-cols-4 gap-2">
-                                <div className="flex flex-col items-center gap-1">
-                                  <span className="text-[10px] text-gray-500 uppercase">Read</span>
-                                  <Checkbox checked={perm.canSelect} onCheckedChange={(c) => handleUpdatePermission(index, 'canSelect', !!c)} />
-                                </div>
-                                <div className="flex flex-col items-center gap-1">
-                                  <span className="text-[10px] text-gray-500 uppercase">Insert</span>
-                                  <Checkbox checked={perm.canInsert} onCheckedChange={(c) => handleUpdatePermission(index, 'canInsert', !!c)} />
-                                </div>
-                                <div className="flex flex-col items-center gap-1">
-                                  <span className="text-[10px] text-gray-500 uppercase">Update</span>
-                                  <Checkbox checked={perm.canUpdate} onCheckedChange={(c) => handleUpdatePermission(index, 'canUpdate', !!c)} />
-                                </div>
-                                <div className="flex flex-col items-center gap-1">
-                                  <span className="text-[10px] text-gray-500 uppercase">Delete</span>
-                                  <Checkbox checked={perm.canDelete} onCheckedChange={(c) => handleUpdatePermission(index, 'canDelete', !!c)} />
-                                </div>
+                            ) : (
+                              <div className="space-y-3">
+                                {selectedPermissions.map((perm, index) => (
+                                  <Card key={index} className="bg-[#1B2431] border-[#3A4553]">
+                                    <CardContent className="p-4">
+                                      <div className="flex items-center justify-between mb-3">
+                                        <div className="flex flex-col gap-1">
+                                          <div className="flex items-center gap-2">
+                                            <Database className="h-4 w-4 text-blue-400" />
+                                            <span className="text-white font-medium">{perm.connectionName}</span>
+                                          </div>
+                                          <div className="flex flex-wrap gap-1">
+                                            <Badge variant="secondary" className="bg-blue-500/20 text-blue-300 text-[10px] py-0">
+                                              {perm.schemaName || 'All schemas'}
+                                            </Badge>
+                                            {perm.tableName && (
+                                              <Badge variant="secondary" className="bg-green-500/20 text-green-300 text-[10px] py-0">
+                                                {perm.tableName}
+                                              </Badge>
+                                            )}
+                                          </div>
+                                        </div>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleRemovePermission(index)}
+                                          className="text-red-300 hover:text-red-200 hover:bg-red-500/10 h-8 w-8 p-0"
+                                        >
+                                          <X className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                      <div className="grid grid-cols-4 gap-2">
+                                        <div className="flex flex-col items-center gap-1">
+                                          <span className="text-[10px] text-gray-500 uppercase">Read</span>
+                                          <Checkbox checked={perm.canSelect} onCheckedChange={(c) => handleUpdatePermission(index, 'canSelect', !!c)} />
+                                        </div>
+                                        <div className="flex flex-col items-center gap-1">
+                                          <span className="text-[10px] text-gray-500 uppercase">Insert</span>
+                                          <Checkbox checked={perm.canInsert} onCheckedChange={(c) => handleUpdatePermission(index, 'canInsert', !!c)} />
+                                        </div>
+                                        <div className="flex flex-col items-center gap-1">
+                                          <span className="text-[10px] text-gray-500 uppercase">Update</span>
+                                          <Checkbox checked={perm.canUpdate} onCheckedChange={(c) => handleUpdatePermission(index, 'canUpdate', !!c)} />
+                                        </div>
+                                        <div className="flex flex-col items-center gap-1">
+                                          <span className="text-[10px] text-gray-500 uppercase">Delete</span>
+                                          <Checkbox checked={perm.canDelete} onCheckedChange={(c) => handleUpdatePermission(index, 'canDelete', !!c)} />
+                                        </div>
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                ))}
                               </div>
-                            </CardContent>
-                          </Card>
-                        ))}
+                            )}
+                          </CardContent>
+                        </Card>
+                      </div>
+                    )}
+
+                    {createStep === 3 && (
+                      <div className="space-y-4">
+                        {identityCheck?.action === 'use_existing_viewer' && identityCheck.existingUser && (
+                          <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/5 p-3">
+                            <AlertCircle className="h-4 w-4 text-blue-400 mt-0.5" />
+                            <div className="text-sm">
+                              <p className="text-white font-medium">Updating existing viewer</p>
+                              <p className="text-gray-400">No new credentials will be created.</p>
+                            </div>
+                          </div>
+                        )}
+
+                        <Card className="bg-[#273142] border-[#3A4553]">
+                          <CardHeader>
+                            <CardTitle className="text-white text-base">Capabilities</CardTitle>
+                            <CardDescription className="text-gray-400">Controls what the viewer can see and do.</CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-sm text-gray-200">
+                                <Sparkles className="h-4 w-4 text-blue-400" />
+                                AI
+                              </div>
+                              <Switch checked={formData.canUseAi} onCheckedChange={(checked) => setFormData({ ...formData, canUseAi: checked })} />
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-sm text-gray-200">
+                                <BarChart3 className="h-4 w-4 text-green-400" />
+                                Analytics
+                              </div>
+                              <Switch checked={formData.canViewAnalytics} onCheckedChange={(checked) => setFormData({ ...formData, canViewAnalytics: checked })} />
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-sm text-gray-200">
+                                <Download className="h-4 w-4 text-purple-400" />
+                                Export
+                              </div>
+                              <Switch checked={formData.canExport} onCheckedChange={(checked) => setFormData({ ...formData, canExport: checked })} />
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        <Card className="bg-[#273142] border-[#3A4553]">
+                          <CardHeader>
+                            <CardTitle className="text-white text-base">Account rules</CardTitle>
+                            <CardDescription className="text-gray-400">Expiry and first-login requirements.</CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Label className="text-gray-200 font-medium">Temporary Access</Label>
+                                <p className="text-sm text-gray-500">Set an expiration time for this viewer</p>
+                              </div>
+                              <Switch checked={formData.isTemporary} onCheckedChange={(checked) => setFormData({ ...formData, isTemporary: checked })} />
+                            </div>
+                            {formData.isTemporary && (
+                              <div className="grid gap-2">
+                                <Label className="text-gray-300">Expires In</Label>
+                                <Select value={formData.expiresInHours.toString()} onValueChange={(v) => setFormData({ ...formData, expiresInHours: parseInt(v) })}>
+                                  <SelectTrigger className="bg-[#1B2431] border-[#3A4553] text-white">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-[#273142] border-[#3A4553]">
+                                    <SelectItem value="1">1 hour</SelectItem>
+                                    <SelectItem value="6">6 hours</SelectItem>
+                                    <SelectItem value="12">12 hours</SelectItem>
+                                    <SelectItem value="24">24 hours</SelectItem>
+                                    <SelectItem value="48">48 hours</SelectItem>
+                                    <SelectItem value="72">72 hours (3 days)</SelectItem>
+                                    <SelectItem value="168">168 hours (1 week)</SelectItem>
+                                    <SelectItem value="720">720 hours (30 days)</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
+
+                            <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                              <div>
+                                <Label className="text-gray-200 font-medium">Send Invitation Email</Label>
+                                <p className="text-sm text-gray-500">Only applies to new viewers</p>
+                              </div>
+                              <Switch checked={formData.sendEmail} onCheckedChange={(checked) => setFormData({ ...formData, sendEmail: checked })} />
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Label className="text-gray-200 font-medium">Force Password Change</Label>
+                                <p className="text-sm text-gray-500">User must change password on first login</p>
+                              </div>
+                              <Switch checked={formData.mustChangePassword} onCheckedChange={(checked) => setFormData({ ...formData, mustChangePassword: checked })} />
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-gray-300">
+                          <p className="text-white font-medium">Summary</p>
+                          <p className="text-gray-400">{selectedPermissions.length} permission entr{selectedPermissions.length === 1 ? 'y' : 'ies'} will be applied.</p>
+                        </div>
                       </div>
                     )}
                   </div>
-                )}
 
-                {createStep === 3 && (
-                  <div className="space-y-4">
-                    {identityCheck?.action === 'use_existing_viewer' && identityCheck.existingUser && (
-                      <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/5 p-3">
-                        <AlertCircle className="h-4 w-4 text-blue-400 mt-0.5" />
-                        <div className="text-sm">
-                          <p className="text-white font-medium">Updating existing viewer</p>
-                          <p className="text-gray-400">No new credentials will be created.</p>
-                        </div>
-                      </div>
-                    )}
-                    <div className="space-y-3 p-4 bg-[#273142]/50 rounded-lg border border-[#3A4553]">
-                      <Label className="text-gray-300 font-medium">ChatSQL features</Label>
-                      <div className="grid grid-cols-1 gap-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-sm text-gray-300">
-                            <Sparkles className="h-4 w-4 text-blue-400" />
-                            AI
-                          </div>
-                          <Switch checked={formData.canUseAi} onCheckedChange={(checked) => setFormData({ ...formData, canUseAi: checked })} />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-sm text-gray-300">
-                            <BarChart3 className="h-4 w-4 text-green-400" />
-                            Analytics
-                          </div>
-                          <Switch checked={formData.canViewAnalytics} onCheckedChange={(checked) => setFormData({ ...formData, canViewAnalytics: checked })} />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-sm text-gray-300">
-                            <Download className="h-4 w-4 text-purple-400" />
-                            Export
-                          </div>
-                          <Switch checked={formData.canExport} onCheckedChange={(checked) => setFormData({ ...formData, canExport: checked })} />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4 p-4 bg-[#273142]/50 rounded-lg border border-[#3A4553]">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <Label className="text-gray-300 font-medium">Temporary Access</Label>
-                          <p className="text-sm text-gray-500">Set an expiration time for this viewer</p>
-                        </div>
-                        <Switch checked={formData.isTemporary} onCheckedChange={(checked) => setFormData({ ...formData, isTemporary: checked })} />
-                      </div>
-                      {formData.isTemporary && (
-                        <div className="grid gap-2 pt-2">
-                          <Label className="text-gray-300">Expires In</Label>
-                          <Select
-                            value={formData.expiresInHours.toString()}
-                            onValueChange={(v) => setFormData({ ...formData, expiresInHours: parseInt(v) })}
-                          >
-                            <SelectTrigger className="bg-[#273142] border-[#3A4553] text-white">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="bg-[#273142] border-[#3A4553]">
-                              <SelectItem value="1">1 hour</SelectItem>
-                              <SelectItem value="6">6 hours</SelectItem>
-                              <SelectItem value="12">12 hours</SelectItem>
-                              <SelectItem value="24">24 hours</SelectItem>
-                              <SelectItem value="48">48 hours</SelectItem>
-                              <SelectItem value="72">72 hours (3 days)</SelectItem>
-                              <SelectItem value="168">168 hours (1 week)</SelectItem>
-                              <SelectItem value="720">720 hours (30 days)</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 bg-[#273142]/50 rounded-lg border border-[#3A4553]">
-                      <div>
-                        <Label className="text-gray-300 font-medium">Send Invitation Email</Label>
-                        <p className="text-sm text-gray-500">Only applies to new viewers</p>
-                      </div>
-                      <Switch checked={formData.sendEmail} onCheckedChange={(checked) => setFormData({ ...formData, sendEmail: checked })} />
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 bg-[#273142]/50 rounded-lg border border-[#3A4553]">
-                      <div>
-                        <Label className="text-gray-300 font-medium">Force Password Change</Label>
-                        <p className="text-sm text-gray-500">User must change password on first login</p>
-                      </div>
-                      <Switch checked={formData.mustChangePassword} onCheckedChange={(checked) => setFormData({ ...formData, mustChangePassword: checked })} />
-                    </div>
-
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-gray-300">
-                      <p className="text-white font-medium">Summary</p>
-                      <p className="text-gray-400">{selectedPermissions.length} permission entr{selectedPermissions.length === 1 ? 'y' : 'ies'} will be applied.</p>
-                    </div>
+                  <div className="px-6 py-4 border-t border-white/10 flex items-center justify-between">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        if (createStep === 1) setIsCreateDialogOpen(false);
+                        else setCreateStep((s) => (s - 1) as 1 | 2 | 3);
+                      }}
+                      className="border-white/10 text-white hover:bg-white/5"
+                    >
+                      {createStep === 1 ? 'Cancel' : 'Back'}
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        if (createStep === 1) void handleIdentityNext();
+                        else if (createStep === 2) {
+                          if (selectedPermissions.length === 0) {
+                            toast.error('Please add at least one permission entry');
+                            return;
+                          }
+                          setCreateStep(3);
+                        } else {
+                          void handleSubmitWizard();
+                        }
+                      }}
+                      disabled={checkingIdentity}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      {createStep === 1
+                        ? checkingIdentity
+                          ? 'Checking…'
+                          : 'Next'
+                        : createStep === 2
+                          ? 'Next'
+                          : identityCheck?.action === 'use_existing_viewer'
+                            ? 'Save Access'
+                            : 'Create Viewer'}
+                    </Button>
                   </div>
-                )}
+                </div>
               </div>
-
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    if (createStep === 1) setIsCreateDialogOpen(false);
-                    else setCreateStep((s) => (s - 1) as 1 | 2 | 3);
-                  }}
-                  className="border-[#3A4553] text-gray-300"
-                >
-                  {createStep === 1 ? 'Cancel' : 'Back'}
-                </Button>
-                <Button
-                  onClick={() => {
-                    if (createStep === 1) void handleIdentityNext();
-                    else if (createStep === 2) {
-                      if (selectedPermissions.length === 0) {
-                        toast.error('Please add at least one permission entry');
-                        return;
-                      }
-                      setCreateStep(3);
-                    } else {
-                      void handleSubmitWizard();
-                    }
-                  }}
-                  disabled={checkingIdentity}
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  {createStep === 1 ? (checkingIdentity ? 'Checking…' : 'Next') : createStep === 2 ? 'Next' : (identityCheck?.action === 'use_existing_viewer' ? 'Save Access' : 'Create Viewer')}
-                </Button>
-              </DialogFooter>
             </DialogContent>
           </Dialog>
         )}
