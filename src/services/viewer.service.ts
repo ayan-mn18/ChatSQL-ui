@@ -48,6 +48,21 @@ export interface CurrentUserRole {
     connectionCount: number;
     canViewAnalytics: boolean;
     canUseAi: boolean;
+    canExport?: boolean;
+  };
+}
+
+export type ViewerIdentityAction = 'create_new' | 'use_existing_viewer' | 'blocked';
+
+export interface ViewerIdentityCheckResult {
+  action: ViewerIdentityAction;
+  reason?: string;
+  existingUser?: {
+    id: string;
+    email: string;
+    username: string | null;
+    role: string;
+    created_by_user_id: string | null;
   };
 }
 
@@ -98,6 +113,33 @@ export const viewerService = {
   // Get current user's role
   getCurrentUserRole: async (): Promise<CurrentUserRole> => {
     const response = await api.get<{ success: boolean; data: CurrentUserRole }>('/viewers/me/role');
+    return response.data.data;
+  },
+
+  // Admin: check whether identity should create new viewer or add access to existing
+  checkViewerIdentity: async (data: { email: string; username?: string }): Promise<ViewerIdentityCheckResult> => {
+    const response = await api.post<{ success: boolean; data: ViewerIdentityCheckResult }>('/viewers/identity-check', data);
+    return response.data.data;
+  },
+
+  // Admin: create viewer or add access to existing viewer by email
+  upsertViewer: async (data: {
+    email: string;
+    username?: string;
+    isTemporary: boolean;
+    expiresInHours?: number;
+    mustChangePassword?: boolean;
+    permissions: ViewerPermission[];
+    sendEmail?: boolean;
+  }): Promise<{
+    created: boolean;
+    viewer: Viewer;
+    credentials?: { email: string; tempPassword: string };
+  }> => {
+    const response = await api.post<{
+      success: boolean;
+      data: { created: boolean; viewer: Viewer; credentials?: { email: string; tempPassword: string } };
+    }>('/viewers/upsert', data);
     return response.data.data;
   },
 

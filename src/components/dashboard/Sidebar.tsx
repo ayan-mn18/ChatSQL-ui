@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Database, Users, BarChart3, LogOut, User as UserIcon, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
+import { viewerService } from '@/services/viewer.service';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,14 +31,38 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
+  const [canViewAnalytics, setCanViewAnalytics] = useState<boolean>(true);
+
   const isViewer = user?.role === 'viewer';
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadViewerRole = async () => {
+      if (!isViewer) {
+        setCanViewAnalytics(true);
+        return;
+      }
+      try {
+        const role = await viewerService.getCurrentUserRole();
+        if (!cancelled) setCanViewAnalytics(!!role.permissions?.canViewAnalytics);
+      } catch {
+        if (!cancelled) setCanViewAnalytics(false);
+      }
+    };
+    void loadViewerRole();
+    return () => {
+      cancelled = true;
+    };
+  }, [isViewer]);
+
   const filteredNavItems = isViewer
-    ? navItems.map((item) =>
-      item.href === '/dashboard/users'
-        ? { ...item, label: 'My Access', href: '/dashboard/access' }
-        : item
-    )
+    ? navItems
+      .filter((item) => (item.href === '/dashboard/analytics' ? canViewAnalytics : true))
+      .map((item) =>
+        item.href === '/dashboard/users'
+          ? { ...item, label: 'My Access', href: '/dashboard/access' }
+          : item
+      )
     : navItems;
 
   // The sidebar is "expanded" visually if it's NOT collapsed OR if it IS collapsed but currently hovered OR if the dropdown is open
