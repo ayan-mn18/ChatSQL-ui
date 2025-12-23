@@ -16,6 +16,7 @@ interface AuthContextType {
   verifyEmail: (data: VerifyEmailRequest) => Promise<void>;
   resendOTP: (email: string) => Promise<void>;
   logout: () => Promise<void>;
+  forceLogout: () => void;
   checkAuth: () => Promise<void>;
 
   // Helper to clear errors
@@ -31,6 +32,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   const clearError = useCallback(() => setError(null), []);
+
+  const forceLogout = useCallback(() => {
+    setUser(null);
+    setIsAuthenticated(false);
+    setError(null);
+    setIsLoading(false);
+  }, []);
 
   const checkAuth = useCallback(async () => {
     try {
@@ -49,6 +57,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
+
+  // Proactively re-check auth so expired cookies redirect quickly
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const onFocus = () => {
+      void checkAuth();
+    };
+
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        void checkAuth();
+      }
+    };
+
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    const intervalId = window.setInterval(() => {
+      if (!document.hidden) {
+        void checkAuth();
+      }
+    }, 60_000);
+
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.clearInterval(intervalId);
+    };
+  }, [isAuthenticated, checkAuth]);
 
   const login = useCallback(async (data: LoginRequest) => {
     setIsLoading(true);
@@ -152,6 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         verifyEmail,
         resendOTP,
         logout,
+        forceLogout,
         checkAuth,
         clearError
       }}

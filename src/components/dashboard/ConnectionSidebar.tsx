@@ -247,14 +247,14 @@ export function ConnectionSidebar({ className, onClose }: ConnectionSidebarProps
 
   if (!connection) {
     return (
-      <div className={cn("h-full w-64 bg-[#0f172a] border-r border-white/10 flex items-center justify-center", className)}>
+      <div className={cn("h-full w-full bg-[#0f172a] border-r border-white/10 flex items-center justify-center", className)}>
         <Loader2 className="w-5 h-5 text-gray-500 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className={cn("h-full w-64 bg-[#0f172a] border-r border-white/10 flex flex-col text-white", className)}>
+    <div className={cn("h-full w-full bg-[#0f172a] border-r border-white/10 flex flex-col text-white", className)}>
       {/* Header */}
       <div className="h-14 flex items-center px-4 border-b border-white/5 gap-3 bg-[#0f172a]">
         <button

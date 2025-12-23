@@ -109,6 +109,22 @@ export const connectionService = {
   },
 
   /**
+   * Get full schema metadata including all tables and columns for autocomplete
+   * @param id - Connection UUID
+   * @returns Full schema metadata for SQL editor autocomplete
+   */
+  getFullSchema: async (id: string): Promise<ApiResponse<{
+    tables: Array<{
+      schema: string;
+      name: string;
+      columns: Array<{ name: string; type: string }>;
+    }>;
+  }>> => {
+    const response = await api.get<ApiResponse<any>>(`/connections/${id}/schema-metadata`);
+    return response.data;
+  },
+
+  /**
    * Update which schemas are selected for use
    * @param id - Connection UUID
    * @param schemas - Array of schema selections

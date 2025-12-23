@@ -2,8 +2,13 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
 export function ProtectedRoute() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, isLoading } = useAuth();
   const location = useLocation();
+
+  // Wait for the initial /auth/me check so we don't flash-redirect.
+  if (isLoading) {
+    return null;
+  }
 
   if (!isAuthenticated) {
     // Redirect to the sign-in page, but save the current location they were

@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
 import { JobProgressProvider } from './contexts/JobProgressContext';
 import { GlobalJobProgress } from './components/JobProgressIndicator';
+import { AuthRedirector } from './components/AuthRedirector';
 import App from './App.tsx';
 import './index.css';
 
@@ -13,6 +14,7 @@ createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <AuthProvider>
         <JobProgressProvider>
+          <AuthRedirector />
           <App />
           <GlobalJobProgress />
           <Toaster />

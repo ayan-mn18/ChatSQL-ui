@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { AUTH_UNAUTHORIZED_EVENT } from '@/components/AuthRedirector';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
 
@@ -16,8 +17,9 @@ api.interceptors.response.use(
   (error) => {
     // Handle 401 Unauthorized (e.g., redirect to login)
     if (error.response?.status === 401) {
-      // Optional: Dispatch logout event or redirect
-      // window.location.href = '/auth/signin';
+      // Notify the app to clear auth state + redirect.
+      // This avoids importing router/navigation into this module.
+      window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
     }
     return Promise.reject(error);
   }
