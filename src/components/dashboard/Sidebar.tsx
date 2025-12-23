@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Database, Users, BarChart3, LogOut, User as UserIcon, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { viewerService } from '@/services/viewer.service';
+import { UserAvatar } from '@/components/UserAvatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -132,10 +132,7 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
         <DropdownMenu onOpenChange={setIsDropdownOpen}>
           <DropdownMenuTrigger asChild>
             <button className={cn("flex items-center gap-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer group w-full outline-none", isExpanded ? "px-4 py-3" : "p-0 w-10 h-10 justify-center mx-auto")}>
-              <Avatar className="w-8 h-8 border border-white/10 shrink-0">
-                <AvatarImage src={user?.profile_url || "https://github.com/shadcn.png"} />
-                <AvatarFallback>{user?.username?.substring(0, 2).toUpperCase() || 'US'}</AvatarFallback>
-              </Avatar>
+              <UserAvatar user={user} className="w-8 h-8" fallbackClassName="text-sm" />
               <div className={cn("flex-1 min-w-0 text-left transition-all duration-300 overflow-hidden", isExpanded ? "opacity-100 w-auto" : "opacity-0 w-0 hidden")}>
                 <p className="text-sm font-medium text-white truncate">{user?.username || 'User'}</p>
                 <p className="text-xs text-gray-500 truncate">{user?.email || 'user@chatsql.app'}</p>

@@ -25,7 +25,7 @@ import { TableSchema } from '@/types';
 import useConnections from '@/hooks/useConnections';
 import useSchemas from '@/hooks/useSchemas';
 import { useAuth } from '@/contexts/AuthContext';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/UserAvatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -418,10 +418,7 @@ export function ConnectionSidebar({ className, onClose }: ConnectionSidebarProps
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer group w-full outline-none px-3 py-2">
-              <Avatar className="w-8 h-8 border border-white/10 shrink-0">
-                <AvatarImage src={user?.profile_url || "https://github.com/shadcn.png"} />
-                <AvatarFallback>{user?.username?.substring(0, 2).toUpperCase() || 'US'}</AvatarFallback>
-              </Avatar>
+              <UserAvatar user={user} className="w-8 h-8" fallbackClassName="text-sm" />
               <div className="flex-1 min-w-0 text-left overflow-hidden">
                 <p className="text-sm font-medium text-white truncate">{user?.username || 'User'}</p>
                 <p className="text-xs text-gray-500 truncate">{user?.email || 'user@chatsql.app'}</p>
