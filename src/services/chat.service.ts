@@ -120,9 +120,9 @@ export const chatService = {
     const fetchStream = async () => {
       try {
         const token = getAuthToken();
-        const baseUrl = import.meta.env.VITE_API_URL || '';
+        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
         
-        const response = await fetch(`${baseUrl}/api/chat/${connectionId}/stream`, {
+        const response = await fetch(`${baseUrl}/chat/${connectionId}/stream`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

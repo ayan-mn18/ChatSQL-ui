@@ -23,6 +23,9 @@ import {
   Search,
   Clock,
   Sparkles,
+  Code,
+  Settings2,
+  Palette,
 } from 'lucide-react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import DataTable from '@/components/DataTable';
@@ -54,6 +57,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import toast from 'react-hot-toast';
 
 // Chart imports
@@ -345,7 +355,7 @@ function AIChatSidebar({
       <Button
         variant="ghost"
         size="sm"
-        className="fixed right-4 top-20 z-50 bg-[#0f172a] border border-blue-500/30 text-blue-200 hover:bg-white/5"
+        className="fixed right-4 top-20 z-50 bg-[#0f172a] border border-blue-500/30 text-white hover:bg-white/5 hover:text-white"
         onClick={onToggle}
       >
         <MessageSquare className="w-4 h-4 mr-2" />
@@ -383,8 +393,12 @@ function AIChatSidebar({
           {messages.length === 0 && !isStreaming && (
             <div className="text-center text-gray-500 py-8">
               <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">Ask me to write SQL queries!</p>
-              <p className="text-xs mt-1">e.g., "Show me all users who signed up last week"</p>
+              <p className="text-sm font-medium mb-2">Chat with AI Assistant</p>
+              <div className="text-xs space-y-1 text-gray-600">
+                <p>💬 Ask me anything about your database</p>
+                <p>🔍 Request SQL queries when you need them</p>
+                <p className="mt-3 italic">Try: "What tables do I have?" or "Show me all users"</p>
+              </div>
             </div>
           )}
 
@@ -399,18 +413,59 @@ function AIChatSidebar({
                   : 'bg-[#1e293b] text-gray-200'
                   }`}
               >
-                <div className="text-sm whitespace-pre-wrap break-words">
-                  {msg.content}
+                {/* Message Content */}
+                <div className="text-sm space-y-2">
+                  {msg.content && msg.content.split('\n\n').map((paragraph, idx) => {
+                    if (!paragraph.trim()) return null;
+
+                    // Check if paragraph is a code block
+                    if (paragraph.includes('```sql')) {
+                      const codeMatch = paragraph.match(/```sql\n([\s\S]*?)\n```/);
+                      if (codeMatch) {
+                        const sqlCode = codeMatch[1];
+                        const beforeCode = paragraph.split('```sql')[0].trim();
+                        const afterCode = paragraph.split('```')[2]?.trim();
+                        return (
+                          <div key={idx} className="space-y-2">
+                            {beforeCode && (
+                              <p className="whitespace-pre-wrap">{beforeCode}</p>
+                            )}
+                            <div className="bg-[#0f172a] rounded-md p-3 font-mono text-xs overflow-x-auto border border-white/10">
+                              <code className="text-green-400">{sqlCode}</code>
+                            </div>
+                            {afterCode && (
+                              <p className="whitespace-pre-wrap">{afterCode}</p>
+                            )}
+                          </div>
+                        );
+                      }
+                    }
+
+                    // Handle bold text (**text**)
+                    const parts = paragraph.split(/(\*\*.*?\*\*)/g);
+                    return (
+                      <p key={idx} className="whitespace-pre-wrap">
+                        {parts.map((part, i) => {
+                          if (part.startsWith('**') && part.endsWith('**')) {
+                            return <strong key={i} className="font-semibold text-white">{part.slice(2, -2)}</strong>;
+                          }
+                          return <span key={i}>{part}</span>;
+                        })}
+                      </p>
+                    );
+                  })}
                 </div>
+
+                {/* SQL Insert Button */}
                 {msg.role === 'assistant' && msg.sqlGenerated && (
-                  <div className="mt-2 pt-2 border-t border-white/10">
+                  <div className="mt-3 pt-3 border-t border-white/10">
                     <Button
                       size="sm"
                       variant="outline"
                       className="w-full text-xs border-blue-500/40 text-blue-200 hover:bg-blue-500/10"
                       onClick={() => onInsertSQL(msg.sqlGenerated!)}
                     >
-                      <Copy className="w-3 h-3 mr-1" />
+                      <Code className="w-3 h-3 mr-1" />
                       Insert SQL to Editor
                     </Button>
                   </div>
@@ -422,8 +477,46 @@ function AIChatSidebar({
           {isStreaming && streamingContent && (
             <div className="flex justify-start">
               <div className="max-w-[90%] rounded-lg p-3 bg-[#1e293b] text-gray-200">
-                <div className="text-sm whitespace-pre-wrap break-words">
-                  {streamingContent}
+                <div className="text-sm space-y-2">
+                  {streamingContent.split('\n\n').map((paragraph, idx) => {
+                    if (!paragraph.trim()) return null;
+
+                    // Check if paragraph is a code block
+                    if (paragraph.includes('```sql')) {
+                      const codeMatch = paragraph.match(/```sql\n([\s\S]*?)\n```/);
+                      if (codeMatch) {
+                        const sqlCode = codeMatch[1];
+                        const beforeCode = paragraph.split('```sql')[0].trim();
+                        const afterCode = paragraph.split('```')[2]?.trim();
+                        return (
+                          <div key={idx} className="space-y-2">
+                            {beforeCode && (
+                              <p className="whitespace-pre-wrap">{beforeCode}</p>
+                            )}
+                            <div className="bg-[#0f172a] rounded-md p-3 font-mono text-xs overflow-x-auto border border-white/10">
+                              <code className="text-green-400">{sqlCode}</code>
+                            </div>
+                            {afterCode && (
+                              <p className="whitespace-pre-wrap">{afterCode}</p>
+                            )}
+                          </div>
+                        );
+                      }
+                    }
+
+                    // Handle bold text (**text**)
+                    const parts = paragraph.split(/(\*\*.*?\*\*)/g);
+                    return (
+                      <p key={idx} className="whitespace-pre-wrap">
+                        {parts.map((part, i) => {
+                          if (part.startsWith('**') && part.endsWith('**')) {
+                            return <strong key={i} className="font-semibold text-white">{part.slice(2, -2)}</strong>;
+                          }
+                          return <span key={i}>{part}</span>;
+                        })}
+                      </p>
+                    );
+                  })}
                   <span className="animate-pulse">▌</span>
                 </div>
               </div>
@@ -452,14 +545,14 @@ function AIChatSidebar({
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask AI to generate SQL..."
+            placeholder="Ask me anything or request a SQL query..."
             className="flex-1 bg-[#1e293b] border-white/10 text-white placeholder:text-gray-500 min-h-[60px] max-h-[120px] resize-none"
             disabled={isStreaming}
           />
           <Button
             onClick={handleSendMessage}
             disabled={!inputValue.trim() || isStreaming}
-            className="bg-blue-600 hover:bg-blue-700 px-4"
+            className="bg-blue-600 text-white hover:bg-blue-700 px-4"
           >
             {isStreaming ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -793,7 +886,7 @@ function SaveQueryDialog({
           <Button
             onClick={handleSave}
             disabled={!name.trim() || saving}
-            className="bg-blue-600 hover:bg-blue-700"
+            className="bg-blue-600 text-white hover:bg-blue-700"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
             Save Query
@@ -854,14 +947,23 @@ export default function QueryConsole() {
   const [showSavedQueries, setShowSavedQueries] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [executionLogs, setExecutionLogs] = useState<string[]>([]);
+  const [showChartConfig, setShowChartConfig] = useState(false);
 
-  // Chart config
+  // Chart config with colors
   const [chartConfig, setChartConfig] = useState<ChartConfig>({
     type: 'bar',
     xAxis: '',
     yAxis: [],
     title: 'Query Results',
   });
+  const [chartColors, setChartColors] = useState<string[]>([
+    '#8b5cf6', // violet
+    '#06b6d4', // cyan
+    '#10b981', // green
+    '#f59e0b', // amber
+    '#ef4444', // red
+    '#ec4899', // pink
+  ]);
 
   // Get active tab
   const activeTab = getActiveTab();
@@ -1155,31 +1257,39 @@ export default function QueryConsole() {
   // CHART DATA
   // ============================================
 
+  // Helper function to convert hex to rgba
+  const hexToRgba = (hex: string, alpha: number) => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+
   const chartData = useMemo(() => {
     if (!activeTab?.results?.data?.length || !chartConfig.xAxis || !chartConfig.yAxis.length) {
       return null;
     }
 
     const labels = activeTab.results.data.map(row => String(row[chartConfig.xAxis] ?? 'N/A'));
-    const colors = [
-      { bg: 'rgba(139, 92, 246, 0.7)', border: '#8b5cf6' },
-      { bg: 'rgba(6, 182, 212, 0.7)', border: '#06b6d4' },
-      { bg: 'rgba(16, 185, 129, 0.7)', border: '#10b981' },
-    ];
 
-    const datasets = chartConfig.yAxis.map((field, idx) => ({
-      label: field,
-      data: activeTab.results!.data.map(row => Number(String(row[field]).replace(/[,$]/g, '')) || 0),
-      backgroundColor: chartConfig.type === 'pie' || chartConfig.type === 'doughnut'
-        ? colors.map(c => c.bg)
-        : colors[idx % colors.length].bg,
-      borderColor: colors[idx % colors.length].border,
-      borderWidth: 2,
-      tension: 0.4,
-    }));
+    const datasets = chartConfig.yAxis.map((field, idx) => {
+      const color = chartColors[idx % chartColors.length];
+      const rgbaColor = hexToRgba(color, 0.7);
+
+      return {
+        label: field,
+        data: activeTab.results!.data.map(row => Number(String(row[field]).replace(/[,$]/g, '')) || 0),
+        backgroundColor: chartConfig.type === 'pie' || chartConfig.type === 'doughnut'
+          ? chartColors.map(c => hexToRgba(c, 0.7))
+          : rgbaColor,
+        borderColor: color,
+        borderWidth: 2,
+        tension: 0.4,
+      };
+    });
 
     return { labels, datasets };
-  }, [activeTab?.results, chartConfig]);
+  }, [activeTab?.results, chartConfig, chartColors]);
 
   // ============================================
   // HANDLERS
@@ -1369,7 +1479,11 @@ export default function QueryConsole() {
                   variant={showChatSidebar ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setShowChatSidebar(!showChatSidebar)}
-                  className={showChatSidebar ? 'bg-blue-600' : 'border-blue-500/40 text-blue-300'}
+                  className={
+                    showChatSidebar
+                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'border-blue-500/40 text-white hover:bg-white/5 hover:text-white'
+                  }
                 >
                   <MessageSquare className="w-4 h-4 mr-2" />
                   AI Chat
@@ -1455,6 +1569,19 @@ export default function QueryConsole() {
                           Logs
                         </TabsTrigger>
                       </TabsList>
+
+                      {/* Chart Config Button */}
+                      {activeResultTab === 'chart' && activeTab?.results && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowChartConfig(true)}
+                          className="border-white/10 bg-white/5 hover:bg-white/10 text-gray-300"
+                        >
+                          <Settings2 className="w-4 h-4 mr-2" />
+                          Configure Chart
+                        </Button>
+                      )}
                     </div>
 
                     <div className="flex-1 relative overflow-hidden">
@@ -1562,6 +1689,221 @@ export default function QueryConsole() {
           onSaved={() => { }}
           isViewer={isViewer}
         />
+
+        {/* Chart Configuration Modal */}
+        <Dialog open={showChartConfig} onOpenChange={setShowChartConfig}>
+          <DialogContent className="bg-[#1B2431] border-white/10 text-white max-w-3xl max-h-[85vh] overflow-hidden">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Settings2 className="w-5 h-5 text-blue-400" />
+                Chart Configuration
+              </DialogTitle>
+              <DialogDescription className="text-gray-400">
+                Customize your chart appearance and data visualization
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="overflow-y-auto max-h-[calc(85vh-180px)] pr-2 space-y-6 py-4">
+              {/* Chart Type */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4" />
+                  Chart Type
+                </Label>
+                <div className="grid grid-cols-4 gap-3">
+                  {(['bar', 'line', 'pie', 'doughnut'] as const).map((type) => (
+                    <Button
+                      key={type}
+                      variant={chartConfig.type === type ? 'default' : 'outline'}
+                      size="sm"
+                      className={chartConfig.type === type
+                        ? 'bg-blue-600 hover:bg-blue-700'
+                        : 'border-white/10 hover:bg-white/5'}
+                      onClick={() => setChartConfig(prev => ({ ...prev, type }))}
+                    >
+                      {type.charAt(0).toUpperCase() + type.slice(1)}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Chart Title */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium text-gray-300">Chart Title</Label>
+                <Input
+                  value={chartConfig.title}
+                  onChange={(e) => setChartConfig(prev => ({ ...prev, title: e.target.value }))}
+                  placeholder="Enter chart title..."
+                  className="bg-[#0f172a] border-white/10 text-white"
+                />
+              </div>
+
+              {/* X-Axis (Category) */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium text-gray-300">X-Axis (Category)</Label>
+                <Select
+                  value={chartConfig.xAxis}
+                  onValueChange={(value) => setChartConfig(prev => ({ ...prev, xAxis: value }))}
+                >
+                  <SelectTrigger className="bg-[#0f172a] border-white/10 text-white">
+                    <SelectValue placeholder="Select column for X-axis" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#273142] border-white/10 text-white">
+                    {activeTab?.results?.columns.map((col) => (
+                      <SelectItem key={col} value={col}>{col}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Y-Axis (Values) */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium text-gray-300">Y-Axis (Values) - Select one or more</Label>
+                <div className="flex flex-wrap gap-2">
+                  {activeTab?.results?.columns.map((col) => (
+                    <Button
+                      key={col}
+                      variant={chartConfig.yAxis.includes(col) ? 'default' : 'outline'}
+                      size="sm"
+                      className={chartConfig.yAxis.includes(col)
+                        ? 'bg-blue-600 hover:bg-blue-700'
+                        : 'border-white/10 hover:bg-white/5'}
+                      onClick={() => {
+                        setChartConfig(prev => ({
+                          ...prev,
+                          yAxis: prev.yAxis.includes(col)
+                            ? prev.yAxis.filter(y => y !== col)
+                            : [...prev.yAxis, col],
+                        }));
+                      }}
+                    >
+                      {col}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Color Palette */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                  <Palette className="w-4 h-4" />
+                  Color Palette
+                </Label>
+                <div className="grid grid-cols-6 gap-3">
+                  {chartColors.map((color, idx) => (
+                    <div key={idx} className="flex flex-col gap-2">
+                      <div className="relative">
+                        <input
+                          type="color"
+                          value={color}
+                          onChange={(e) => {
+                            const newColors = [...chartColors];
+                            newColors[idx] = e.target.value;
+                            setChartColors(newColors);
+                          }}
+                          className="w-full h-12 rounded-lg cursor-pointer border-2 border-white/10"
+                        />
+                      </div>
+                      <span className="text-xs text-gray-400 text-center font-mono">
+                        {color.toUpperCase()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-white/10 hover:bg-white/5 text-xs"
+                    onClick={() => setChartColors(['#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899'])}
+                  >
+                    Reset to Default
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-white/10 hover:bg-white/5 text-xs"
+                    onClick={() => {
+                      const randomColor = () => '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+                      setChartColors(Array(6).fill(0).map(() => randomColor()));
+                    }}
+                  >
+                    Random Colors
+                  </Button>
+                </div>
+              </div>
+
+              {/* Preset Palettes */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium text-gray-300">Color Presets</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-white/10 hover:bg-white/5 justify-start"
+                    onClick={() => setChartColors(['#3b82f6', '#06b6d4', '#14b8a6', '#10b981', '#84cc16', '#eab308'])}
+                  >
+                    <div className="flex gap-1 mr-2">
+                      {['#3b82f6', '#06b6d4', '#14b8a6'].map(c => (
+                        <div key={c} className="w-4 h-4 rounded" style={{ backgroundColor: c }} />
+                      ))}
+                    </div>
+                    Cool Blues
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-white/10 hover:bg-white/5 justify-start"
+                    onClick={() => setChartColors(['#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e'])}
+                  >
+                    <div className="flex gap-1 mr-2">
+                      {['#ef4444', '#f97316', '#f59e0b'].map(c => (
+                        <div key={c} className="w-4 h-4 rounded" style={{ backgroundColor: c }} />
+                      ))}
+                    </div>
+                    Warm Sunset
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-white/10 hover:bg-white/5 justify-start"
+                    onClick={() => setChartColors(['#8b5cf6', '#a855f7', '#c084fc', '#d8b4fe', '#e9d5ff', '#f3e8ff'])}
+                  >
+                    <div className="flex gap-1 mr-2">
+                      {['#8b5cf6', '#a855f7', '#c084fc'].map(c => (
+                        <div key={c} className="w-4 h-4 rounded" style={{ backgroundColor: c }} />
+                      ))}
+                    </div>
+                    Purple Haze
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-white/10 hover:bg-white/5 justify-start"
+                    onClick={() => setChartColors(['#ec4899', '#f472b6', '#fb7185', '#f43f5e', '#e11d48', '#be123c'])}
+                  >
+                    <div className="flex gap-1 mr-2">
+                      {['#ec4899', '#f472b6', '#fb7185'].map(c => (
+                        <div key={c} className="w-4 h-4 rounded" style={{ backgroundColor: c }} />
+                      ))}
+                    </div>
+                    Pink Passion
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="border-t border-white/10 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => setShowChartConfig(false)}
+                className="border-white/10 hover:bg-white/5"
+              >
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </TooltipProvider>
   );
