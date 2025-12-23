@@ -25,7 +25,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
-import ResultsTable from '@/components/ResultsTable';
+import DataTable from '@/components/DataTable';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
@@ -837,6 +837,18 @@ export default function QueryConsole() {
   const [selectedSchemas, setSelectedSchemas] = useState<string[]>([]);
   const [, setLoadingSchemas] = useState(false);
   const [schemaMetadata, setSchemaMetadata] = useState<SchemaMetadata | null>(null);
+
+  // Keep latest values for Monaco completion provider (provider is registered once)
+  const schemaMetadataRef = useRef<SchemaMetadata | null>(null);
+  const selectedSchemasRef = useRef<string[]>([]);
+
+  useEffect(() => {
+    schemaMetadataRef.current = schemaMetadata;
+  }, [schemaMetadata]);
+
+  useEffect(() => {
+    selectedSchemasRef.current = selectedSchemas;
+  }, [selectedSchemas]);
   const [activeResultTab, setActiveResultTab] = useState('table');
   const [showChatSidebar, setShowChatSidebar] = useState(false);
   const [showSavedQueries, setShowSavedQueries] = useState(false);
@@ -911,31 +923,98 @@ export default function QueryConsole() {
 
     // Configure SQL language
     monaco.languages.registerCompletionItemProvider('sql', {
-      provideCompletionItems: () => {
+      provideCompletionItems: (model: any, position: any) => {
         const suggestions: any[] = [];
 
-        // Add table suggestions from schema
-        if (schemaMetadata?.tables) {
-          schemaMetadata.tables.forEach(table => {
-            if (selectedSchemas.includes(table.schema)) {
-              // Table name
-              suggestions.push({
-                label: `${table.schema}.${table.name}`,
-                kind: monaco.languages.CompletionItemKind.Class,
-                insertText: `${table.schema}.${table.name}`,
-                detail: 'Table',
-              });
+        const schemaMeta = schemaMetadataRef.current;
+        const word = model.getWordUntilPosition(position);
+        const replaceRange = new monaco.Range(
+          position.lineNumber,
+          word.startColumn,
+          position.lineNumber,
+          word.endColumn
+        );
 
-              // Column names
-              table.columns.forEach(col => {
+        const lineUntilCursor = model.getValueInRange({
+          startLineNumber: position.lineNumber,
+          startColumn: 1,
+          endLineNumber: position.lineNumber,
+          endColumn: position.column,
+        });
+
+        // Dotted-path completion
+        // - schema.           => tables
+        // - schema.table.     => columns
+        // - schema.ta         => tables (prefix)
+        // - schema.table.co   => columns (prefix)
+        const schemaTableColPrefix = lineUntilCursor.match(/([A-Za-z_][\w]*)\.([A-Za-z_][\w]*)\.([A-Za-z_][\w]*)$/);
+        const schemaTableDot = lineUntilCursor.match(/([A-Za-z_][\w]*)\.([A-Za-z_][\w]*)\.$/);
+        const schemaTablePrefix = lineUntilCursor.match(/([A-Za-z_][\w]*)\.([A-Za-z_][\w]*)$/);
+        const schemaDot = lineUntilCursor.match(/([A-Za-z_][\w]*)\.$/);
+
+        if (schemaMeta?.tables) {
+          // Columns: schema.table. or schema.table.colprefix
+          if (schemaTableColPrefix || schemaTableDot) {
+            const schemaName = (schemaTableColPrefix?.[1] || schemaTableDot?.[1]) as string;
+            const tableName = (schemaTableColPrefix?.[2] || schemaTableDot?.[2]) as string;
+
+            const table = schemaMeta.tables.find(t => t.schema === schemaName && t.name === tableName);
+            if (table) {
+              table.columns.forEach((col) => {
                 suggestions.push({
-                  label: `${table.name}.${col.name}`,
+                  label: col.name,
                   kind: monaco.languages.CompletionItemKind.Field,
                   insertText: col.name,
-                  detail: `${col.type} - ${table.name}`,
+                  detail: `${col.type} - ${schemaName}.${tableName}`,
+                  range: replaceRange,
                 });
               });
+              return { suggestions };
             }
+          }
+
+          // Tables: schema. or schema.tabprefix
+          if (schemaDot || schemaTablePrefix) {
+            const schemaName = (schemaDot?.[1] || schemaTablePrefix?.[1]) as string;
+            schemaMeta.tables
+              .filter(t => t.schema === schemaName)
+              .forEach((t) => {
+                suggestions.push({
+                  label: t.name,
+                  kind: monaco.languages.CompletionItemKind.Class,
+                  insertText: t.name,
+                  detail: `Table in ${schemaName}`,
+                  range: replaceRange,
+                });
+              });
+
+            if (suggestions.length > 0) {
+              return { suggestions };
+            }
+          }
+
+          // General suggestions (tables/columns) scoped to selected schemas when available
+          const allowedSchemas = selectedSchemasRef.current || [];
+          schemaMeta.tables.forEach((table) => {
+            if (allowedSchemas.length > 0 && !allowedSchemas.includes(table.schema)) return;
+
+            suggestions.push({
+              label: `${table.schema}.${table.name}`,
+              kind: monaco.languages.CompletionItemKind.Class,
+              insertText: `${table.schema}.${table.name}`,
+              detail: 'Table',
+              range: replaceRange,
+            });
+
+            table.columns.forEach((col) => {
+              suggestions.push({
+                label: `${table.schema}.${table.name}.${col.name}`,
+                kind: monaco.languages.CompletionItemKind.Field,
+                insertText: col.name,
+                detail: `${col.type} - ${table.schema}.${table.name}`,
+                range: replaceRange,
+              });
+            });
           });
         }
 
@@ -954,6 +1033,7 @@ export default function QueryConsole() {
             label: kw,
             kind: monaco.languages.CompletionItemKind.Keyword,
             insertText: kw,
+            range: replaceRange,
           });
         });
 
@@ -1380,7 +1460,7 @@ export default function QueryConsole() {
                     <div className="flex-1 overflow-hidden">
                       <TabsContent value="table" className="h-full m-0">
                         {activeTab?.results ? (
-                          <ResultsTable
+                          <DataTable
                             data={activeTab.results.data}
                             columns={activeTab.results.columns}
                           />

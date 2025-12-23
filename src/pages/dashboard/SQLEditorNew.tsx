@@ -18,7 +18,7 @@ import {
   Settings2,
 } from 'lucide-react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
-import ResultsTable from '@/components/ResultsTable';
+import DataTable from '@/components/DataTable';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
@@ -911,7 +911,7 @@ export default function SQLEditor() {
                 <div className="flex-1 overflow-hidden relative">
                   <TabsContent value="table" className="h-full w-full m-0 absolute inset-0">
                     {results ? (
-                      <ResultsTable data={results.rows} columns={results.columns} />
+                      <DataTable data={results.rows} columns={results.columns} />
                     ) : (
                       <div className="flex items-center justify-center h-full text-gray-500">
                         <div className="text-center">

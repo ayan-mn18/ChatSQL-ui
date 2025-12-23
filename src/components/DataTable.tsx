@@ -1,21 +1,50 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect, type MouseEvent } from 'react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  RefreshCw,
+  Plus,
+  Trash2,
+  Filter,
+  Columns,
+  X,
+  Code,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Loader2,
+  AlertCircle,
+  Key,
+  Link2,
+  Copy,
+  Save,
+  ExternalLink,
+  AlertTriangle,
+  Database
+} from 'lucide-react';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -23,437 +52,1020 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
+import Editor from '@monaco-editor/react';
+import toast from 'react-hot-toast';
+import { cn } from '@/lib/utils';
 
-import { Label } from "@/components/ui/label";
-import { ArrowUpDown, ChevronLeft, ChevronRight, MoreHorizontal, Save, X, Edit2, Copy, Maximize2 } from 'lucide-react';
-import { toast } from 'sonner';
-
-export interface ColumnDef<T = any> {
-  key: string;
-  header: string;
-  cell?: (row: T) => React.ReactNode;
-  className?: string;
-  sortable?: boolean;
-  filterable?: boolean;
-  editable?: boolean;
+// Types
+export interface ERDRelation {
+  source_schema: string;
+  source_table: string;
+  source_column: string;
+  target_schema: string;
+  target_table: string;
+  target_column: string;
 }
 
-interface DataTableProps<T> {
+export interface FilterCondition {
+  column: string;
+  operator: string;
+  value: any;
+}
+
+interface DataTableProps<T = any> {
   data: T[];
-  columns?: ColumnDef<T>[];
+  columns: string[];
+  totalRows?: number;
+  isLoading?: boolean;
+  error?: string;
+
+  // Pagination
+  page?: number;
+  pageSize?: number;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
+
+  // Sorting
+  sortBy?: string;
+  sortOrder?: 'ASC' | 'DESC';
+  onSort?: (column: string) => void;
+
+  // Filtering
+  filters?: FilterCondition[];
+  onFilter?: (filters: FilterCondition[]) => void;
+
+  // Selection
+  selectedRows?: Set<number>;
+  onSelectionChange?: (selectedRows: Set<number>) => void;
+
+  // Editing
+  onEdit?: (rowIndex: number, column: string, value: any) => Promise<void>;
+  onDelete?: (selectedIndices: number[]) => Promise<void>;
+  onInsert?: (values: Record<string, any>) => Promise<void>;
+
+  // Metadata
+  primaryKey?: string;
+  foreignKeys?: Map<string, ERDRelation>;
+  schemaName?: string;
+  tableName?: string;
+
+  // Actions
+  onRefresh?: () => void;
+  onFkClick?: (relation: ERDRelation, value: any) => void;
+
+  // Styling
   className?: string;
-  onSave?: (updatedData: T[]) => Promise<void> | void;
 }
 
-export default function DataTable<T extends Record<string, any>>({
+const calculateColumnWidth = (columnName: string): number => {
+  const baseWidth = columnName.length * 10;
+  const minWidth = Math.max(120, baseWidth + 60);
+  return Math.min(minWidth, 300);
+};
+
+export default function DataTable({
   data: initialData,
-  columns: userColumns,
-  className,
-  onSave
-}: DataTableProps<T>) {
-  const [data, setData] = useState<T[]>(initialData);
-  const [sortConfig, setSortConfig] = useState<{ key: string | null; direction: 'asc' | 'desc' }>({ key: null, direction: 'asc' });
-  const [filters, setFilters] = useState<{ [key: string]: string }>({});
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(20);
+  columns,
+  totalRows,
+  isLoading,
+  error,
+  page: controlledPage,
+  pageSize: controlledPageSize,
+  onPageChange,
+  onPageSizeChange,
+  sortBy: controlledSortBy,
+  sortOrder: controlledSortOrder,
+  onSort,
+  filters: controlledFilters,
+  onFilter,
+  selectedRows: controlledSelectedRows,
+  onSelectionChange,
+  onEdit,
+  onDelete,
+  onInsert,
+  primaryKey,
+  foreignKeys,
+  schemaName,
+  tableName,
+  onRefresh,
+  onFkClick,
+  className
+}: DataTableProps) {
+  // ============================================
+  // INTERNAL STATE (Client-side fallback)
+  // ============================================
 
-  // Edit mode state
-  const [editingCell, setEditingCell] = useState<{ rowIndex: number; key: string } | null>(null);
-  const [editedRows, setEditedRows] = useState<Record<string, Partial<T>>>({});
-  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  // Pagination
+  const [internalPage, setInternalPage] = useState(1);
+  const [internalPageSize, setInternalPageSize] = useState(50);
+  const isControlledPagination = controlledPage !== undefined;
+  const currentPage = isControlledPagination ? controlledPage : internalPage;
+  const currentPageSize = isControlledPagination ? controlledPageSize || 50 : internalPageSize;
 
-  // Row Edit Dialog State
-  const [rowEditingIndex, setRowEditingIndex] = useState<number | null>(null);
-  const [rowEditData, setRowEditData] = useState<T | null>(null);
+  // Sorting
+  const [internalSortBy, setInternalSortBy] = useState<string | null>(null);
+  const [internalSortOrder, setInternalSortOrder] = useState<'ASC' | 'DESC'>('ASC');
+  const isControlledSort = controlledSortBy !== undefined;
+  const currentSortBy = isControlledSort ? controlledSortBy : internalSortBy;
+  const currentSortOrder = isControlledSort ? controlledSortOrder : internalSortOrder;
 
-  // Cell Edit Dialog State
-  const [cellEditingDialog, setCellEditingDialog] = useState<{ rowIndex: number; key: string; value: string } | null>(null);
+  // Filtering
+  const [internalFilters, setInternalFilters] = useState<FilterCondition[]>([]);
+  const isControlledFilter = controlledFilters !== undefined;
+  const currentFilters = isControlledFilter ? controlledFilters : internalFilters;
 
-  const handleRowEditSave = async () => {
-    if (rowEditingIndex === null || !rowEditData || !onSave) return;
+  // Selection
+  const [internalSelectedRows, setInternalSelectedRows] = useState<Set<number>>(new Set());
+  const isControlledSelection = controlledSelectedRows !== undefined;
+  const selectedRows = isControlledSelection ? controlledSelectedRows : internalSelectedRows;
 
-    const newData = [...data];
-    newData[rowEditingIndex] = rowEditData;
+  // Local UI State
+  const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
+  const [filterColumn, setFilterColumn] = useState<string>('');
+  const [filterValue, setFilterValue] = useState<string>('');
+  const [showInsertDialog, setShowInsertDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [insertValues, setInsertValues] = useState<Record<string, string>>({});
+  const [highlightedRows, setHighlightedRows] = useState<Set<number>>(new Set());
 
-    await onSave(newData);
-    setRowEditingIndex(null);
-    setRowEditData(null);
-  };
+  // Edit Modal State
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editModalData, setEditModalData] = useState<{
+    rowIndex: number;
+    column: string;
+    value: string;
+    originalValue: any;
+  } | null>(null);
+  const [mutating, setMutating] = useState(false);
 
-  const handleCellDialogSave = async () => {
-    if (!cellEditingDialog || !onSave) return;
+  // Warning Dialogs
+  const [showPkWarning, setShowPkWarning] = useState(false);
+  const [showFkWarning, setShowFkWarning] = useState(false);
+  const [pendingEdit, setPendingEdit] = useState<{
+    rowIndex: number;
+    column: string;
+    value: any;
+  } | null>(null);
 
-    // Try to parse JSON if it looks like JSON
-    let valueToSave: any = cellEditingDialog.value;
-    try {
-      // Only attempt to parse if it starts with { or [
-      if (valueToSave.trim().startsWith('{') || valueToSave.trim().startsWith('[')) {
-        valueToSave = JSON.parse(valueToSave);
-      }
-    } catch (e) {
-      // If parse fails, save as string
-    }
+  // FK Dialogs
+  const [fkMenuData, setFkMenuData] = useState<{
+    relation: ERDRelation;
+    value: any;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [showFkActionDialog, setShowFkActionDialog] = useState(false);
+  const [fkActionData, setFkActionData] = useState<{
+    relation: ERDRelation;
+    value: any;
+    column: string;
+  } | null>(null);
 
-    const newData = [...data];
-    newData[cellEditingDialog.rowIndex] = {
-      ...newData[cellEditingDialog.rowIndex],
-      [cellEditingDialog.key]: valueToSave
-    };
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const CLICK_DELAY = 200;
 
-    await onSave(newData);
-    setCellEditingDialog(null);
-  };
-
-  useEffect(() => {
-    setData(initialData);
-  }, [initialData]);
-
-  // Auto-generate columns if not provided
-  const columns = useMemo<ColumnDef<T>[]>(() => {
-    if (userColumns) return userColumns;
-    if (!data || data.length === 0) return [];
-
-    return Object.keys(data[0]).map(key => ({
-      key,
-      header: key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' '),
-      sortable: true,
-      filterable: true,
-      editable: key !== 'id' && key !== 'created_at' && key !== 'updated_at'
-    }));
-  }, [data, userColumns]);
-
-  const handleSort = (key: string) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
-  };
-
-  const handleFilter = (key: string, value: string) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-    setCurrentPage(1);
-  };
-
-
-
-  const handleSave = async () => {
-    if (onSave) {
-      await onSave(data);
-    }
-    setEditedRows({});
-    setEditingCell(null);
-    setIsSaveDialogOpen(false);
-    toast.success('Changes saved successfully');
-  };
-
-  const handleCancelEdit = () => {
-    setData(initialData);
-    setEditedRows({});
-    setEditingCell(null);
-  };
+  // ============================================
+  // DATA PROCESSING (Client-side)
+  // ============================================
 
   const processedData = useMemo(() => {
-    let result = [...data];
+    if (isControlledPagination && isControlledSort && isControlledFilter) {
+      return initialData;
+    }
 
-    // Filtering
-    Object.keys(filters).forEach(key => {
-      if (filters[key]) {
-        result = result.filter(item => {
-          const val = item[key];
-          return String(val).toLowerCase().includes(filters[key].toLowerCase());
+    let result = [...initialData];
+
+    // Client-side Filtering
+    if (!isControlledFilter && currentFilters && currentFilters.length > 0) {
+      result = result.filter(row => {
+        return currentFilters.every(filter => {
+          const cellValue = String(row[filter.column] ?? '').toLowerCase();
+          return cellValue.includes(String(filter.value).toLowerCase());
         });
-      }
-    });
+      });
+    }
 
-    // Sorting
-    if (sortConfig.key) {
+    // Client-side Sorting
+    if (!isControlledSort && currentSortBy) {
       result.sort((a, b) => {
-        const aValue = a[sortConfig.key!];
-        const bValue = b[sortConfig.key!];
-
-        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-        return 0;
+        const aValue = a[currentSortBy!];
+        const bValue = b[currentSortBy!];
+        if (aValue === bValue) return 0;
+        if (aValue === null || aValue === undefined) return 1;
+        if (bValue === null || bValue === undefined) return -1;
+        const comparison = aValue < bValue ? -1 : 1;
+        return currentSortOrder === 'ASC' ? comparison : -comparison;
       });
     }
 
     return result;
-  }, [data, filters, sortConfig]);
+  }, [initialData, currentFilters, currentSortBy, currentSortOrder, isControlledPagination, isControlledSort, isControlledFilter]);
 
-  const totalPages = Math.ceil(processedData.length / itemsPerPage);
-  const paginatedData = processedData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const hasChanges = Object.keys(editedRows).length > 0;
+  const paginatedData = useMemo(() => {
+    if (isControlledPagination) return processedData;
+    const start = (currentPage - 1) * currentPageSize;
+    return processedData.slice(start, start + currentPageSize);
+  }, [processedData, currentPage, currentPageSize, isControlledPagination]);
 
-  if (!data) return null;
+  const effectiveTotalRows = totalRows ?? processedData.length;
+  const totalPages = Math.ceil(effectiveTotalRows / currentPageSize);
 
-  return (
-    <div className={`flex flex-col h-full w-full overflow-hidden ${className}`}>
-      {/* Toolbar */}
-      <div className="flex items-center justify-between p-2 bg-[#273142] border-b border-white/5 shrink-0">
-        <div className="flex items-center gap-2">
-          {hasChanges && (
-            <>
-              <Dialog open={isSaveDialogOpen} onOpenChange={setIsSaveDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button
-                    size="sm"
-                    className="bg-green-600 hover:bg-green-700 text-white"
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    Save Changes
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="bg-[#1e293b] border-white/10 text-gray-200">
-                  <DialogHeader>
-                    <DialogTitle>Save Changes?</DialogTitle>
-                    <DialogDescription className="text-gray-400">
-                      You have modified {Object.keys(editedRows).length} rows. This action cannot be undone.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter>
-                    <Button variant="ghost" onClick={() => setIsSaveDialogOpen(false)}>Cancel</Button>
-                    <Button className="bg-green-600 hover:bg-green-700" onClick={handleSave}>Confirm Save</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCancelEdit}
-                className="text-gray-400 hover:text-white"
-              >
-                <X className="w-4 h-4 mr-2" />
-                Cancel
-              </Button>
-            </>
+  // ============================================
+  // HANDLERS
+  // ============================================
+
+  const handlePageChange = (newPage: number) => {
+    if (onPageChange) onPageChange(newPage);
+    else setInternalPage(newPage);
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    if (onPageSizeChange) onPageSizeChange(newSize);
+    else {
+      setInternalPageSize(newSize);
+      setInternalPage(1);
+    }
+  };
+
+  const handleSort = (column: string) => {
+    if (onSort) {
+      onSort(column);
+    } else {
+      if (internalSortBy === column) {
+        setInternalSortOrder(prev => prev === 'ASC' ? 'DESC' : 'ASC');
+      } else {
+        setInternalSortBy(column);
+        setInternalSortOrder('ASC');
+      }
+    }
+  };
+
+  const handleApplyFilter = () => {
+    if (!filterColumn || !filterValue) return;
+    const newFilter: FilterCondition = {
+      column: filterColumn,
+      operator: 'ilike',
+      value: filterValue,
+    };
+
+    if (onFilter) {
+      onFilter([...(currentFilters || []), newFilter]);
+    } else {
+      setInternalFilters(prev => [...prev, newFilter]);
+    }
+    setFilterColumn('');
+    setFilterValue('');
+  };
+
+  const clearFilters = () => {
+    if (onFilter) onFilter([]);
+    else setInternalFilters([]);
+  };
+
+  const toggleRowSelection = (index: number) => {
+    const newSelected = new Set(selectedRows);
+    if (newSelected.has(index)) newSelected.delete(index);
+    else newSelected.add(index);
+
+    if (onSelectionChange) onSelectionChange(newSelected);
+    else setInternalSelectedRows(newSelected);
+  };
+
+  const toggleAllRows = () => {
+    if (selectedRows.size === paginatedData.length) {
+      if (onSelectionChange) onSelectionChange(new Set());
+      else setInternalSelectedRows(new Set());
+    } else {
+      const newSelected = new Set(paginatedData.map((_, i) => i));
+      if (onSelectionChange) onSelectionChange(newSelected);
+      else setInternalSelectedRows(newSelected);
+    }
+  };
+
+  const toggleColumnVisibility = (column: string) => {
+    setHiddenColumns(prev => {
+      const next = new Set(prev);
+      if (next.has(column)) next.delete(column);
+      else next.add(column);
+      return next;
+    });
+  };
+
+  // ============================================
+  // CELL INTERACTION
+  // ============================================
+
+  const getColumnType = useCallback((column: string): 'primary' | 'foreign' | 'normal' => {
+    if (column === primaryKey) return 'primary';
+    if (foreignKeys?.has(column)) return 'foreign';
+    return 'normal';
+  }, [primaryKey, foreignKeys]);
+
+  const copyToClipboard = useCallback((value: any) => {
+    if (value === null || value === undefined) {
+      toast('NULL value', { icon: '📋' });
+      return;
+    }
+    const textValue = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
+    navigator.clipboard.writeText(textValue).then(() => {
+      toast.success('Copied to clipboard');
+    }).catch(() => toast.error('Failed to copy'));
+  }, []);
+
+  const handleCellClick = useCallback((_rowIndex: number, column: string, value: any) => {
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+
+    clickTimerRef.current = setTimeout(() => {
+      const columnType = getColumnType(column);
+      if (columnType === 'foreign' && value !== null && value !== undefined && foreignKeys) {
+        const relation = foreignKeys.get(column);
+        if (relation) {
+          setFkActionData({ relation, value, column });
+          setShowFkActionDialog(true);
+          return;
+        }
+      }
+      copyToClipboard(value);
+    }, CLICK_DELAY);
+  }, [getColumnType, foreignKeys, copyToClipboard]);
+
+  const handleCellDoubleClick = useCallback((rowIndex: number, column: string, value: any) => {
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+
+    const columnType = getColumnType(column);
+    const strValue = value === null ? '' : (typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value));
+
+    if (onEdit) {
+      if (columnType === 'primary') {
+        setPendingEdit({ rowIndex, column, value });
+        setShowPkWarning(true);
+        return;
+      }
+      if (columnType === 'foreign') {
+        setPendingEdit({ rowIndex, column, value });
+        setShowFkWarning(true);
+        return;
+      }
+    }
+
+    setEditModalData({
+      rowIndex,
+      column,
+      value: strValue,
+      originalValue: value,
+    });
+    setShowEditModal(true);
+  }, [getColumnType, onEdit]);
+
+  const handleSaveEdit = async () => {
+    if (!editModalData || !onEdit) return;
+    setMutating(true);
+    try {
+      let parsedValue: any = editModalData.value === '' ? null : editModalData.value;
+      // Simple JSON check
+      if (editModalData.value.trim().startsWith('{') || editModalData.value.trim().startsWith('[')) {
+        try {
+          parsedValue = JSON.parse(editModalData.value);
+        } catch { }
+      }
+      await onEdit(editModalData.rowIndex, editModalData.column, parsedValue);
+      setShowEditModal(false);
+      setEditModalData(null);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setMutating(false);
+    }
+  };
+
+  const handleInsertRow = async () => {
+    if (!onInsert) return;
+    setMutating(true);
+    try {
+      const values: Record<string, any> = {};
+      for (const [key, val] of Object.entries(insertValues)) {
+        if (val === '' || val === undefined) continue;
+        const num = Number(val);
+        if (!isNaN(num) && val.trim() !== '') values[key] = num;
+        else {
+          try { values[key] = JSON.parse(val); } catch { values[key] = val; }
+        }
+      }
+      await onInsert(values);
+      setShowInsertDialog(false);
+      setInsertValues({});
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setMutating(false);
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (!onDelete || selectedRows.size === 0) return;
+    setMutating(true);
+    try {
+      await onDelete(Array.from(selectedRows));
+      if (onSelectionChange) onSelectionChange(new Set());
+      else setInternalSelectedRows(new Set());
+      setShowDeleteDialog(false);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setMutating(false);
+    }
+  };
+
+  // ============================================
+  // RENDER HELPERS
+  // ============================================
+
+  const displayColumns = useMemo(() => columns.filter(col => !hiddenColumns.has(col)), [columns, hiddenColumns]);
+
+  const renderCellValue = (value: any): string => {
+    if (value === null || value === undefined) return 'NULL';
+    if (typeof value === 'object') {
+      const json = JSON.stringify(value);
+      return json.length > 30 ? json.substring(0, 27) + '...' : json;
+    }
+    const strValue = String(value);
+    if (strValue.length > 40) return strValue.substring(0, 37) + '...';
+    return strValue;
+  };
+
+  const getSortIcon = (column: string) => {
+    if (currentSortBy !== column) return <ArrowUpDown className="w-3 h-3 opacity-50 shrink-0" />;
+    return currentSortOrder === 'ASC'
+      ? <ArrowUp className="w-3 h-3 text-blue-400 shrink-0" />
+      : <ArrowDown className="w-3 h-3 text-blue-400 shrink-0" />;
+  };
+
+  const getColumnHeaderStyles = (column: string) => {
+    const type = getColumnType(column);
+    switch (type) {
+      case 'primary': return 'bg-yellow-500/10 border-l-2 border-l-yellow-500';
+      case 'foreign': return 'bg-purple-500/10 border-l-2 border-l-purple-500';
+      default: return '';
+    }
+  };
+
+  const getColumnCellStyles = (column: string) => {
+    const type = getColumnType(column);
+    switch (type) {
+      case 'primary': return 'bg-yellow-500/5';
+      case 'foreign': return 'bg-purple-500/5 cursor-pointer';
+      default: return '';
+    }
+  };
+
+  const isJsonEdit = useMemo(() => {
+    if (!editModalData) return false;
+    const value = editModalData.value || '';
+    return value.trim().startsWith('{') || value.trim().startsWith('[');
+  }, [editModalData]);
+
+  const isLargeEdit = useMemo(() => {
+    if (!editModalData) return false;
+    const value = editModalData.value || '';
+    return isJsonEdit || value.length > 150 || value.split('\n').length > 3;
+  }, [editModalData, isJsonEdit]);
+
+  // ============================================
+  // RENDER
+  // ============================================
+
+  if (error) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-gray-400 h-full">
+        <div className="text-center">
+          <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-400" />
+          <p className="text-red-400 mb-2">Error loading data</p>
+          <p className="text-sm">{error}</p>
+          {onRefresh && (
+            <Button onClick={onRefresh} className="mt-4" variant="outline" size="sm">
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Retry
+            </Button>
           )}
         </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn("flex flex-col h-full bg-[#1B2431] overflow-hidden", className)}>
+      {/* Toolbar */}
+      <div className="flex items-center justify-between shrink-0 px-4 py-2 border-b border-white/5 bg-[#273142]">
         <div className="flex items-center gap-2">
-          {/* Right side toolbar items if any */}
-        </div>
-      </div>      <div className="flex-1 overflow-auto w-full [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-[#1B2431] [&::-webkit-scrollbar-thumb]:bg-[#273142] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#374151] transition-colors">
-        <table className="w-full caption-bottom text-sm text-left border-collapse min-w-[800px]">
-          <thead className="bg-[#273142] sticky top-0 z-10 shadow-sm">
-            <tr className="border-b border-white/5 hover:bg-[#273142]">
-              {columns.map((col) => (
-                <th key={col.key} className={`h-10 px-4 font-medium text-gray-400 ${col.className || ''}`}>
-                  <div className={`flex items-center gap-2 justify-between`}>
-                    <span>{col.header}</span>
-                    {(col.sortable !== false || col.filterable !== false) && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-white/10 data-[state=open]:bg-white/10">
-                            {sortConfig.key === col.key ? (
-                              <ArrowUpDown className={`h-3 w-3 ${sortConfig.direction === 'asc' ? 'text-blue-400' : 'text-green-400'}`} />
-                            ) : (
-                              <MoreHorizontal className="h-3 w-3" />
-                            )}
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48 bg-[#1e293b] border-white/10 text-gray-200">
-                          <DropdownMenuLabel>Options</DropdownMenuLabel>
-                          <DropdownMenuSeparator className="bg-white/10" />
-                          {col.sortable !== false && (
-                            <DropdownMenuItem onClick={() => handleSort(col.key)} className="focus:bg-white/10 focus:text-white cursor-pointer">
-                              <ArrowUpDown className="mr-2 h-3.5 w-3.5 text-gray-400" />
-                              Sort {sortConfig.key === col.key && sortConfig.direction === 'asc' ? 'Desc' : 'Asc'}
-                            </DropdownMenuItem>
-                          )}
-                          {col.filterable !== false && (
-                            <>
-                              <DropdownMenuSeparator className="bg-white/10" />
-                              <div className="p-2">
-                                <Input
-                                  placeholder="Filter..."
-                                  className="h-8 bg-[#0f172a] border-white/10 text-xs"
-                                  value={filters[col.key] || ''}
-                                  onChange={(e) => handleFilter(col.key, e.target.value)}
-                                />
-                              </div>
-                            </>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
-                  </div>
-                </th>
+          <span className="text-sm text-gray-400">
+            {effectiveTotalRows} rows
+          </span>
+          {currentFilters && currentFilters.length > 0 && (
+            <div className="flex items-center gap-2 ml-4">
+              <span className="text-xs text-gray-500">Filters:</span>
+              {currentFilters.map((filter, idx) => (
+                <Badge
+                  key={idx}
+                  variant="outline"
+                  className="border-blue-500/30 text-blue-400 cursor-pointer hover:bg-blue-500/10"
+                  onClick={clearFilters}
+                >
+                  {filter.column} contains "{filter.value}"
+                  <X className="w-3 h-3 ml-1" />
+                </Badge>
               ))}
-              {onSave && <th className="h-10 px-4 font-medium text-gray-400 w-10"></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {paginatedData.map((row, rowIndex) => {
-              const actualIndex = (currentPage - 1) * itemsPerPage + rowIndex;
-              return (
-                <tr key={rowIndex} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                  {columns.map((col) => {
-                    return (
-                      <td
-                        key={`${rowIndex}-${col.key}`}
-                        className={`px-4 py-2 border-r border-white/5 last:border-r-0 ${col.className || ''}`}
-                        onDoubleClick={() => {
-                          if (col.editable !== false && onSave) {
-                            const val = row[col.key];
-                            const stringVal = typeof val === 'object' ? JSON.stringify(val, null, 2) : String(val || '');
-                            setCellEditingDialog({ rowIndex: actualIndex, key: col.key, value: stringVal });
-                          }
-                        }}
-                      >
-                        {col.cell ? col.cell(row) : row[col.key]}
-                      </td>
-                    );
-                  })}
-                  {onSave && (
-                    <td className="px-4 py-2 border-r border-white/5 last:border-r-0 w-10">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-gray-400 hover:text-white"
-                        onClick={() => {
-                          setRowEditingIndex(actualIndex);
-                          setRowEditData({ ...row });
-                        }}
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </Button>
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Columns */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="border-white/10 bg-transparent text-gray-400 hover:bg-white/5">
+                <Columns className="w-4 h-4 mr-2" />
+                Columns
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56 bg-[#273142] border-white/10 p-2" align="end">
+              <div className="text-xs font-medium text-gray-400 mb-2 px-2">Toggle Columns</div>
+              <div className="max-h-64 overflow-y-auto space-y-1 scrollbar-thin">
+                {columns.map((col) => (
+                  <div
+                    key={col}
+                    className="flex items-center space-x-2 px-2 py-1.5 hover:bg-white/5 rounded cursor-pointer"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      toggleColumnVisibility(col);
+                    }}
+                  >
+                    <Checkbox
+                      id={`col-${col}`}
+                      checked={!hiddenColumns.has(col)}
+                      onCheckedChange={() => toggleColumnVisibility(col)}
+                      className="border-white/20 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                    />
+                    <label htmlFor={`col-${col}`} className="text-sm text-gray-300 cursor-pointer flex-1 truncate select-none">
+                      {col}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Filter */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="border-white/10 bg-transparent text-gray-400 hover:bg-white/5">
+                <Filter className="w-4 h-4 mr-2" />
+                Filter
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-72 bg-[#273142] border-white/10 p-4" align="end">
+              <div className="space-y-3">
+                <Select value={filterColumn} onValueChange={setFilterColumn}>
+                  <SelectTrigger className="bg-[#1B2431] border-white/10 text-white">
+                    <SelectValue placeholder="Select column" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#273142] border-white/10 text-white">
+                    {columns.map((col) => (
+                      <SelectItem key={col} value={col}>{col}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder="Search value..."
+                  value={filterValue}
+                  onChange={(e) => setFilterValue(e.target.value)}
+                  className="bg-[#1B2431] border-white/10 text-white"
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={handleApplyFilter} className="flex-1 bg-blue-600 hover:bg-blue-700">
+                    Apply
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={clearFilters} className="border-white/10 text-gray-300">
+                    Clear
+                  </Button>
+                </div>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Actions */}
+          {onDelete && selectedRows.size > 0 && (
+            <Button variant="destructive" size="sm" onClick={() => setShowDeleteDialog(true)}>
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete ({selectedRows.size})
+            </Button>
+          )}
+
+          {onInsert && (
+            <Button size="sm" onClick={() => setShowInsertDialog(true)} className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Row
+            </Button>
+          )}
+
+          {onRefresh && (
+            <Button variant="outline" size="sm" onClick={onRefresh} disabled={isLoading} className="border-white/10 bg-transparent text-gray-400 hover:bg-white/5">
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Pagination Footer */}
-      <div className="h-14 shrink-0 border-t border-white/5 bg-[#273142] flex items-center justify-between px-4 z-20">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400">Rows per page</span>
-            <Select value={String(itemsPerPage)} onValueChange={(v) => setItemsPerPage(Number(v))}>
-              <SelectTrigger className="h-8 w-[70px] bg-[#1B2431] border-white/10 text-xs">
-                <SelectValue placeholder={itemsPerPage} />
-              </SelectTrigger>
-              <SelectContent className="bg-[#1B2431] border-white/10 text-gray-200">
-                {[10, 20, 50, 100].map(pageSize => (
-                  <SelectItem key={pageSize} value={String(pageSize)} className="focus:bg-white/10 focus:text-white">{pageSize}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      {/* Table */}
+      <div className="flex-1 overflow-auto scrollbar-thin relative">
+        {isLoading && !paginatedData.length ? (
+          <div className="w-full h-full">
+            <div className="sticky top-0 z-10 flex items-center gap-4 px-4 py-3 bg-[#273142] border-b border-white/5 min-w-max">
+              <Skeleton className="h-5 w-5 rounded bg-white/10 shrink-0" />
+              {[...Array(8)].map((_, i) => (
+                <Skeleton key={i} className="h-6 w-48 bg-white/10 shrink-0" />
+              ))}
+            </div>
+            <div className="divide-y divide-white/5 min-w-max">
+              {[...Array(20)].map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-4 py-3">
+                  <Skeleton className="h-4 w-5 rounded bg-white/5 shrink-0" />
+                  {[...Array(8)].map((_, j) => (
+                    <Skeleton key={j} className="h-5 w-48 bg-white/5 shrink-0" />
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="text-xs text-gray-500">
-            Showing {(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, processedData.length)} of {processedData.length} results
-          </div>
+        ) : (
+          <Table>
+            <TableHeader className="sticky top-0 bg-[#273142] z-10 shadow-sm">
+              <TableRow className="border-white/5 hover:bg-transparent">
+                <TableHead className="w-12 text-center sticky left-0 bg-[#273142] z-20">
+                  <input
+                    type="checkbox"
+                    checked={paginatedData.length > 0 && selectedRows.size === paginatedData.length}
+                    onChange={toggleAllRows}
+                    className="rounded border-white/20 bg-transparent"
+                  />
+                </TableHead>
+                {displayColumns.map((column) => {
+                  const columnType = getColumnType(column);
+                  const fkRelation = foreignKeys?.get(column);
+                  const columnWidth = calculateColumnWidth(column);
+
+                  return (
+                    <TableHead
+                      key={column}
+                      className={cn(
+                        'text-gray-400 font-medium cursor-pointer hover:bg-white/5 transition-colors whitespace-nowrap',
+                        getColumnHeaderStyles(column)
+                      )}
+                      style={{ minWidth: columnWidth }}
+                      onClick={() => handleSort(column)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>{column}</span>
+                        {getSortIcon(column)}
+                        {columnType === 'primary' && (
+                          <Tooltip>
+                            <TooltipTrigger><Key className="w-3.5 h-3.5 text-yellow-400 shrink-0" /></TooltipTrigger>
+                            <TooltipContent className="bg-[#1B2431] border-white/10 text-white">Primary Key</TooltipContent>
+                          </Tooltip>
+                        )}
+                        {columnType === 'foreign' && fkRelation && (
+                          <Tooltip>
+                            <TooltipTrigger><Link2 className="w-3.5 h-3.5 text-purple-400 shrink-0" /></TooltipTrigger>
+                            <TooltipContent className="bg-[#1B2431] border-white/10 text-white">
+                              <div className="text-xs">
+                                <p className="font-medium">Foreign Key</p>
+                                <p className="text-gray-400">→ {fkRelation.target_schema}.{fkRelation.target_table}.{fkRelation.target_column}</p>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
+                    </TableHead>
+                  );
+                })}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedData.length > 0 ? (
+                paginatedData.map((row, rowIndex) => (
+                  <TableRow
+                    key={rowIndex}
+                    className={cn(
+                      'border-white/5 hover:bg-white/5 transition-colors',
+                      selectedRows.has(rowIndex) && 'bg-blue-500/10',
+                      highlightedRows.has(rowIndex) && 'bg-green-500/20 animate-pulse border-l-4 border-l-green-500'
+                    )}
+                  >
+                    <TableCell className={cn("text-center w-12 sticky left-0", highlightedRows.has(rowIndex) ? 'bg-green-500/20' : 'bg-[#1B2431]')}>
+                      <input
+                        type="checkbox"
+                        checked={selectedRows.has(rowIndex)}
+                        onChange={() => toggleRowSelection(rowIndex)}
+                        className="rounded border-white/20 bg-transparent"
+                      />
+                    </TableCell>
+                    {displayColumns.map((column) => {
+                      const value = row[column];
+                      const isNull = value === null || value === undefined;
+                      const columnType = getColumnType(column);
+                      const columnWidth = calculateColumnWidth(column);
+
+                      return (
+                        <TableCell
+                          key={column}
+                          className={cn(
+                            'font-mono text-sm cursor-pointer hover:bg-white/10 transition-colors',
+                            getColumnCellStyles(column),
+                            isNull ? 'text-gray-500 italic' : 'text-gray-300'
+                          )}
+                          style={{ minWidth: columnWidth, maxWidth: 300 }}
+                          onClick={() => handleCellClick(rowIndex, column, value)}
+                          onDoubleClick={() => handleCellDoubleClick(rowIndex, column, value)}
+                          onContextMenu={(e) => {
+                            if (columnType === 'foreign' && foreignKeys?.get(column)) {
+                              e.preventDefault();
+                              setFkMenuData({ relation: foreignKeys.get(column)!, value, x: e.clientX, y: e.clientY });
+                            }
+                          }}
+                        >
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="block truncate">{renderCellValue(value)}</span>
+                            </TooltipTrigger>
+                            {!isNull && String(value).length > 30 && (
+                              <TooltipContent className="bg-[#1B2431] border-white/10 text-white max-w-md">
+                                <p className="break-all font-mono text-xs">
+                                  {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                                </p>
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={displayColumns.length + 1} className="text-center py-8 text-gray-400">
+                    No data found
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        )}
+      </div>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between px-4 py-3 border-t border-white/5 bg-[#273142]">
+        <div className="flex items-center gap-4 text-sm text-gray-400">
+          <span>Page {currentPage} of {totalPages || 1}</span>
+          <Select
+            value={String(currentPageSize)}
+            onValueChange={(val) => handlePageSizeChange(parseInt(val, 10))}
+          >
+            <SelectTrigger className="w-32 h-8 bg-[#1B2431] border-white/10 text-white">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-[#273142] border-white/10 text-white">
+              <SelectItem value="25">25 per page</SelectItem>
+              <SelectItem value="50">50 per page</SelectItem>
+              <SelectItem value="100">100 per page</SelectItem>
+              <SelectItem value="500">500 per page</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8 text-gray-400 hover:text-white disabled:opacity-50"
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-          >
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="sm" onClick={() => handlePageChange(1)} disabled={currentPage <= 1} className="border-white/10 bg-transparent text-white hover:bg-white/5">
+            <ChevronsLeft className="w-4 h-4" />
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage <= 1} className="border-white/10 bg-transparent text-white hover:bg-white/5">
             <ChevronLeft className="w-4 h-4" />
           </Button>
-          <div className="text-xs text-gray-400 font-medium">
-            Page {currentPage} of {totalPages}
-          </div>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8 text-gray-400 hover:text-white disabled:opacity-50"
-            disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-          >
+          <Button variant="outline" size="sm" onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage >= totalPages} className="border-white/10 bg-transparent text-white hover:bg-white/5">
             <ChevronRight className="w-4 h-4" />
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => handlePageChange(totalPages)} disabled={currentPage >= totalPages} className="border-white/10 bg-transparent text-white hover:bg-white/5">
+            <ChevronsRight className="w-4 h-4" />
           </Button>
         </div>
       </div>
 
-      <Dialog open={rowEditingIndex !== null} onOpenChange={(open) => !open && setRowEditingIndex(null)}>
-        <DialogContent className="bg-[#1B2431] border-white/10 text-white max-h-[80vh] sm:max-w-[600px] flex flex-col p-0 gap-0">
-          <div className="p-6 pb-2">
-            <DialogHeader>
-              <DialogTitle className="text-white">Edit Row</DialogTitle>
-              <DialogDescription className="text-gray-400">
-                Make changes to the row data here. Click save when you're done.
-              </DialogDescription>
-            </DialogHeader>
-          </div>
-          <div className="grid gap-4 py-4 px-6 overflow-y-auto flex-1 [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-[#1B2431] [&::-webkit-scrollbar-thumb]:bg-[#273142] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#374151]">
-            {columns.map((col) => {
-              if (col.editable === false || col.key === 'metadata') return null;
-              return (
-                <div key={col.key} className="grid gap-2">
-                  <Label htmlFor={`edit-${col.key}`} className="text-gray-300">
-                    {col.header}
-                  </Label>
-                  <Input
-                    id={`edit-${col.key}`}
-                    value={rowEditData?.[col.key] || ''}
-                    onChange={(e) => setRowEditData(prev => prev ? ({ ...prev, [col.key]: e.target.value }) : null)}
-                    className="bg-[#0f172a] border-white/10 text-white"
-                  />
-                </div>
-              );
-            })}
-          </div>
-          <div className="p-6 pt-2 border-t border-white/5 bg-[#1B2431]">
-            <DialogFooter className="flex justify-between sm:justify-between w-full">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (rowEditData) {
-                    navigator.clipboard.writeText(JSON.stringify(rowEditData, null, 2));
-                    toast.success('Row data copied to clipboard');
-                  }
-                }}
-                className="border-white/10 text-gray-400 hover:text-white hover:bg-white/10 gap-2"
-              >
-                <Copy className="w-4 h-4" /> Copy JSON
-              </Button>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setRowEditingIndex(null)} className="border-white/10 text-gray-400 hover:text-white hover:bg-white/10">
-                  Cancel
-                </Button>
-                <Button onClick={handleRowEditSave} className="bg-blue-600 hover:bg-blue-700 text-white">
-                  Save changes
-                </Button>
-              </div>
-            </DialogFooter>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* FK Context Menu */}
+      {fkMenuData && (
+        <div
+          className="fixed z-50 bg-[#273142] border border-white/10 rounded-lg shadow-xl py-1 min-w-[180px]"
+          style={{ left: fkMenuData.x, top: fkMenuData.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {onFkClick && (
+            <button
+              className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-white/10 flex items-center gap-2"
+              onClick={() => {
+                onFkClick(fkMenuData.relation, fkMenuData.value);
+                setFkMenuData(null);
+              }}
+            >
+              <ExternalLink className="w-4 h-4" />
+              Open in {fkMenuData.relation.target_table}
+            </button>
+          )}
+          <button
+            className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-white/10 flex items-center gap-2"
+            onClick={() => {
+              copyToClipboard(fkMenuData.value);
+              setFkMenuData(null);
+            }}
+          >
+            <Copy className="w-4 h-4" />
+            Copy value
+          </button>
+        </div>
+      )}
 
-      <Dialog open={cellEditingDialog !== null} onOpenChange={(open) => !open && setCellEditingDialog(null)}>
-        <DialogContent className="bg-[#1B2431] border-white/10 text-white sm:max-w-[800px] max-h-[90vh] flex flex-col">
+      {/* Edit Modal */}
+      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+        <DialogContent className={cn("bg-[#1B2431] border-white/10 text-white flex flex-col transition-all duration-200", isLargeEdit ? "max-w-5xl h-[80vh]" : "max-w-xl")}>
           <DialogHeader>
-            <DialogTitle className="text-white">Edit Cell Content</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              {onEdit ? 'Edit Value' : 'View Value'}
+              {editModalData && getColumnType(editModalData.column) === 'primary' && (
+                <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30"><Key className="w-3 h-3 mr-1" /> Primary Key</Badge>
+              )}
+              {editModalData && getColumnType(editModalData.column) === 'foreign' && (
+                <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30"><Link2 className="w-3 h-3 mr-1" /> Foreign Key</Badge>
+              )}
+            </DialogTitle>
             <DialogDescription className="text-gray-400">
-              Edit the content of the cell. Valid JSON will be parsed automatically on save.
+              Column: <span className="text-white font-mono">{editModalData?.column}</span>
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4 flex-1 min-h-0">
-            <textarea
-              className="w-full h-full min-h-[300px] bg-[#0f172a] border border-white/10 rounded-md p-4 text-white font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-[#1B2431] [&::-webkit-scrollbar-thumb]:bg-[#273142] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#374151]"
-              value={cellEditingDialog?.value || ''}
-              onChange={(e) => setCellEditingDialog(prev => prev ? ({ ...prev, value: e.target.value }) : null)}
-            />
+          <div className={cn("py-4 flex flex-col", isLargeEdit ? "flex-1 min-h-0" : "")}>
+            {isJsonEdit ? (
+              <div className="flex-1 border border-white/10 rounded-md overflow-hidden h-full">
+                <Editor
+                  height="100%"
+                  defaultLanguage="json"
+                  value={editModalData?.value || ''}
+                  onChange={(value) => setEditModalData(prev => prev ? { ...prev, value: value || '' } : null)}
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 14,
+                    scrollBeyondLastLine: false,
+                    automaticLayout: true,
+                    readOnly: !onEdit,
+                    theme: 'vs-dark'
+                  }}
+                />
+              </div>
+            ) : (
+              <Textarea
+                value={editModalData?.value || ''}
+                onChange={(e) => setEditModalData(prev => prev ? { ...prev, value: e.target.value } : null)}
+                className={cn("bg-[#273142] border-white/10 font-mono text-sm resize-none", isLargeEdit ? "h-full" : "min-h-[150px]")}
+                readOnly={!onEdit}
+              />
+            )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCellEditingDialog(null)} className="border-white/10 text-gray-400 hover:text-white hover:bg-white/10">
-              Cancel
-            </Button>
-            <Button onClick={handleCellDialogSave} className="bg-blue-600 hover:bg-blue-700 text-white">
-              Save changes
-            </Button>
+          <DialogFooter className="flex gap-2 items-center">
+            <Button variant="outline" onClick={() => {
+              if (editModalData) copyToClipboard(editModalData.value);
+            }} className="border-white/10"><Copy className="w-4 h-4 mr-2" /> Copy</Button>
+            <div className="flex-1" />
+            <Button variant="outline" onClick={() => setShowEditModal(false)} className="border-white/10">Close</Button>
+            {onEdit && (
+              <Button onClick={handleSaveEdit} disabled={mutating} className="bg-blue-600 hover:bg-blue-700">
+                {mutating ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-2" /> Save</>}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* FK Action Dialog */}
+      <Dialog open={showFkActionDialog} onOpenChange={setShowFkActionDialog}>
+        <DialogContent className="bg-[#1B2431] border-white/10 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Link2 className="w-5 h-5 text-purple-400" /> Foreign Key Action</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              {fkActionData && (
+                <>Column <span className="text-white font-mono">{fkActionData.column}</span> references <span className="text-purple-400 font-mono">{fkActionData.relation.target_schema}.{fkActionData.relation.target_table}</span></>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+            <div className="bg-[#273142] rounded-lg p-3 border border-white/10">
+              <p className="text-xs text-gray-400 mb-1">Value</p>
+              <p className="font-mono text-sm text-white break-all">{fkActionData?.value !== null ? String(fkActionData?.value) : <span className="text-gray-500 italic">NULL</span>}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Button variant="outline" onClick={() => { if (fkActionData) copyToClipboard(fkActionData.value); setShowFkActionDialog(false); }} className="border-white/10 hover:bg-white/5"><Copy className="w-4 h-4 mr-2" /> Copy Value</Button>
+              {onFkClick && (
+                <Button onClick={() => { if (fkActionData) onFkClick(fkActionData.relation, fkActionData.value); setShowFkActionDialog(false); }} className="bg-purple-600 hover:bg-purple-700"><ExternalLink className="w-4 h-4 mr-2" /> Open in Table</Button>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Insert Dialog */}
+      <Dialog open={showInsertDialog} onOpenChange={setShowInsertDialog}>
+        <DialogContent className="bg-[#1B2431] border-white/10 text-white max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader className="border-b border-white/10 pb-4">
+            <DialogTitle className="flex items-center gap-3 text-xl"><div className="w-10 h-10 rounded-lg bg-blue-600/20 flex items-center justify-center"><Plus className="w-5 h-5 text-blue-400" /></div> Insert New Row</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto py-4 scrollbar-thin">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {displayColumns.filter(col => col !== primaryKey).map((column) => (
+                <div key={column} className="space-y-2">
+                  <Label className="text-sm font-medium text-gray-300 flex items-center gap-2">{column}</Label>
+                  <Input value={insertValues[column] || ''} onChange={(e) => setInsertValues(prev => ({ ...prev, [column]: e.target.value }))} placeholder={`Enter ${column}...`} className="bg-[#273142] border-white/10" />
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter className="border-t border-white/10 pt-4">
+            <Button variant="outline" onClick={() => setShowInsertDialog(false)} className="border-white/10">Cancel</Button>
+            <Button onClick={handleInsertRow} disabled={mutating} className="bg-blue-600 hover:bg-blue-700 min-w-[120px]">{mutating ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Plus className="w-4 h-4 mr-2" /> Insert Row</>}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="bg-[#1B2431] border-white/10 text-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3 text-red-400"><Trash2 className="w-5 h-5" /> Confirm Delete</DialogTitle>
+            <DialogDescription className="text-gray-400">Are you sure you want to delete {selectedRows.size} row(s)?</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)} className="border-white/10">Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteSelected} disabled={mutating}>{mutating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Delete'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* PK/FK Warnings */}
+      <AlertDialog open={showPkWarning} onOpenChange={setShowPkWarning}>
+        <AlertDialogContent className="bg-[#1B2431] border-white/10 text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-yellow-400"><AlertTriangle className="w-5 h-5 inline mr-2" /> Editing Primary Key</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-400">Changing a Primary Key may affect data integrity. Proceed?</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-transparent border-white/10 text-gray-300">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setShowPkWarning(false); setShowEditModal(true); }} className="bg-yellow-600 hover:bg-yellow-700">Proceed</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showFkWarning} onOpenChange={setShowFkWarning}>
+        <AlertDialogContent className="bg-[#1B2431] border-white/10 text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-purple-400"><AlertTriangle className="w-5 h-5 inline mr-2" /> Editing Foreign Key</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-400">Changing a Foreign Key may break relationships. Proceed?</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-transparent border-white/10 text-gray-300">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setShowFkWarning(false); setShowEditModal(true); }} className="bg-purple-600 hover:bg-purple-700">Proceed</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

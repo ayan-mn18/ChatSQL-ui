@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Play, Sparkles, Save, Download, BarChart3, Table as TableIcon, ChevronRight, ChevronLeft, AlertCircle, ArrowUpDown, Filter, MoreHorizontal, ChevronDown } from 'lucide-react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
-import DataTable, { ColumnDef } from '@/components/DataTable';
+import DataTable from '@/components/DataTable';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Parser } from 'node-sql-parser';
@@ -87,37 +87,13 @@ LIMIT 100;`);
         id: order.id,
         customer: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
         status: order.status,
-        total_amount: order.total_amount,
+        total_amount: `$${order.total_amount.toLocaleString()}`,
         created_at: new Date(order.created_at).toLocaleDateString(),
       };
     });
   }, []);
 
-  const columns: ColumnDef<any>[] = [
-    { key: 'id', header: 'Order ID', className: 'text-gray-400 font-mono text-xs' },
-    { key: 'customer', header: 'Customer', className: 'text-white font-medium' },
-    {
-      key: 'status',
-      header: 'Status',
-      cell: (row) => {
-        const colors: any = {
-          pending: 'text-yellow-400',
-          processing: 'text-blue-400',
-          shipped: 'text-purple-400',
-          delivered: 'text-green-400',
-          cancelled: 'text-red-400'
-        };
-        return <span className={`capitalize ${colors[row.status] || 'text-gray-400'}`}>{row.status}</span>;
-      }
-    },
-    {
-      key: 'total_amount',
-      header: 'Amount',
-      className: 'text-right font-mono',
-      cell: (row) => `$${row.total_amount.toLocaleString()}`
-    },
-    { key: 'created_at', header: 'Date', className: 'text-gray-400 text-right' },
-  ];
+  const columns = ['id', 'customer', 'status', 'total_amount', 'created_at'];
 
   // Chart 1: Revenue Trends (Line)
   const lineChartData = {
