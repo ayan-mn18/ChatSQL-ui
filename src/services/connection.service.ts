@@ -160,6 +160,15 @@ export const connectionService = {
   },
 
   /**
+   * Get workspace-wide analytics across all user's connections
+   * @returns Aggregate query statistics and trends
+   */
+  getWorkspaceAnalytics: async (): Promise<ApiResponse<any>> => {
+    const response = await api.get<ApiResponse<any>>('/connections/analytics/workspace');
+    return response.data;
+  },
+
+  /**
    * Get real-time database analytics and statistics
    * @param id - Connection UUID
    * @returns Analytics data including DB size, connections, and query stats
