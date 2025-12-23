@@ -726,7 +726,7 @@ export default function DataTable({
             </div>
           </div>
         ) : (
-          <Table>
+          <table className="w-full caption-bottom text-sm text-left">
             <TableHeader className="sticky top-0 bg-[#273142] z-10 shadow-sm">
               <TableRow className="border-white/5 hover:bg-transparent">
                 <TableHead className="w-12 text-center sticky left-0 bg-[#273142] z-20">
@@ -846,7 +846,7 @@ export default function DataTable({
                 </TableRow>
               )}
             </TableBody>
-          </Table>
+          </table>
         )}
       </div>
 

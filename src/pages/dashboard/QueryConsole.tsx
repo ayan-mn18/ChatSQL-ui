@@ -153,7 +153,7 @@ function QueryTabBar({
             group flex items-center gap-2 px-3 py-1.5 rounded-t text-sm cursor-pointer
             transition-colors min-w-[120px] max-w-[200px]
             ${activeTabId === tab.id
-              ? 'bg-[#1e293b] text-white border-t-2 border-purple-500'
+              ? 'bg-[#1e293b] text-white border-t-2 border-blue-500'
               : 'text-gray-400 hover:text-white hover:bg-white/5'
             }
           `}
@@ -178,7 +178,7 @@ function QueryTabBar({
           ) : (
             <span className="truncate">{tab.title}</span>
           )}
-          {tab.isDirty && <span className="text-purple-400">•</span>}
+          {tab.isDirty && <span className="text-blue-400">•</span>}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -345,7 +345,7 @@ function AIChatSidebar({
       <Button
         variant="ghost"
         size="sm"
-        className="fixed right-4 top-20 z-50 bg-purple-600 hover:bg-purple-700 text-white"
+        className="fixed right-4 top-20 z-50 bg-[#0f172a] border border-blue-500/30 text-blue-200 hover:bg-white/5"
         onClick={onToggle}
       >
         <MessageSquare className="w-4 h-4 mr-2" />
@@ -359,7 +359,7 @@ function AIChatSidebar({
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b border-white/10">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-purple-400" />
+          <Sparkles className="w-5 h-5 text-blue-400" />
           <span className="font-semibold text-white">AI Assistant</span>
         </div>
         <div className="flex items-center gap-1">
@@ -395,7 +395,7 @@ function AIChatSidebar({
             >
               <div
                 className={`max-w-[90%] rounded-lg p-3 ${msg.role === 'user'
-                  ? 'bg-purple-600 text-white'
+                  ? 'bg-blue-600 text-white'
                   : 'bg-[#1e293b] text-gray-200'
                   }`}
               >
@@ -407,7 +407,7 @@ function AIChatSidebar({
                     <Button
                       size="sm"
                       variant="outline"
-                      className="w-full text-xs border-purple-500/50 text-purple-300 hover:bg-purple-500/20"
+                      className="w-full text-xs border-blue-500/40 text-blue-200 hover:bg-blue-500/10"
                       onClick={() => onInsertSQL(msg.sqlGenerated!)}
                     >
                       <Copy className="w-3 h-3 mr-1" />
@@ -459,7 +459,7 @@ function AIChatSidebar({
           <Button
             onClick={handleSendMessage}
             disabled={!inputValue.trim() || isStreaming}
-            className="bg-purple-600 hover:bg-purple-700 px-4"
+            className="bg-blue-600 hover:bg-blue-700 px-4"
           >
             {isStreaming ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -552,7 +552,7 @@ function SavedQueriesModal({
       <DialogContent className="bg-[#1e293b] border-white/10 text-white max-w-2xl max-h-[80vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FolderOpen className="w-5 h-5 text-purple-400" />
+            <FolderOpen className="w-5 h-5 text-blue-400" />
             Saved Queries
           </DialogTitle>
           <DialogDescription className="text-gray-400">
@@ -581,7 +581,7 @@ function SavedQueriesModal({
         <ScrollArea className="h-[400px]">
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+              <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
             </div>
           ) : filteredQueries.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
@@ -593,14 +593,14 @@ function SavedQueriesModal({
               {filteredQueries.map(query => (
                 <div
                   key={query.id}
-                  className="p-3 rounded-lg bg-[#0f172a] border border-white/5 hover:border-purple-500/30 transition-colors"
+                  className="p-3 rounded-lg bg-[#0f172a] border border-white/5 hover:border-blue-500/30 transition-colors"
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <h4 className="font-medium text-white flex items-center gap-2">
                         {query.name}
                         {query.isShared && (
-                          <Badge variant="outline" className="text-xs text-purple-400 border-purple-500/30">
+                          <Badge variant="outline" className="text-xs text-blue-400 border-blue-500/30">
                             Shared
                           </Badge>
                         )}
@@ -660,7 +660,7 @@ function SavedQueriesModal({
                     <Button
                       size="sm"
                       onClick={() => handleLoad(query)}
-                      className="bg-purple-600 hover:bg-purple-700 text-xs"
+                      className="bg-blue-600 hover:bg-blue-700 text-xs"
                     >
                       Load Query
                     </Button>
@@ -734,7 +734,7 @@ function SaveQueryDialog({
       <DialogContent className="bg-[#1e293b] border-white/10 text-white">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Save className="w-5 h-5 text-purple-400" />
+            <Save className="w-5 h-5 text-blue-400" />
             Save Query
           </DialogTitle>
           <DialogDescription className="text-gray-400">
@@ -793,7 +793,7 @@ function SaveQueryDialog({
           <Button
             onClick={handleSave}
             disabled={!name.trim() || saving}
-            className="bg-purple-600 hover:bg-purple-700"
+            className="bg-blue-600 hover:bg-blue-700"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
             Save Query
@@ -1369,7 +1369,7 @@ export default function QueryConsole() {
                   variant={showChatSidebar ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setShowChatSidebar(!showChatSidebar)}
-                  className={showChatSidebar ? 'bg-purple-600' : 'border-purple-500/50 text-purple-400'}
+                  className={showChatSidebar ? 'bg-blue-600' : 'border-blue-500/40 text-blue-300'}
                 >
                   <MessageSquare className="w-4 h-4 mr-2" />
                   AI Chat
@@ -1457,8 +1457,8 @@ export default function QueryConsole() {
                       </TabsList>
                     </div>
 
-                    <div className="flex-1 overflow-hidden">
-                      <TabsContent value="table" className="h-full m-0">
+                    <div className="flex-1 relative overflow-hidden">
+                      <TabsContent value="table" className="h-full w-full m-0 absolute inset-0">
                         {activeTab?.results ? (
                           <DataTable
                             data={activeTab.results.data}
@@ -1474,7 +1474,7 @@ export default function QueryConsole() {
                         )}
                       </TabsContent>
 
-                      <TabsContent value="chart" className="h-full m-0 p-4">
+                      <TabsContent value="chart" className="h-full w-full m-0 p-4 absolute inset-0">
                         {chartData ? (
                           <div className="h-full">
                             {chartConfig.type === 'bar' && <Bar data={chartData} options={{ responsive: true, maintainAspectRatio: false }} />}
@@ -1492,7 +1492,7 @@ export default function QueryConsole() {
                         )}
                       </TabsContent>
 
-                      <TabsContent value="logs" className="h-full m-0">
+                      <TabsContent value="logs" className="h-full w-full m-0 absolute inset-0">
                         <ScrollArea className="h-full p-4">
                           <div className="font-mono text-xs space-y-1">
                             {executionLogs.length === 0 ? (
