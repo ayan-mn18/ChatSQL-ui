@@ -18,7 +18,7 @@ import {
   Settings2,
 } from 'lucide-react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
-import DataTable from '@/components/DataTable';
+import ResultsTable from '@/components/ResultsTable';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
@@ -43,10 +43,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Parser } from 'node-sql-parser';
-import Editor from 'react-simple-code-editor';
-import Prism from '@/lib/prism-setup';
-import 'prismjs/components/prism-sql';
-import 'prismjs/themes/prism-tomorrow.css';
+import Editor, { Monaco } from '@monaco-editor/react';
 import toast from 'react-hot-toast';
 
 // Chart imports
@@ -190,10 +187,24 @@ export default function SQLEditor() {
     }
   }, [parser]);
 
-  const handleQueryChange = useCallback((newQuery: string) => {
-    setQuery(newQuery);
-    validateSQL(newQuery);
+  const handleQueryChange = useCallback((newQuery: string | undefined) => {
+    const sql = newQuery || '';
+    setQuery(sql);
+    validateSQL(sql);
   }, [validateSQL]);
+
+  const toggleAllSchemas = (select: boolean) => {
+    if (select) {
+      setSelectedSchemas(schemas.map(s => s.schema_name));
+    } else {
+      setSelectedSchemas([]);
+    }
+  };
+
+  const handleEditorDidMount = (_editor: any, _monaco: Monaco) => {
+    // TODO: Implement advanced autocomplete with schema metadata
+    // For now, we rely on Monaco's built-in SQL support
+  };
 
   // ============================================
   // RUN QUERY
@@ -490,7 +501,7 @@ export default function SQLEditor() {
   // LINE NUMBERS
   // ============================================
 
-  const lineNumbers = useMemo(() => query.split('\n').map((_, i) => i + 1), [query]);
+
 
   // ============================================
   // RENDER CHART
@@ -584,26 +595,53 @@ export default function SQLEditor() {
                   <ChevronDown className="w-4 h-4 ml-2" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="bg-[#273142] border-white/10 text-white min-w-[200px]">
-                <DropdownMenuLabel className="text-gray-400 text-xs">
+              <DropdownMenuContent className="bg-[#273142] border-white/10 text-white min-w-[220px]">
+                <DropdownMenuLabel className="text-gray-400 text-xs px-2 py-1.5">
                   Select schemas for AI context
                 </DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-white/10" />
-                {schemas.map(schema => (
-                  <DropdownMenuCheckboxItem
-                    key={schema.id}
-                    checked={selectedSchemas.includes(schema.schema_name)}
-                    onCheckedChange={() => toggleSchema(schema.schema_name)}
-                    className="text-white hover:bg-white/10"
+                <div className="px-2 pb-2 flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs flex-1 border-white/10 bg-white/5 hover:bg-white/10 hover:text-white"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      toggleAllSchemas(true);
+                    }}
                   >
-                    <span className="flex items-center justify-between w-full">
-                      <span>{schema.schema_name}</span>
-                      <Badge variant="outline" className="ml-2 text-xs border-white/20">
-                        {schema.table_count} tables
-                      </Badge>
-                    </span>
-                  </DropdownMenuCheckboxItem>
-                ))}
+                    Select All
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs flex-1 border-white/10 bg-white/5 hover:bg-white/10 hover:text-white"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      toggleAllSchemas(false);
+                    }}
+                  >
+                    Clear
+                  </Button>
+                </div>
+                <DropdownMenuSeparator className="bg-white/10" />
+                <div className="max-h-[300px] overflow-y-auto scrollbar-thin">
+                  {schemas.map(schema => (
+                    <DropdownMenuCheckboxItem
+                      key={schema.id}
+                      checked={selectedSchemas.includes(schema.schema_name)}
+                      onCheckedChange={() => toggleSchema(schema.schema_name)}
+                      className="text-white hover:bg-white/10 cursor-pointer"
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      <span className="flex items-center justify-between w-full gap-2">
+                        <span className="truncate">{schema.schema_name}</span>
+                        <Badge variant="outline" className="text-[10px] border-white/10 bg-white/5 text-gray-400 shrink-0">
+                          {schema.table_count}
+                        </Badge>
+                      </span>
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </div>
                 {schemas.length === 0 && (
                   <div className="px-2 py-4 text-center text-gray-500 text-sm">
                     No schemas found
@@ -782,31 +820,27 @@ export default function SQLEditor() {
                   </div>
                 )}
 
-                {/* Line Numbers */}
-                <div className="w-12 bg-[#0f172a] border-r border-white/5 flex flex-col items-end py-4 pr-3 select-none text-gray-600 font-mono text-sm leading-6">
-                  {lineNumbers.map(num => (
-                    <div key={num} style={{ height: '24px' }}>{num}</div>
-                  ))}
-                </div>
                 {/* Editor */}
-                <div className={`flex-1 bg-[#0f172a] overflow-auto scrollbar-thin ${isTyping ? 'cursor-wait pointer-events-none' : ''}`}>
+                <div className={`flex-1 bg-[#0f172a] overflow-hidden ${isTyping ? 'cursor-wait pointer-events-none' : ''}`}>
                   <Editor
+                    height="100%"
+                    defaultLanguage="sql"
                     value={query}
-                    onValueChange={handleQueryChange}
-                    highlight={code => Prism.highlight(code, Prism.languages.sql, 'sql')}
-                    padding={16}
-                    disabled={isTyping}
-                    style={{
-                      fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+                    onChange={handleQueryChange}
+                    onMount={handleEditorDidMount}
+                    theme="vs-dark"
+                    options={{
+                      minimap: { enabled: false },
                       fontSize: 14,
-                      backgroundColor: '#0f172a',
-                      color: '#e2e8f0',
-                      minHeight: '100%',
-                      lineHeight: '24px',
-                      cursor: isTyping ? 'wait' : 'text',
+                      fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+                      lineHeight: 24,
+                      padding: { top: 16, bottom: 16 },
+                      scrollBeyondLastLine: false,
+                      automaticLayout: true,
+                      wordWrap: 'on',
+                      readOnly: isTyping,
                     }}
-                    className={`font-mono ${isTyping ? 'animate-pulse' : ''}`}
-                    textareaClassName="focus:outline-none"
+                    className={isTyping ? 'animate-pulse' : ''}
                   />
                 </div>
               </div>
@@ -828,7 +862,7 @@ export default function SQLEditor() {
                     Generating SQL...
                   </span>
                 ) : (
-                  <span>Ln {lineNumbers.length}, Col {query.split('\n').pop()?.length || 0}</span>
+                  <span>Ln {query.split('\n').length}, Col {query.split('\n').pop()?.length || 0}</span>
                 )}
               </div>
             </div>
@@ -877,7 +911,7 @@ export default function SQLEditor() {
                 <div className="flex-1 overflow-hidden relative">
                   <TabsContent value="table" className="h-full w-full m-0 absolute inset-0">
                     {results ? (
-                      <DataTable data={results.rows} />
+                      <ResultsTable data={results.rows} columns={results.columns} />
                     ) : (
                       <div className="flex items-center justify-center h-full text-gray-500">
                         <div className="text-center">

@@ -25,7 +25,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
-import DataTable from '@/components/DataTable';
+import ResultsTable from '@/components/ResultsTable';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
@@ -395,8 +395,8 @@ function AIChatSidebar({
             >
               <div
                 className={`max-w-[90%] rounded-lg p-3 ${msg.role === 'user'
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-[#1e293b] text-gray-200'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-[#1e293b] text-gray-200'
                   }`}
               >
                 <div className="text-sm whitespace-pre-wrap break-words">
@@ -1130,6 +1130,14 @@ export default function QueryConsole() {
     );
   };
 
+  const toggleAllSchemas = (select: boolean) => {
+    if (select) {
+      setSelectedSchemas(schemas.map(s => s.schema_name));
+    } else {
+      setSelectedSchemas([]);
+    }
+  };
+
   // ============================================
   // NO CONNECTION STATE
   // ============================================
@@ -1185,20 +1193,51 @@ export default function QueryConsole() {
                   <ChevronDown className="w-4 h-4 ml-2" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="bg-[#273142] border-white/10 text-white">
-                <DropdownMenuLabel className="text-gray-400 text-xs">Select schemas</DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-white/10" />
-                {schemas.map(schema => (
-                  <DropdownMenuCheckboxItem
-                    key={schema.id}
-                    checked={selectedSchemas.includes(schema.schema_name)}
-                    onCheckedChange={() => toggleSchema(schema.schema_name)}
-                    className="text-white hover:bg-white/10"
+              <DropdownMenuContent className="bg-[#273142] border-white/10 text-white min-w-[220px]">
+                <DropdownMenuLabel className="text-gray-400 text-xs px-2 py-1.5">Select schemas</DropdownMenuLabel>
+                <div className="px-2 pb-2 flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs flex-1 border-white/10 bg-white/5 hover:bg-white/10 hover:text-white"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      toggleAllSchemas(true);
+                    }}
                   >
-                    {schema.schema_name}
-                    <Badge variant="outline" className="ml-2 text-xs">{schema.table_count}</Badge>
-                  </DropdownMenuCheckboxItem>
-                ))}
+                    Select All
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs flex-1 border-white/10 bg-white/5 hover:bg-white/10 hover:text-white"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      toggleAllSchemas(false);
+                    }}
+                  >
+                    Clear
+                  </Button>
+                </div>
+                <DropdownMenuSeparator className="bg-white/10" />
+                <div className="max-h-[300px] overflow-y-auto scrollbar-thin">
+                  {schemas.map(schema => (
+                    <DropdownMenuCheckboxItem
+                      key={schema.id}
+                      checked={selectedSchemas.includes(schema.schema_name)}
+                      onCheckedChange={() => toggleSchema(schema.schema_name)}
+                      className="text-white hover:bg-white/10 cursor-pointer"
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      <span className="flex items-center justify-between w-full gap-2">
+                        <span className="truncate">{schema.schema_name}</span>
+                        <Badge variant="outline" className="text-[10px] border-white/10 bg-white/5 text-gray-400 shrink-0">
+                          {schema.table_count}
+                        </Badge>
+                      </span>
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </div>
               </DropdownMenuContent>
             </DropdownMenu>
 
@@ -1341,12 +1380,9 @@ export default function QueryConsole() {
                     <div className="flex-1 overflow-hidden">
                       <TabsContent value="table" className="h-full m-0">
                         {activeTab?.results ? (
-                          <DataTable
+                          <ResultsTable
                             data={activeTab.results.data}
-                            columns={activeTab.results.columns.map(col => ({
-                              key: col,
-                              header: col,
-                            }))}
+                            columns={activeTab.results.columns}
                           />
                         ) : (
                           <div className="flex items-center justify-center h-full text-gray-500">
@@ -1386,8 +1422,8 @@ export default function QueryConsole() {
                                 <div
                                   key={i}
                                   className={`${log.includes('✓') ? 'text-green-400' :
-                                      log.includes('✗') ? 'text-red-400' :
-                                        'text-gray-400'
+                                    log.includes('✗') ? 'text-red-400' :
+                                      'text-gray-400'
                                     }`}
                                 >
                                   {log}
