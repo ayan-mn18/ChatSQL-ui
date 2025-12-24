@@ -27,6 +27,8 @@ import {
   Save,
   ExternalLink,
   AlertTriangle,
+  ClipboardPaste,
+  Rows3,
 } from 'lucide-react';
 import {
   Table,
@@ -85,6 +87,95 @@ const calculateColumnWidth = (columnName: string): number => {
   const baseWidth = columnName.length * 10; // ~10px per character
   const minWidth = Math.max(120, baseWidth + 60); // Extra space for icons
   return Math.min(minWidth, 300); // Cap at 300px
+};
+
+// ============================================
+// CSV HELPERS
+// ============================================
+
+// Escape a value for CSV format
+const escapeCSVValue = (value: any): string => {
+  if (value === null || value === undefined) return '';
+  const strValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
+  // If value contains comma, quote, or newline, wrap in quotes and escape inner quotes
+  if (strValue.includes(',') || strValue.includes('"') || strValue.includes('\n')) {
+    return `"${strValue.replace(/"/g, '""')}"`;
+  }
+  return strValue;
+};
+
+// Convert rows to CSV string
+const rowsToCSV = (rows: Record<string, any>[], columns: string[], includeHeader: boolean = true): string => {
+  const lines: string[] = [];
+
+  if (includeHeader) {
+    lines.push(columns.map(col => escapeCSVValue(col)).join(','));
+  }
+
+  rows.forEach(row => {
+    const values = columns.map(col => escapeCSVValue(row[col]));
+    lines.push(values.join(','));
+  });
+
+  return lines.join('\n');
+};
+
+// Parse CSV string to values (handles quoted values)
+const parseCSVLine = (line: string): string[] => {
+  const values: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    const nextChar = line[i + 1];
+
+    if (inQuotes) {
+      if (char === '"' && nextChar === '"') {
+        current += '"';
+        i++; // Skip next quote
+      } else if (char === '"') {
+        inQuotes = false;
+      } else {
+        current += char;
+      }
+    } else {
+      if (char === '"') {
+        inQuotes = true;
+      } else if (char === ',') {
+        values.push(current);
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+  }
+  values.push(current);
+
+  return values;
+};
+
+// Parse CSV string - returns columns and values
+const parseCSV = (csvText: string): { columns: string[], values: Record<string, string>[] } => {
+  const lines = csvText.trim().split('\n').filter(l => l.trim());
+  if (lines.length === 0) return { columns: [], values: [] };
+
+  // First line is headers
+  const columns = parseCSVLine(lines[0]);
+  const values: Record<string, string>[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const lineValues = parseCSVLine(lines[i]);
+    const row: Record<string, string> = {};
+    columns.forEach((col, idx) => {
+      if (lineValues[idx] !== undefined) {
+        row[col] = lineValues[idx];
+      }
+    });
+    values.push(row);
+  }
+
+  return { columns, values };
 };
 
 // ============================================
@@ -599,6 +690,83 @@ export default function TableView() {
     });
   }, [editModalData]);
 
+  // Copy selected rows as CSV
+  const handleCopyRowsAsCSV = useCallback(() => {
+    if (!data || selectedRows.size === 0) return;
+
+    const rowsToCopy = Array.from(selectedRows)
+      .sort((a, b) => a - b)
+      .map(idx => data.rows[idx]);
+
+    const csvText = rowsToCSV(rowsToCopy, displayColumns, true);
+
+    navigator.clipboard.writeText(csvText).then(() => {
+      toast.success(`Copied ${rowsToCopy.length} row(s) as CSV`);
+    }).catch(() => {
+      toast.error('Failed to copy');
+    });
+  }, [data, selectedRows, displayColumns]);
+
+  // Copy single row as CSV (from context menu or row action)
+  const handleCopySingleRowAsCSV = useCallback((rowIndex: number) => {
+    if (!data) return;
+
+    const row = data.rows[rowIndex];
+    const csvText = rowsToCSV([row], displayColumns, true);
+
+    navigator.clipboard.writeText(csvText).then(() => {
+      toast.success('Row copied as CSV');
+    }).catch(() => {
+      toast.error('Failed to copy');
+    });
+  }, [data, displayColumns]);
+
+  // Handle paste in insert dialog
+  const handlePasteCSV = useCallback(async () => {
+    try {
+      const clipboardText = await navigator.clipboard.readText();
+      if (!clipboardText.trim()) {
+        toast.error('Clipboard is empty');
+        return;
+      }
+
+      const { columns: csvColumns, values } = parseCSV(clipboardText);
+
+      if (values.length === 0) {
+        toast.error('No data found in clipboard');
+        return;
+      }
+
+      // Take first row of values
+      const firstRow = values[0];
+      const newInsertValues: Record<string, string> = {};
+
+      // Map CSV columns to table columns (case-insensitive match)
+      displayColumns.forEach(tableCol => {
+        // Skip primary key column
+        if (tableCol === primaryKeyColumn) return;
+
+        // Find matching CSV column
+        const matchingCSVCol = csvColumns.find(
+          csvCol => csvCol.toLowerCase() === tableCol.toLowerCase()
+        );
+
+        if (matchingCSVCol && firstRow[matchingCSVCol]) {
+          newInsertValues[tableCol] = firstRow[matchingCSVCol];
+        }
+      });
+
+      if (Object.keys(newInsertValues).length > 0) {
+        setInsertValues(prev => ({ ...prev, ...newInsertValues }));
+        toast.success(`Populated ${Object.keys(newInsertValues).length} field(s) from CSV`);
+      } else {
+        toast.error('No matching columns found');
+      }
+    } catch (error) {
+      toast.error('Failed to read clipboard');
+    }
+  }, [displayColumns, primaryKeyColumn]);
+
   const handleInsertRow = async () => {
     const values: Record<string, any> = {};
 
@@ -833,16 +1001,27 @@ export default function TableView() {
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Delete selected */}
+              {/* Copy & Delete selected */}
               {selectedRows.size > 0 && (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setShowDeleteDialog(true)}
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete ({selectedRows.size})
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyRowsAsCSV}
+                    className="border-white/10 text-gray-300 hover:bg-white/5"
+                  >
+                    <Copy className="w-4 h-4 mr-2" />
+                    Copy ({selectedRows.size})
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setShowDeleteDialog(true)}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete ({selectedRows.size})
+                  </Button>
+                </>
               )}
 
               <Button
@@ -1446,17 +1625,37 @@ export default function TableView() {
         {/* Insert Dialog - Enhanced */}
         <Dialog open={showInsertDialog} onOpenChange={setShowInsertDialog}>
           <DialogContent className="bg-[#1B2431] border-white/10 text-white max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-            <DialogHeader className="border-b border-white/10 pb-4">
-              <DialogTitle className="flex items-center gap-3 text-xl">
-                <div className="w-10 h-10 rounded-lg bg-blue-600/20 flex items-center justify-center">
-                  <Plus className="w-5 h-5 text-blue-400" />
+            <DialogHeader className="shrink-0">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 flex items-center justify-center border border-blue-500/20">
+                    <Rows3 className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-lg font-semibold text-white">Insert New Row</DialogTitle>
+                    <DialogDescription className="text-sm text-gray-400 mt-0.5">
+                      Add a new record to <span className="text-blue-400 font-mono">{schemaName}.{tableName}</span>
+                    </DialogDescription>
+                  </div>
                 </div>
-                Insert New Row
-              </DialogTitle>
-              <DialogDescription className="text-gray-400">
-                Add a new record to <span className="text-white font-mono">{schemaName}.{tableName}</span>
-              </DialogDescription>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePasteCSV}
+                  className="border-white/10 text-gray-300 hover:bg-white/5 hover:text-white gap-2"
+                >
+                  <ClipboardPaste className="w-4 h-4" />
+                  Paste CSV
+                </Button>
+              </div>
             </DialogHeader>
+
+            {/* Hint for CSV paste */}
+            <div className="shrink-0 mt-2 px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
+              <p className="text-xs text-blue-300">
+                <span className="font-medium">Tip:</span> Copy a row from this table or paste CSV data with matching column headers to auto-fill the form.
+              </p>
+            </div>
 
             <div className="flex-1 overflow-y-auto py-4 scrollbar-thin">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1465,9 +1664,10 @@ export default function TableView() {
                   .map((column) => {
                     const columnType = getColumnType(column);
                     const fkRelation = foreignKeyColumns.get(column);
+                    const hasValue = !!insertValues[column];
 
                     return (
-                      <div key={column} className="space-y-2">
+                      <div key={column} className="space-y-1.5">
                         <Label className="text-sm font-medium text-gray-300 flex items-center gap-2">
                           {column}
                           {columnType === 'foreign' && fkRelation && (
@@ -1481,28 +1681,48 @@ export default function TableView() {
                           value={insertValues[column] || ''}
                           onChange={(e) => setInsertValues(prev => ({ ...prev, [column]: e.target.value }))}
                           placeholder={`Enter ${column}...`}
-                          className="bg-[#273142] border-white/10 focus:border-blue-500/50 transition-colors"
+                          className={cn(
+                            "bg-[#273142] border-white/10 text-gray-100 placeholder:text-gray-500",
+                            "focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 transition-all",
+                            hasValue && "border-blue-500/30 bg-blue-500/5"
+                          )}
                         />
                       </div>
                     );
                   })}
               </div>
+
+              {displayColumns.filter(col => col !== primaryKeyColumn).length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  <Database className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                  <p>No columns available for input</p>
+                </div>
+              )}
             </div>
 
-            <DialogFooter className="border-t border-white/10 pt-4">
+            <DialogFooter className="shrink-0 border-t border-white/5 pt-4 gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setInsertValues({})}
+                className="text-gray-400 hover:text-white mr-auto"
+                disabled={Object.keys(insertValues).length === 0}
+              >
+                Clear all
+              </Button>
               <Button
                 variant="outline"
                 onClick={() => {
                   setShowInsertDialog(false);
                   setInsertValues({});
                 }}
-                className="border-white/10"
+                className="border-white/10 text-gray-300 hover:bg-white/5"
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleInsertRow}
-                disabled={mutating}
+                disabled={mutating || Object.keys(insertValues).length === 0}
                 className="bg-blue-600 hover:bg-blue-700 min-w-[120px]"
               >
                 {mutating ? (

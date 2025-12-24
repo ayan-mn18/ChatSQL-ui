@@ -473,18 +473,17 @@ export function CommandKBarProvider({ children }: { children: ReactNode }) {
       ]
       : [];
 
-    const adminActions: Action[] =
-      isAuthenticated && user?.role !== 'viewer'
-        ? [
-          {
-            id: 'nav.users',
-            name: 'Go to User Management',
-            section: 'Navigation',
-            keywords: 'users admin',
-            perform: () => goAfterClose('/dashboard/users'),
-          },
-        ]
-        : [];
+    const adminActions: Action[] = isAuthenticated
+      ? [
+        {
+          id: 'nav.users',
+          name: 'Go to User Management',
+          section: 'Navigation',
+          keywords: 'users user management admin',
+          perform: () => goAfterClose('/dashboard/users'),
+        },
+      ]
+      : [];
 
     return [
       ...navActions,
