@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Database, Users, BarChart3, LogOut, User as UserIcon, ChevronUp } from 'lucide-react';
+import { Database, Users, Zap, LogOut, User as UserIcon, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { viewerService } from '@/services/viewer.service';
@@ -16,7 +16,7 @@ import {
 
 const navItems = [
   { icon: Database, label: 'Connections', href: '/dashboard/connections' },
-  { icon: BarChart3, label: 'Analytics', href: '/dashboard/analytics' },
+  { icon: Zap, label: 'Usage & Billing', href: '/dashboard/usage' },
   { icon: Users, label: 'User Management', href: '/dashboard/users' },
 ];
 
@@ -57,7 +57,7 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
 
   const filteredNavItems = isViewer
     ? navItems
-      .filter((item) => (item.href === '/dashboard/analytics' ? canViewAnalytics : true))
+      .filter((item) => (item.href === '/dashboard/usage' ? canViewAnalytics : true))
       .map((item) =>
         item.href === '/dashboard/users'
           ? { ...item, label: 'My Access', href: '/dashboard/access' }

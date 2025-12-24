@@ -14,7 +14,7 @@ import ProfilePage from './pages/ProfilePage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import {
   ConnectionsPage,
-  AnalyticsPage,
+  UsageDashboard,
   ConnectionOverview,
   TableView,
   SQLEditor,
@@ -50,7 +50,7 @@ function App() {
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<Navigate to="/dashboard/connections" replace />} />
           <Route path="connections" element={<ConnectionsPage />} />
-          <Route path="analytics" element={<AnalyticsPage />} />
+          <Route path="usage" element={<UsageDashboard />} />
           <Route path="users" element={<AdminOnlyUserManagement />} />
           <Route path="access" element={<MyAccessPage />} />
           <Route path="profile" element={<ProfilePage />} />

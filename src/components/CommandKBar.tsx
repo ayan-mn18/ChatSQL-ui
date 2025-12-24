@@ -374,12 +374,12 @@ export function CommandKBarProvider({ children }: { children: ReactNode }) {
         perform: () => goAfterClose('/dashboard/connections'),
       },
       {
-        id: 'nav.analytics',
-        name: 'Go to Analytics',
+        id: 'nav.usage',
+        name: 'Go to Usage & Billing',
         section: 'Navigation',
-        shortcut: ['g', 'a'],
-        keywords: 'analytics metrics',
-        perform: () => goAfterClose('/dashboard/analytics'),
+        shortcut: ['g', 'u'],
+        keywords: 'usage billing tokens plan subscription',
+        perform: () => goAfterClose('/dashboard/usage'),
       },
       {
         id: 'nav.access',
