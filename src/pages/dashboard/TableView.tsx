@@ -858,6 +858,7 @@ export default function TableView() {
                   </Select>
                   <Input
                     placeholder="Search value..."
+                    data-chatsql-table-filter-value
                     value={filterValue}
                     onChange={(e) => setFilterValue(e.target.value)}
                     className="bg-[#1B2431] border-white/10"
@@ -866,7 +867,7 @@ export default function TableView() {
                     <Button size="sm" onClick={handleApplyFilter} className="flex-1">
                       Apply
                     </Button>
-                    <Button size="sm" variant="outline" onClick={clearFilters} className="border-white/10">
+                    <Button size="sm" variant="outline" onClick={clearFilters} data-chatsql-clear-filters className="border-white/10">
                       Clear
                     </Button>
                   </div>

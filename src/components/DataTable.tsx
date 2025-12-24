@@ -665,6 +665,7 @@ export default function DataTable({
                 </Select>
                 <Input
                   placeholder="Search value..."
+                  data-chatsql-table-filter-value
                   value={filterValue}
                   onChange={(e) => setFilterValue(e.target.value)}
                   className="bg-[#1B2431] border-white/10 text-white"
@@ -673,7 +674,7 @@ export default function DataTable({
                   <Button size="sm" onClick={handleApplyFilter} className="flex-1 bg-blue-600 hover:bg-blue-700">
                     Apply
                   </Button>
-                  <Button size="sm" variant="outline" onClick={clearFilters} className="border-white/10 text-gray-300">
+                  <Button size="sm" variant="outline" onClick={clearFilters} data-chatsql-clear-filters className="border-white/10 text-gray-300">
                     Clear
                   </Button>
                 </div>
