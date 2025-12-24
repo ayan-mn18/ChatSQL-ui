@@ -50,12 +50,18 @@ function buildDynamicActions(params: {
 }): Action[] {
   const { connections, currentConnectionId, queryClient, go, onRequestReindex } = params;
 
+  const goAfterClose = (path: string) => {
+    // KBar closes after `perform` returns; defer navigation so the close/focus
+    // lifecycle runs first.
+    queueMicrotask(() => go(path));
+  };
+
   const connectionJumpActions: Action[] = connections.map((conn) => ({
     id: `conn.open.${conn.id}`,
     name: `Open connection: ${conn.name}`,
     section: 'Connections',
     keywords: `connection ${conn.name} ${conn.db_name} ${conn.host}`,
-    perform: () => go(`/dashboard/connection/${conn.id}/overview`),
+    perform: () => goAfterClose(`/dashboard/connection/${conn.id}/overview`),
   }));
 
   const tableNavActions: Action[] = [];
@@ -71,7 +77,7 @@ function buildDynamicActions(params: {
         section: 'Tables',
         keywords: `${conn.name} ${schema} ${table} ${schema}.${table} table schema`,
         perform: () =>
-          go(`/dashboard/connection/${conn.id}/table/${encodePathSegment(schema)}/${encodePathSegment(table)}`),
+          goAfterClose(`/dashboard/connection/${conn.id}/table/${encodePathSegment(schema)}/${encodePathSegment(table)}`),
       });
     }
   }
@@ -295,6 +301,13 @@ export function CommandKBarProvider({ children }: { children: ReactNode }) {
     [navigate]
   );
 
+  const goAfterClose = useCallback(
+    (path: string) => {
+      queueMicrotask(() => go(path));
+    },
+    [go]
+  );
+
   const connectionsQuery = useQuery({
     queryKey: queryKeys.connections,
     queryFn: async () => {
@@ -358,7 +371,7 @@ export function CommandKBarProvider({ children }: { children: ReactNode }) {
         section: 'Navigation',
         shortcut: ['g', 'c'],
         keywords: 'connections databases',
-        perform: () => go('/dashboard/connections'),
+        perform: () => goAfterClose('/dashboard/connections'),
       },
       {
         id: 'nav.analytics',
@@ -366,7 +379,7 @@ export function CommandKBarProvider({ children }: { children: ReactNode }) {
         section: 'Navigation',
         shortcut: ['g', 'a'],
         keywords: 'analytics metrics',
-        perform: () => go('/dashboard/analytics'),
+        perform: () => goAfterClose('/dashboard/analytics'),
       },
       {
         id: 'nav.access',
@@ -374,7 +387,7 @@ export function CommandKBarProvider({ children }: { children: ReactNode }) {
         section: 'Navigation',
         shortcut: ['g', 'm'],
         keywords: 'access permissions',
-        perform: () => go('/dashboard/access'),
+        perform: () => goAfterClose('/dashboard/access'),
       },
       {
         id: 'nav.profile',
@@ -382,7 +395,7 @@ export function CommandKBarProvider({ children }: { children: ReactNode }) {
         section: 'Navigation',
         shortcut: ['g', 'p'],
         keywords: 'profile account',
-        perform: () => go('/dashboard/profile'),
+        perform: () => goAfterClose('/dashboard/profile'),
       },
     ];
 
@@ -395,7 +408,7 @@ export function CommandKBarProvider({ children }: { children: ReactNode }) {
           keywords: 'logout sign out',
           perform: async () => {
             await logout();
-            go('/auth/signin');
+            goAfterClose('/auth/signin');
           },
         },
       ]
@@ -405,14 +418,14 @@ export function CommandKBarProvider({ children }: { children: ReactNode }) {
           name: 'Sign in',
           section: 'Account',
           keywords: 'login sign in',
-          perform: () => go('/auth/signin'),
+          perform: () => goAfterClose('/auth/signin'),
         },
         {
           id: 'auth.signup',
           name: 'Sign up',
           section: 'Account',
           keywords: 'register sign up',
-          perform: () => go('/auth/signup'),
+          perform: () => goAfterClose('/auth/signup'),
         },
       ];
 
@@ -441,21 +454,21 @@ export function CommandKBarProvider({ children }: { children: ReactNode }) {
           name: 'Connection: Overview',
           section: 'Connection',
           keywords: 'connection overview',
-          perform: () => go(`/dashboard/connection/${connectionId}/overview`),
+          perform: () => goAfterClose(`/dashboard/connection/${connectionId}/overview`),
         },
         {
           id: 'conn.sql',
           name: 'Connection: SQL Editor',
           section: 'Connection',
           keywords: 'connection sql editor query',
-          perform: () => go(`/dashboard/connection/${connectionId}/sql`),
+          perform: () => goAfterClose(`/dashboard/connection/${connectionId}/sql`),
         },
         {
           id: 'conn.visualizer',
           name: 'Connection: Schema Visualizer',
           section: 'Connection',
           keywords: 'connection schema visualizer erd',
-          perform: () => go(`/dashboard/connection/${connectionId}/visualizer`),
+          perform: () => goAfterClose(`/dashboard/connection/${connectionId}/visualizer`),
         },
       ]
       : [];
@@ -468,7 +481,7 @@ export function CommandKBarProvider({ children }: { children: ReactNode }) {
             name: 'Go to User Management',
             section: 'Navigation',
             keywords: 'users admin',
-            perform: () => go('/dashboard/users'),
+            perform: () => goAfterClose('/dashboard/users'),
           },
         ]
         : [];

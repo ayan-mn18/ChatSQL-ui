@@ -120,13 +120,6 @@ export function TableSearchBar({
       currentMatchIndex: matches.length > 0 ? 0 : -1,
       isHighlighting: matches.length > 0,
     });
-
-    if (matches.length > 0) {
-      toast.success(`Found ${matches.length} match${matches.length > 1 ? 'es' : ''}`, {
-        duration: 2000,
-        icon: '🔍'
-      });
-    }
   }, [rows, columns, onSearchStateChange]);
 
   const handleClearSearch = useCallback(() => {
@@ -361,14 +354,14 @@ export function highlightSearchMatch(
   return (
     <>
       {before}
-      <mark className={cn(
+      <span className={cn(
         "px-0.5 rounded-sm",
         isCurrentMatch
           ? "bg-green-500 text-white font-medium"
-          : "bg-yellow-500/40 text-yellow-100"
+          : "bg-yellow-400/30 text-yellow-200"
       )}>
         {match}
-      </mark>
+      </span>
       {after}
     </>
   );
