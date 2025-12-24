@@ -241,6 +241,7 @@ function AIChatSidebar({
   const [sessionId, setSessionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const streamingContentRef = useRef<string>(''); // Track accumulated content for closure
 
   // Load chat session on mount
   useEffect(() => {
@@ -273,6 +274,7 @@ function AIChatSidebar({
     setInputValue('');
     setIsStreaming(true);
     setStreamingContent('');
+    streamingContentRef.current = ''; // Reset the ref too
 
     // Add user message to list optimistically
     const tempUserMessage: ChatMessage = {
@@ -295,14 +297,19 @@ function AIChatSidebar({
         if (chunk.type === 'session' && chunk.sessionId) {
           setSessionId(chunk.sessionId);
         } else if (chunk.type === 'content' && chunk.content) {
+          // Accumulate content in both state and ref
+          streamingContentRef.current += chunk.content;
           setStreamingContent(prev => prev + chunk.content);
         } else if (chunk.type === 'done') {
+          // Use the ref value which has the full accumulated content
+          const fullContent = streamingContentRef.current;
+
           // Add assistant message
           const assistantMessage: ChatMessage = {
             id: chunk.messageId || `msg-${Date.now()}`,
             sessionId: sessionId || '',
             role: 'assistant',
-            content: streamingContent + (chunk.content || ''),
+            content: fullContent,
             sqlGenerated: chunk.sql,
             reasoning: chunk.reasoning,
             tablesUsed: chunk.tablesUsed,
@@ -314,17 +321,21 @@ function AIChatSidebar({
             assistantMessage
           ]);
           setStreamingContent('');
+          streamingContentRef.current = '';
           setIsStreaming(false);
         } else if (chunk.type === 'error') {
           toast.error(chunk.error || 'Chat failed');
           setIsStreaming(false);
+          streamingContentRef.current = '';
         }
       },
       (error) => {
         toast.error(error.message || 'Chat failed');
         setIsStreaming(false);
+        streamingContentRef.current = '';
       },
       () => {
+        // Cleanup on complete
         setIsStreaming(false);
       }
     );
