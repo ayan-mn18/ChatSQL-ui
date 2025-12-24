@@ -16,7 +16,8 @@ import { Line, Doughnut, Bar } from 'react-chartjs-2';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
+import { Progress } from '@/components/ui/progress.tsx';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Zap,
   Database,
@@ -25,7 +26,6 @@ import {
   Clock,
   TrendingUp,
   RefreshCw,
-  Loader2,
   Sparkles,
   CircleDollarSign,
   ArrowUpRight,
@@ -165,6 +165,127 @@ function UsageProgressCard({
 // ============================================
 // MAIN COMPONENT
 // ============================================
+function UsageDashboardSkeleton() {
+  return (
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8 pb-24 md:pb-8 overflow-y-auto h-full">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <Skeleton className="h-8 w-56 mb-2" />
+          <Skeleton className="h-4 w-80" />
+        </div>
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-9 w-24 rounded-md" />
+        </div>
+      </div>
+
+      {/* Current Plan Card */}
+      <Card className="bg-gradient-to-br from-[#273142] to-[#1B2431] border-white/10 overflow-hidden">
+        <CardContent className="p-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="flex items-start gap-4">
+              <Skeleton className="h-14 w-14 rounded-2xl" />
+              <div className="space-y-2">
+                <Skeleton className="h-6 w-56" />
+                <Skeleton className="h-4 w-72" />
+                <div className="flex items-center gap-4">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-4 w-40" />
+                </div>
+              </div>
+            </div>
+            <Skeleton className="h-10 w-36 rounded-md" />
+          </div>
+
+          <div className="mt-6 pt-6 border-t border-white/10">
+            <Skeleton className="h-3 w-28 mb-3" />
+            <div className="flex flex-wrap gap-2">
+              <Skeleton className="h-6 w-28 rounded-full" />
+              <Skeleton className="h-6 w-36 rounded-full" />
+              <Skeleton className="h-6 w-32 rounded-full" />
+              <Skeleton className="h-6 w-40 rounded-full" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Usage Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+        {[0, 1, 2].map((i) => (
+          <Card key={i} className="bg-[#273142] border-white/5">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-10 w-10 rounded-xl" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-3 w-36" />
+                  </div>
+                </div>
+                <Skeleton className="h-5 w-10 rounded-full" />
+              </div>
+              <div className="space-y-3">
+                <div className="flex items-end justify-between">
+                  <Skeleton className="h-8 w-20" />
+                  <Skeleton className="h-4 w-16" />
+                </div>
+                <Skeleton className="h-2 w-full rounded" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Charts Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+        {[0, 1].map((i) => (
+          <Card key={i} className="bg-[#273142] border-white/5">
+            <CardHeader>
+              <Skeleton className="h-5 w-48" />
+              <Skeleton className="h-4 w-64" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-[250px] w-full" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Bottom Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+        <Card className="bg-[#273142] border-white/5">
+          <CardHeader>
+            <Skeleton className="h-5 w-36" />
+            <Skeleton className="h-4 w-40" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-[200px] w-full" />
+            <div className="mt-4 space-y-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-11/12" />
+              <Skeleton className="h-4 w-10/12" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-[#273142] border-white/5 lg:col-span-2">
+          <CardHeader>
+            <Skeleton className="h-5 w-44" />
+            <Skeleton className="h-4 w-64" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 export default function UsageDashboard() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<UsageDashboardData | null>(null);
@@ -292,11 +413,7 @@ export default function UsageDashboard() {
   };
 
   if (loading) {
-    return (
-      <div className="p-4 md:p-8 h-full flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
-      </div>
-    );
+    return <UsageDashboardSkeleton />;
   }
 
   if (!data) {
