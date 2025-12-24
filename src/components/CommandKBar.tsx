@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useCallback } from 'react';
+import { type ReactNode, useEffect, useMemo, useCallback, useState } from 'react';
 import {
   KBarProvider,
   KBarPortal,
@@ -8,12 +8,175 @@ import {
   KBarResults,
   useMatches,
   useKBar,
+  useRegisterActions,
   type ActionImpl,
   type Action,
 } from 'kbar';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
+import { connectionService } from '@/services/connection.service';
+import type { ApiResponse, ConnectionPublic } from '@/types';
+import toast from 'react-hot-toast';
+
+type FullSchemaResponse = ApiResponse<{
+  tables: Array<{
+    schema: string;
+    name: string;
+    columns: Array<{ name: string; type: string }>;
+  }>;
+}>;
+
+type FullSchemaTable = {
+  schema: string;
+  name: string;
+  columns?: Array<{ name: string; type: string }>;
+};
+
+function getTablesFromFullSchemaResponse(response: unknown): FullSchemaTable[] {
+  const r: any = response;
+  const tables = r?.data?.tables ?? r?.tables ?? r?.data?.data?.tables;
+  return Array.isArray(tables) ? (tables as FullSchemaTable[]) : [];
+}
+
+function buildDynamicActions(params: {
+  connections: ConnectionPublic[];
+  currentConnectionId: string | null;
+  queryClient: ReturnType<typeof useQueryClient>;
+  go: (path: string) => void;
+  onRequestReindex: () => void;
+}): Action[] {
+  const { connections, currentConnectionId, queryClient, go, onRequestReindex } = params;
+
+  const connectionJumpActions: Action[] = connections.map((conn) => ({
+    id: `conn.open.${conn.id}`,
+    name: `Open connection: ${conn.name}`,
+    section: 'Connections',
+    keywords: `connection ${conn.name} ${conn.db_name} ${conn.host}`,
+    perform: () => go(`/dashboard/connection/${conn.id}/overview`),
+  }));
+
+  const tableNavActions: Action[] = [];
+  for (const conn of connections) {
+    const fullSchema = queryClient.getQueryData<FullSchemaResponse>(queryKeys.fullSchema(conn.id));
+    const tables = getTablesFromFullSchemaResponse(fullSchema);
+    for (const t of tables) {
+      const schema = t.schema;
+      const table = t.name;
+      tableNavActions.push({
+        id: `table.open.${conn.id}.${schema}.${table}`,
+        name: `${conn.name} / ${schema}.${table}`,
+        section: 'Tables',
+        keywords: `${conn.name} ${schema} ${table} ${schema}.${table} table schema`,
+        perform: () =>
+          go(`/dashboard/connection/${conn.id}/table/${encodePathSegment(schema)}/${encodePathSegment(table)}`),
+      });
+    }
+  }
+
+  const indexedConnections = connections.filter((c) => {
+    const cached = queryClient.getQueryData<FullSchemaResponse>(queryKeys.fullSchema(c.id));
+    return getTablesFromFullSchemaResponse(cached).length > 0;
+  }).length;
+  const totalTables = connections.reduce((acc, c) => {
+    const cached = queryClient.getQueryData<FullSchemaResponse>(queryKeys.fullSchema(c.id));
+    return acc + getTablesFromFullSchemaResponse(cached).length;
+  }, 0);
+
+  const indexActions: Action[] = [
+    {
+      id: 'kbar.index.status',
+      name: 'CmdK: Schema index status',
+      section: 'Command Palette',
+      keywords: 'kbar cmdk index status schema tables',
+      perform: () => {
+        const current = currentConnectionId ? ` (current: ${currentConnectionId})` : '';
+        toast.success(`Indexed ${indexedConnections}/${connections.length} connections, ${totalTables} tables${current}`);
+      },
+    },
+    {
+      id: 'kbar.index.refresh',
+      name: 'CmdK: Refresh schema index',
+      section: 'Command Palette',
+      keywords: 'kbar cmdk refresh index schema tables reload',
+      perform: async () => {
+        // Invalidate cached schema metadata and refetch progressively.
+        for (const conn of connections) {
+          queryClient.removeQueries({ queryKey: queryKeys.fullSchema(conn.id) });
+        }
+        toast.success('Refreshing schema index…');
+        onRequestReindex();
+      },
+    },
+  ];
+
+  return [...indexActions, ...connectionJumpActions, ...tableNavActions];
+}
+
+function CommandKBarDynamicActions({
+  connections,
+  currentConnectionId,
+  schemaIndexVersion,
+  go,
+  onRequestReindex,
+}: {
+  connections: ConnectionPublic[];
+  currentConnectionId: string | null;
+  schemaIndexVersion: number;
+  go: (path: string) => void;
+  onRequestReindex: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const { query, visualState } = useKBar((state) => ({ visualState: state.visualState }));
+
+  const dynamicActions = useMemo(
+    () =>
+      buildDynamicActions({
+        connections,
+        currentConnectionId,
+        queryClient,
+        go,
+        onRequestReindex,
+      }),
+    [connections, currentConnectionId, go, onRequestReindex, queryClient, schemaIndexVersion]
+  );
+
+  useRegisterActions(dynamicActions, [dynamicActions]);
+
+  // When palette opens, prioritize indexing the current connection.
+  useEffect(() => {
+    if (visualState !== 'showing') return;
+    if (!currentConnectionId) return;
+
+    const existing = queryClient.getQueryData<FullSchemaResponse>(queryKeys.fullSchema(currentConnectionId));
+    if (getTablesFromFullSchemaResponse(existing).length > 0) return;
+
+    void queryClient
+      .fetchQuery({
+        queryKey: queryKeys.fullSchema(currentConnectionId),
+        queryFn: () => connectionService.getFullSchema(currentConnectionId),
+        staleTime: 30 * 60 * 1000,
+        gcTime: 60 * 60 * 1000,
+      })
+      .then(() => {
+        // close+reopen not required; actions will register after version bump in parent
+        // but we can also nudge the results by triggering a re-query
+        query.setSearch('');
+        onRequestReindex();
+      })
+      .catch(() => {
+        toast.error('Failed to load schema metadata for CmdK');
+      });
+  }, [currentConnectionId, onRequestReindex, query, queryClient, visualState]);
+
+  return null;
+}
+
+const queryKeys = {
+  connections: ['kbar', 'connections'] as const,
+  fullSchema: (connectionId: string) => ['kbar', 'fullSchema', connectionId] as const,
+};
 
 function isVisibleElement(element: Element): boolean {
   const rects = element.getClientRects();
@@ -39,6 +202,10 @@ function clickFirstVisibleButton(selector: string) {
 function extractConnectionId(pathname: string): string | null {
   const match = pathname.match(/^\/dashboard\/connection\/([^/]+)(?:\/|$)/);
   return match?.[1] ?? null;
+}
+
+function encodePathSegment(value: string): string {
+  return encodeURIComponent(value);
 }
 
 function CommandKBarShortcutHandler() {
@@ -135,6 +302,8 @@ export function CommandKBarProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, user, logout } = useAuth();
+  const queryClient = useQueryClient();
+  const [schemaIndexVersion, setSchemaIndexVersion] = useState(0);
 
   const connectionId = useMemo(() => extractConnectionId(location.pathname), [location.pathname]);
 
@@ -144,6 +313,61 @@ export function CommandKBarProvider({ children }: { children: ReactNode }) {
     },
     [navigate]
   );
+
+  const connectionsQuery = useQuery({
+    queryKey: queryKeys.connections,
+    queryFn: async () => {
+      const response = await connectionService.getAllConnections();
+      return response.data || [];
+    },
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+  });
+
+  // Build / refresh the in-memory (React Query) schema index.
+  // Uses cached data if present; fetches full schema metadata if missing or stale.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const connections = connectionsQuery.data || [];
+    if (connections.length === 0) return;
+
+    let cancelled = false;
+
+    const buildIndex = async () => {
+      // Prefer current connection first (better perceived speed).
+      const ordered: ConnectionPublic[] = connectionId
+        ? [...connections].sort((a, b) => (a.id === connectionId ? -1 : b.id === connectionId ? 1 : 0))
+        : connections;
+
+      for (const conn of ordered) {
+        if (cancelled) return;
+
+        // Skip if we already have data in cache.
+        const existing = queryClient.getQueryData<FullSchemaResponse>(queryKeys.fullSchema(conn.id));
+        if (getTablesFromFullSchemaResponse(existing).length) continue;
+
+        try {
+          await queryClient.fetchQuery({
+            queryKey: queryKeys.fullSchema(conn.id),
+            queryFn: () => connectionService.getFullSchema(conn.id),
+            staleTime: 30 * 60 * 1000,
+            gcTime: 60 * 60 * 1000,
+          });
+          if (!cancelled) setSchemaIndexVersion(v => v + 1);
+        } catch {
+          // Best-effort: failing to index one connection shouldn't break CmdK.
+        }
+      }
+    };
+
+    void buildIndex();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [connectionId, connectionsQuery.data, isAuthenticated, queryClient, schemaIndexVersion]);
 
   const actions: Action[] = useMemo(() => {
     const navActions: Action[] = [
@@ -268,12 +492,34 @@ export function CommandKBarProvider({ children }: { children: ReactNode }) {
         ]
         : [];
 
-    return [...navActions, ...adminActions, ...connectionActions, ...tableActions, ...authActions];
-  }, [connectionId, go, isAuthenticated, logout, user?.role]);
+    return [
+      ...navActions,
+      ...adminActions,
+      ...connectionActions,
+      ...tableActions,
+      ...authActions,
+    ];
+  }, [
+    connectionId,
+    connectionsQuery.data,
+    go,
+    isAuthenticated,
+    logout,
+    queryClient,
+    schemaIndexVersion,
+    user?.role,
+  ]);
 
   return (
     <KBarProvider actions={actions}>
       <CommandKBarShortcutHandler />
+      <CommandKBarDynamicActions
+        connections={(connectionsQuery.data || []) as ConnectionPublic[]}
+        currentConnectionId={connectionId}
+        schemaIndexVersion={schemaIndexVersion}
+        go={go}
+        onRequestReindex={() => setSchemaIndexVersion(v => v + 1)}
+      />
       {children}
       <CommandKBarUI />
     </KBarProvider>
