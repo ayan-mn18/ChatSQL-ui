@@ -22,6 +22,7 @@ interface TableTabsContextType {
   getTabById: (tabId: string) => TableTab | undefined;
   closeOtherTabs: (tabId: string) => void;
   closeAllTabs: () => void;
+  reorderTabs: (fromIndex: number, toIndex: number) => void;
 }
 
 const TableTabsContext = createContext<TableTabsContextType | undefined>(undefined);
@@ -147,6 +148,15 @@ export function TableTabsProvider({ children }: { children: ReactNode }) {
     setActiveTabId(null);
   }, []);
 
+  const reorderTabs = useCallback((fromIndex: number, toIndex: number) => {
+    setTabs(currentTabs => {
+      const newTabs = [...currentTabs];
+      const [removed] = newTabs.splice(fromIndex, 1);
+      newTabs.splice(toIndex, 0, removed);
+      return newTabs;
+    });
+  }, []);
+
   return (
     <TableTabsContext.Provider
       value={{
@@ -158,6 +168,7 @@ export function TableTabsProvider({ children }: { children: ReactNode }) {
         getTabById,
         closeOtherTabs,
         closeAllTabs,
+        reorderTabs,
       }}
     >
       {children}

@@ -9,6 +9,7 @@ import {
   useMatches,
   useKBar,
   useRegisterActions,
+  VisualState,
   type ActionImpl,
   type Action,
 } from 'kbar';
@@ -146,7 +147,7 @@ function CommandKBarDynamicActions({
 
   // When palette opens, prioritize indexing the current connection.
   useEffect(() => {
-    if (visualState !== 'showing') return;
+    if (visualState !== VisualState.showing) return;
     if (!currentConnectionId) return;
 
     const existing = queryClient.getQueryData<FullSchemaResponse>(queryKeys.fullSchema(currentConnectionId));
@@ -206,26 +207,6 @@ function extractConnectionId(pathname: string): string | null {
 
 function encodePathSegment(value: string): string {
   return encodeURIComponent(value);
-}
-
-function CommandKBarShortcutHandler() {
-  const { query } = useKBar();
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const isK = event.key.toLowerCase() === 'k';
-      const isMod = event.metaKey || event.ctrlKey;
-      if (!isK || !isMod) return;
-
-      event.preventDefault();
-      query.toggle();
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [query]);
-
-  return null;
 }
 
 function ResultItem({
@@ -512,7 +493,6 @@ export function CommandKBarProvider({ children }: { children: ReactNode }) {
 
   return (
     <KBarProvider actions={actions}>
-      <CommandKBarShortcutHandler />
       <CommandKBarDynamicActions
         connections={(connectionsQuery.data || []) as ConnectionPublic[]}
         currentConnectionId={connectionId}

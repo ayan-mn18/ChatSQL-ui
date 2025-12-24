@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
+
 import {
   ChevronLeft,
   ChevronRight,
@@ -14,9 +14,6 @@ import {
   RefreshCw,
   Plus,
   Trash2,
-  Filter,
-  Columns,
-  X,
   Code,
   ArrowUpDown,
   ArrowUp,
@@ -55,11 +52,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -77,7 +69,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useTableData } from '@/hooks/useTableData';
 import { useTableTabs } from '@/contexts/TableTabsContext';
-import { TableTabsBar } from '@/components/dashboard/TableTabsBar';
+import { TableTabsBar } from '@/components/dashboard/TableTabsBarEnhanced';
+import { AdvancedFilterBuilder, TableSearchBar, ColumnManager, highlightSearchMatch, type TableSearchState, type ColumnConfig } from '@/components/table';
 import { ColumnUpdate, FilterCondition, connectionService } from '@/services/connection.service';
 import { ERDRelation } from '@/types';
 import toast from 'react-hot-toast';
@@ -146,10 +139,26 @@ export default function TableView() {
   const [showInsertDialog, setShowInsertDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [insertValues, setInsertValues] = useState<Record<string, string>>({});
-  const [filterColumn, setFilterColumn] = useState<string>('');
-  const [filterValue, setFilterValue] = useState<string>('');
   const [relations, setRelations] = useState<ERDRelation[]>([]);
   const [highlightedRows, setHighlightedRows] = useState<Set<number>>(new Set());
+
+  // Search state
+  const [searchState, setSearchState] = useState<TableSearchState>({
+    query: '',
+    matches: [],
+    currentMatchIndex: -1,
+    isHighlighting: false,
+  });
+
+  // Column configuration (visibility + order)
+  const [columnConfig, setColumnConfig] = useState<ColumnConfig[]>([]);
+
+  // Query execution state
+  const [isExecutingQuery, setIsExecutingQuery] = useState(false);
+  const [queryResults, setQueryResults] = useState<{
+    rows: Record<string, any>[];
+    columns: string[];
+  } | null>(null);
 
   // Edit modal state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -308,50 +317,52 @@ export default function TableView() {
     return [];
   }, [data, columnsMetadata]);
 
-  // Local state for hidden columns
-  const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
-
-  // Load hidden columns from local storage
+  // Initialize column config when columns change
   useEffect(() => {
-    if (connectionId && schemaName && tableName) {
-      const key = `hidden_columns_${connectionId}_${schemaName}_${tableName}`;
-      const saved = localStorage.getItem(key);
-      if (saved) {
-        try {
-          setHiddenColumns(new Set(JSON.parse(saved)));
-        } catch (e) {
-          console.error('Failed to parse hidden columns', e);
-        }
-      } else {
-        setHiddenColumns(new Set());
+    if (!connectionId || !schemaName || !tableName || allColumns.length === 0) return;
+
+    const key = `column_config_${connectionId}_${schemaName}_${tableName}`;
+    const saved = localStorage.getItem(key);
+
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as ColumnConfig[];
+        // Merge saved config with current columns (handle new columns)
+        const merged = allColumns.map((col, idx) => {
+          const existing = parsed.find(c => c.name === col);
+          return existing || { name: col, visible: true, order: idx };
+        });
+        setColumnConfig(merged);
+      } catch (e) {
+        // Reset to defaults
+        setColumnConfig(allColumns.map((name, idx) => ({ name, visible: true, order: idx })));
       }
+    } else {
+      setColumnConfig(allColumns.map((name, idx) => ({ name, visible: true, order: idx })));
+    }
+  }, [connectionId, schemaName, tableName, allColumns]);
+
+  // Save column config to localStorage
+  const handleColumnConfigChange = useCallback((newConfig: ColumnConfig[]) => {
+    setColumnConfig(newConfig);
+    if (connectionId && schemaName && tableName) {
+      const key = `column_config_${connectionId}_${schemaName}_${tableName}`;
+      localStorage.setItem(key, JSON.stringify(newConfig));
     }
   }, [connectionId, schemaName, tableName]);
 
-  // Save hidden columns to local storage
-  const toggleColumnVisibility = useCallback((column: string) => {
-    setHiddenColumns(prev => {
-      const next = new Set(prev);
-      if (next.has(column)) {
-        next.delete(column);
-      } else {
-        next.add(column);
-      }
-
-      // Save to local storage
-      if (connectionId && schemaName && tableName) {
-        const key = `hidden_columns_${connectionId}_${schemaName}_${tableName}`;
-        localStorage.setItem(key, JSON.stringify(Array.from(next)));
-      }
-
-      return next;
-    });
-  }, [connectionId, schemaName, tableName]);
-
-  // Filter columns for display
+  // Filter and order columns for display
   const displayColumns = useMemo(() => {
-    return allColumns.filter(col => !hiddenColumns.has(col));
-  }, [allColumns, hiddenColumns]);
+    return [...columnConfig]
+      .filter(col => col.visible)
+      .sort((a, b) => a.order - b.order)
+      .map(col => col.name);
+  }, [columnConfig]);
+
+  // Get FK columns as Set for ColumnManager
+  const foreignKeyColumnsSet = useMemo(() => {
+    return new Set(foreignKeyColumns.keys());
+  }, [foreignKeyColumns]);
 
   // ============================================
   // HANDLERS
@@ -637,19 +648,38 @@ export default function TableView() {
     }
   };
 
-  const handleApplyFilter = () => {
-    if (!filterColumn || !filterValue) return;
+  const handleApplyFilters = useCallback((filters: FilterCondition[]) => {
+    setFilters(filters);
+  }, [setFilters]);
 
-    const filter: FilterCondition = {
-      column: filterColumn,
-      operator: 'ilike',
-      value: filterValue,
-    };
+  // Execute inline query
+  const handleExecuteQuery = useCallback(async (query: string) => {
+    if (!connectionId) return;
 
-    setFilters([filter]);
-    setFilterColumn('');
-    setFilterValue('');
-  };
+    setIsExecutingQuery(true);
+    try {
+      const result = await connectionService.executeQuery(connectionId, query, true);
+
+      if (result.success && result.data) {
+        const rows = result.data.rows || [];
+        const cols = rows.length > 0 ? Object.keys(rows[0]) : [];
+
+        setQueryResults({ rows, columns: cols });
+        toast.success(`Query returned ${rows.length} row(s)`);
+      } else {
+        toast.error(result.message || 'Query execution failed');
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Query execution failed');
+    } finally {
+      setIsExecutingQuery(false);
+    }
+  }, [connectionId]);
+
+  // Clear query results
+  const handleClearQueryResults = useCallback(() => {
+    setQueryResults(null);
+  }, []);
 
   const toggleRowSelection = (index: number) => {
     const newSelected = new Set(selectedRows);
@@ -769,160 +799,130 @@ export default function TableView() {
         <TableTabsBar />
 
         {/* Header */}
-        <div className="flex items-center justify-between shrink-0 px-4 md:px-6 py-3 border-b border-white/5 bg-[#273142]">
-          <div className="flex items-center gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg font-bold text-white">
-                  {schemaName}.{tableName}
-                </h1>
-                {data?.cached && (
-                  <Badge variant="outline" className="text-[10px] border-blue-500/30 text-blue-400">
-                    Cached
+        <div className="shrink-0 border-b border-white/5 bg-[#273142]">
+          {/* Top row: Title + Actions */}
+          <div className="flex items-center justify-between px-4 md:px-6 py-3">
+            <div className="flex items-center gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-lg font-bold text-white">
+                    {tableName}
+                  </h1>
+                  <Badge variant="outline" className="text-[10px] border-white/20 text-gray-400 font-mono">
+                    {schemaName}
                   </Badge>
-                )}
+                  {data?.cached && (
+                    <Badge variant="outline" className="text-[10px] border-blue-500/30 text-blue-400">
+                      Cached
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
+                  <span>{data?.totalCount?.toLocaleString() || 0} rows</span>
+                  <span className="text-white/20">•</span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+                    PK
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                    FK
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
-                <span>{data?.totalCount || 0} rows</span>
-                <span>•</span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
-                  Primary Key
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                  Foreign Key
-                </span>
-              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Delete selected */}
+              {selectedRows.size > 0 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setShowDeleteDialog(true)}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete ({selectedRows.size})
+                </Button>
+              )}
+
+              <Button
+                size="sm"
+                onClick={() => setShowInsertDialog(true)}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Row
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={refetch}
+                disabled={loading}
+                className="border-white/10 bg-transparent text-gray-400 hover:bg-white/5"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              </Button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Columns Visibility */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="border-white/10 bg-transparent text-gray-400 hover:bg-white/5">
-                  <Columns className="w-4 h-4 mr-2" />
-                  Columns
+          {/* Toolbar row: Search + Filters + Columns */}
+          <div className="flex items-center justify-between px-4 md:px-6 py-2 border-t border-white/5 bg-[#1B2431]/50">
+            {/* Left: Search */}
+            <TableSearchBar
+              rows={queryResults?.rows || data?.rows || []}
+              columns={queryResults?.columns || displayColumns}
+              searchState={searchState}
+              onSearchStateChange={setSearchState}
+              connectionId={connectionId || ''}
+              schemaName={schemaName || ''}
+              tableName={tableName || ''}
+              onExecuteQuery={handleExecuteQuery}
+              isExecutingQuery={isExecutingQuery}
+            />
+
+            {/* Right: Filter + Columns */}
+            <div className="flex items-center gap-2">
+              {/* Show "Clear Query" button when query results are displayed */}
+              {queryResults && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleClearQueryResults}
+                  className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+                >
+                  Clear Query Results
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56 bg-[#273142] border-white/10 p-2" align="end">
-                <div className="text-xs font-medium text-gray-400 mb-2 px-2">Toggle Columns</div>
-                <div className="max-h-64 overflow-y-auto space-y-1 scrollbar-thin">
-                  {allColumns.map((col) => (
-                    <div
-                      key={col}
-                      className="flex items-center space-x-2 px-2 py-1.5 hover:bg-white/5 rounded cursor-pointer"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        toggleColumnVisibility(col);
-                      }}
-                    >
-                      <Checkbox
-                        id={`col-${col}`}
-                        checked={!hiddenColumns.has(col)}
-                        onCheckedChange={() => toggleColumnVisibility(col)}
-                        className="border-white/20 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                      />
-                      <label
-                        htmlFor={`col-${col}`}
-                        className="text-sm text-gray-300 cursor-pointer flex-1 truncate select-none"
-                      >
-                        {col}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              )}
 
-            {/* Filter */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="border-white/10 bg-transparent text-gray-400 hover:bg-white/5">
-                  <Filter className="w-4 h-4 mr-2" />
-                  Filter
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-72 bg-[#273142] border-white/10 p-4" align="end">
-                <div className="space-y-3">
-                  <Select value={filterColumn} onValueChange={setFilterColumn}>
-                    <SelectTrigger className="bg-[#1B2431] border-white/10">
-                      <SelectValue placeholder="Select column" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-[#273142] border-white/10">
-                      {allColumns.map((col) => (
-                        <SelectItem key={col} value={col}>{col}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    placeholder="Search value..."
-                    data-chatsql-table-filter-value
-                    value={filterValue}
-                    onChange={(e) => setFilterValue(e.target.value)}
-                    className="bg-[#1B2431] border-white/10"
-                  />
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={handleApplyFilter} className="flex-1">
-                      Apply
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={clearFilters} data-chatsql-clear-filters className="border-white/10">
-                      Clear
-                    </Button>
-                  </div>
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              <AdvancedFilterBuilder
+                columns={allColumns}
+                activeFilters={currentOptions.filters || []}
+                onApplyFilters={handleApplyFilters}
+                onClearFilters={clearFilters}
+              />
 
-            {/* Actions */}
-            {selectedRows.size > 0 && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => setShowDeleteDialog(true)}
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete ({selectedRows.size})
-              </Button>
-            )}
-
-            <Button
-              size="sm"
-              onClick={() => setShowInsertDialog(true)}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Row
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={refetch}
-              disabled={loading}
-              className="border-white/10 bg-transparent text-gray-400 hover:bg-white/5"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </Button>
+              <ColumnManager
+                columns={allColumns}
+                columnConfig={columnConfig}
+                onColumnConfigChange={handleColumnConfigChange}
+                primaryKeyColumn={primaryKeyColumn}
+                foreignKeyColumns={foreignKeyColumnsSet}
+              />
+            </div>
           </div>
         </div>
 
-        {/* Active Filters */}
-        {currentOptions.filters && currentOptions.filters.length > 0 && (
-          <div className="flex items-center gap-2 px-4 py-2 border-b border-white/5 bg-blue-500/5">
-            <span className="text-xs text-gray-400">Filters:</span>
-            {currentOptions.filters.map((filter, idx) => (
-              <Badge
-                key={idx}
-                variant="outline"
-                className="border-blue-500/30 text-blue-400 cursor-pointer hover:bg-blue-500/10"
-                onClick={clearFilters}
-              >
-                {filter.column} contains "{filter.value}"
-                <X className="w-3 h-3 ml-1" />
+        {/* Query Results Banner */}
+        {queryResults && (
+          <div className="flex items-center justify-between px-4 py-2 border-b border-purple-500/30 bg-purple-500/10">
+            <div className="flex items-center gap-2 text-sm">
+              <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">
+                Query Results
               </Badge>
-            ))}
+              <span className="text-purple-300">{queryResults.rows.length} row(s) returned</span>
+            </div>
+            <span className="text-xs text-gray-500">Read-only query results • Click "Clear Query Results" to return to table view</span>
           </div>
         )}
 
@@ -954,32 +954,35 @@ export default function TableView() {
             <Table>
               <TableHeader className="sticky top-0 bg-[#273142] z-10">
                 <TableRow className="border-white/5 hover:bg-transparent">
-                  <TableHead className="w-12 text-center sticky left-0 bg-[#273142]">
-                    <input
-                      type="checkbox"
-                      checked={data?.rows && selectedRows.size === data.rows.length}
-                      onChange={toggleAllRows}
-                      className="rounded border-white/20 bg-transparent"
-                    />
-                  </TableHead>
-                  {displayColumns.map((column) => {
-                    const columnType = getColumnType(column);
-                    const fkRelation = foreignKeyColumns.get(column);
+                  {!queryResults && (
+                    <TableHead className="w-12 text-center sticky left-0 bg-[#273142]">
+                      <input
+                        type="checkbox"
+                        checked={data?.rows && selectedRows.size === data.rows.length}
+                        onChange={toggleAllRows}
+                        className="rounded border-white/20 bg-transparent"
+                      />
+                    </TableHead>
+                  )}
+                  {(queryResults?.columns || displayColumns).map((column) => {
+                    const columnType = queryResults ? 'normal' : getColumnType(column);
+                    const fkRelation = queryResults ? undefined : foreignKeyColumns.get(column);
                     const columnWidth = calculateColumnWidth(column);
 
                     return (
                       <TableHead
                         key={column}
                         className={cn(
-                          'text-gray-400 font-medium cursor-pointer hover:bg-white/5 transition-colors whitespace-nowrap',
-                          getColumnHeaderStyles(column)
+                          'text-gray-400 font-medium transition-colors whitespace-nowrap',
+                          !queryResults && 'cursor-pointer hover:bg-white/5',
+                          !queryResults && getColumnHeaderStyles(column)
                         )}
                         style={{ minWidth: columnWidth }}
-                        onClick={() => toggleSort(column)}
+                        onClick={() => !queryResults && toggleSort(column)}
                       >
                         <div className="flex items-center gap-2">
                           <span>{column}</span>
-                          {getSortIcon(column)}
+                          {!queryResults && getSortIcon(column)}
                           {columnType === 'primary' && (
                             <Tooltip>
                               <TooltipTrigger>
@@ -1012,76 +1015,100 @@ export default function TableView() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data?.rows && data.rows.length > 0 ? (
-                  data.rows.map((row, rowIndex) => (
-                    <TableRow
-                      key={rowIndex}
-                      className={cn(
-                        'border-white/5 hover:bg-white/5 transition-colors',
-                        selectedRows.has(rowIndex) && 'bg-blue-500/10',
-                        highlightedRows.has(rowIndex) && 'bg-green-500/20 animate-pulse border-l-4 border-l-green-500'
-                      )}
-                    >
-                      <TableCell className={cn(
-                        "text-center w-12 sticky left-0",
-                        highlightedRows.has(rowIndex) ? 'bg-green-500/20' : 'bg-[#1B2431]'
-                      )}>
-                        <input
-                          type="checkbox"
-                          checked={selectedRows.has(rowIndex)}
-                          onChange={() => toggleRowSelection(rowIndex)}
-                          className="rounded border-white/20 bg-transparent"
-                        />
-                      </TableCell>
-                      {displayColumns.map((column) => {
-                        const value = row[column];
-                        const isNull = value === null || value === undefined;
-                        const columnType = getColumnType(column);
-                        const columnWidth = calculateColumnWidth(column);
+                {((queryResults?.rows || data?.rows) || []).length > 0 ? (
+                  (queryResults?.rows || data?.rows || []).map((row, rowIndex) => {
+                    // Check if this row has any search matches
+                    const rowSearchMatches = searchState.matches.filter(m => m.rowIndex === rowIndex);
+                    const isCurrentSearchRow = searchState.currentMatchIndex >= 0 &&
+                      searchState.matches[searchState.currentMatchIndex]?.rowIndex === rowIndex;
 
-                        return (
-                          <TableCell
-                            key={column}
-                            className={cn(
-                              'font-mono text-sm cursor-pointer hover:bg-white/10 transition-colors',
-                              getColumnCellStyles(column),
-                              isNull ? 'text-gray-500 italic' : 'text-gray-300'
-                            )}
-                            style={{ minWidth: columnWidth, maxWidth: 300 }}
-                            onClick={() => handleCellClick(rowIndex, column, value)}
-                            onDoubleClick={() => handleCellDoubleClickWrapper(rowIndex, column, value)}
-                            onContextMenu={(e) => {
-                              if (columnType === 'foreign') {
-                                handleFkRightClick(e, column, value);
-                              }
-                            }}
-                          >
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="block truncate">
-                                  {renderCellValue(value)}
-                                </span>
-                              </TooltipTrigger>
-                              {!isNull && String(value).length > 30 && (
-                                <TooltipContent className="bg-[#1B2431] border-white/10 text-white max-w-md">
-                                  <p className="break-all font-mono text-xs">
-                                    {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
-                                  </p>
-                                </TooltipContent>
-                              )}
-                            </Tooltip>
+                    return (
+                      <TableRow
+                        key={rowIndex}
+                        className={cn(
+                          'border-white/5 hover:bg-white/5 transition-colors',
+                          !queryResults && selectedRows.has(rowIndex) && 'bg-blue-500/10',
+                          highlightedRows.has(rowIndex) && 'bg-green-500/20 animate-pulse border-l-4 border-l-green-500',
+                          isCurrentSearchRow && 'bg-yellow-500/10 border-l-2 border-l-yellow-500',
+                          queryResults && 'bg-purple-500/5'
+                        )}
+                      >
+                        {!queryResults && (
+                          <TableCell className={cn(
+                            "text-center w-12 sticky left-0",
+                            highlightedRows.has(rowIndex) ? 'bg-green-500/20' :
+                              isCurrentSearchRow ? 'bg-yellow-500/10' : 'bg-[#1B2431]'
+                          )}>
+                            <input
+                              type="checkbox"
+                              checked={selectedRows.has(rowIndex)}
+                              onChange={() => toggleRowSelection(rowIndex)}
+                              className="rounded border-white/20 bg-transparent"
+                            />
                           </TableCell>
-                        );
-                      })}
-                    </TableRow>
-                  ))
+                        )}
+                        {(queryResults?.columns || displayColumns).map((column) => {
+                          const value = row[column];
+                          const isNull = value === null || value === undefined;
+                          const columnType = queryResults ? 'normal' : getColumnType(column);
+                          const columnWidth = calculateColumnWidth(column);
+
+                          // Check if this cell matches the search
+                          const cellMatch = rowSearchMatches.find(m => m.columnName === column);
+                          const isCurrentMatch = searchState.currentMatchIndex >= 0 &&
+                            searchState.matches[searchState.currentMatchIndex]?.rowIndex === rowIndex &&
+                            searchState.matches[searchState.currentMatchIndex]?.columnName === column;
+
+                          return (
+                            <TableCell
+                              key={column}
+                              className={cn(
+                                'font-mono text-sm transition-colors',
+                                !queryResults && 'cursor-pointer hover:bg-white/10',
+                                !queryResults && getColumnCellStyles(column),
+                                isNull ? 'text-gray-500 italic' : 'text-gray-300',
+                                cellMatch && 'bg-yellow-500/20',
+                                isCurrentMatch && 'bg-yellow-500/30 ring-1 ring-yellow-500'
+                              )}
+                              style={{ minWidth: columnWidth, maxWidth: 300 }}
+                              onClick={() => !queryResults && handleCellClick(rowIndex, column, value)}
+                              onDoubleClick={() => !queryResults && handleCellDoubleClickWrapper(rowIndex, column, value)}
+                              onContextMenu={(e) => {
+                                if (!queryResults && columnType === 'foreign') {
+                                  handleFkRightClick(e, column, value);
+                                }
+                              }}
+                            >
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="block truncate">
+                                    {searchState.query && !isNull ?
+                                      highlightSearchMatch(renderCellValue(value), searchState.query, isCurrentMatch) :
+                                      renderCellValue(value)
+                                    }
+                                  </span>
+                                </TooltipTrigger>
+                                {!isNull && String(value).length > 30 && (
+                                  <TooltipContent className="bg-[#1B2431] border-white/10 text-white max-w-md">
+                                    <p className="break-all font-mono text-xs">
+                                      {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                                    </p>
+                                  </TooltipContent>
+                                )}
+                              </Tooltip>
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow>
                     <TableCell
-                      colSpan={displayColumns.length + 1}
+                      colSpan={(queryResults?.columns || displayColumns).length + (queryResults ? 0 : 1)}
                       className="text-center py-8 text-gray-400"
                     >
-                      No data found
+                      {queryResults ? 'Query returned no results' : 'No data found'}
                     </TableCell>
                   </TableRow>
                 )}
