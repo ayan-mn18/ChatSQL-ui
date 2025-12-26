@@ -487,7 +487,10 @@ function SchemaVisualizerContent() {
                     variant="ghost"
                     size="sm"
                     className="h-7 text-xs text-gray-400 hover:text-white hover:bg-white/10"
-                    onClick={selectAllSchemas}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      selectAllSchemas();
+                    }}
                   >
                     Select All
                   </Button>
@@ -495,7 +498,10 @@ function SchemaVisualizerContent() {
                     variant="ghost"
                     size="sm"
                     className="h-7 text-xs text-gray-400 hover:text-white hover:bg-white/10"
-                    onClick={clearSchemaSelection}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      clearSchemaSelection();
+                    }}
                   >
                     Clear All
                   </Button>
@@ -503,25 +509,28 @@ function SchemaVisualizerContent() {
                 <DropdownMenuSeparator className="bg-white/10" />
 
                 {/* Schema list */}
-                {availableSchemas.map((schema) => (
-                  <DropdownMenuCheckboxItem
-                    key={schema.schema_name}
-                    checked={selectedSchemas.has(schema.schema_name)}
-                    onCheckedChange={() => toggleSchema(schema.schema_name)}
-                    className="text-gray-300 hover:text-white hover:bg-white/10 cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2 w-full">
-                      <div
-                        className="w-3 h-3 rounded-sm"
-                        style={{ backgroundColor: schemaColors.get(schema.schema_name) }}
-                      />
-                      <span className="flex-1">{schema.schema_name}</span>
-                      <span className="text-xs text-gray-500">
-                        {allTables.filter(t => t.schema_name === schema.schema_name).length} tables
-                      </span>
-                    </div>
-                  </DropdownMenuCheckboxItem>
-                ))}
+                <div className="max-h-[300px] overflow-y-auto scrollbar-thin">
+                  {availableSchemas.map((schema) => (
+                    <DropdownMenuCheckboxItem
+                      key={schema.schema_name}
+                      checked={selectedSchemas.has(schema.schema_name)}
+                      onCheckedChange={() => toggleSchema(schema.schema_name)}
+                      onSelect={(e) => e.preventDefault()}
+                      className="text-gray-300 hover:text-white hover:bg-white/10 cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2 w-full">
+                        <div
+                          className="w-3 h-3 rounded-sm"
+                          style={{ backgroundColor: schemaColors.get(schema.schema_name) }}
+                        />
+                        <span className="flex-1">{schema.schema_name}</span>
+                        <span className="text-xs text-gray-500">
+                          {allTables.filter(t => t.schema_name === schema.schema_name).length} tables
+                        </span>
+                      </div>
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </div>
               </DropdownMenuContent>
             </DropdownMenu>
           )}

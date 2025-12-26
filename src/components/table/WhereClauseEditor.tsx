@@ -2,7 +2,6 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Play, Loader2, X, AlertCircle, CheckCircle2, Filter } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { TableColumnDef } from '@/types';
@@ -35,8 +34,11 @@ interface ValidationError {
 // SQL operators that can be followed by a value
 const VALUE_OPERATORS = ['=', '!=', '<>', '>', '<', '>=', '<=', 'LIKE', 'ILIKE', 'IN', 'NOT IN', 'BETWEEN'];
 const NULL_OPERATORS = ['IS NULL', 'IS NOT NULL'];
-const LOGICAL_OPERATORS = ['AND', 'OR', 'NOT'];
+const LOGICAL_OPERATORS = ['AND', 'OR', 'NOT', 'WHERE'];
 const ALL_KEYWORDS = [...VALUE_OPERATORS, ...NULL_OPERATORS, ...LOGICAL_OPERATORS, '(', ')'];
+
+// Operators that expect a value after them (not a column name)
+const OPERATORS_EXPECTING_VALUE = ['=', '!=', '<>', '>', '<', '>=', '<=', 'LIKE', 'ILIKE', 'IN', 'BETWEEN'];
 
 // PostgreSQL type categories for validation
 const NUMERIC_TYPES = ['int2', 'int4', 'int8', 'integer', 'bigint', 'smallint', 'numeric', 'decimal', 'real', 'float4', 'float8', 'double precision', 'serial', 'bigserial', 'smallserial', 'money'];
@@ -233,8 +235,41 @@ export function WhereClauseEditor({
     };
   }, [whereClause, cursorPosition]);
 
+  // Determine if we should show suggestions based on context
+  const shouldShowSuggestions = useMemo(() => {
+    const beforeCursor = whereClause.slice(0, cursorPosition);
+
+    // Don't show suggestions if we're inside quotes
+    const singleQuotes = (beforeCursor.match(/'/g) || []).length;
+    if (singleQuotes % 2 !== 0) {
+      return false; // Inside single quotes
+    }
+
+    const doubleQuotes = (beforeCursor.match(/"/g) || []).length;
+    if (doubleQuotes % 2 !== 0) {
+      return false; // Inside double quotes
+    }
+
+    // Check if the previous token is an operator expecting a value
+    const trimmedBefore = beforeCursor.trimEnd();
+    const lastTokenMatch = trimmedBefore.match(/(\S+)\s*$/);
+    if (lastTokenMatch) {
+      const lastToken = lastTokenMatch[1].toUpperCase();
+      // If last token is an operator expecting a value, don't suggest columns
+      if (OPERATORS_EXPECTING_VALUE.includes(lastToken)) {
+        return false;
+      }
+    }
+
+    return true;
+  }, [whereClause, cursorPosition]);
+
   // Filter suggestions based on current input
   const filteredSuggestions = useMemo(() => {
+    if (!shouldShowSuggestions) {
+      return [];
+    }
+
     const { word } = getCurrentWord();
     const wordLower = word.toLowerCase();
 
@@ -394,9 +429,22 @@ export function WhereClauseEditor({
   // Handle input change
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
+    const newCursorPos = e.target.selectionStart || 0;
     setWhereClause(value);
-    setCursorPosition(e.target.selectionStart || 0);
-    setShowSuggestions(true);
+    setCursorPosition(newCursorPos);
+
+    // Only show suggestions if not in a context where values are expected
+    const beforeCursor = value.slice(0, newCursorPos);
+    const singleQuotes = (beforeCursor.match(/'/g) || []).length;
+    const doubleQuotes = (beforeCursor.match(/"/g) || []).length;
+
+    // Don't show suggestions inside quotes
+    if (singleQuotes % 2 === 0 && doubleQuotes % 2 === 0) {
+      setShowSuggestions(true);
+    } else {
+      setShowSuggestions(false);
+    }
+
     setSelectedSuggestionIndex(0);
   }, []);
 
@@ -413,7 +461,14 @@ export function WhereClauseEditor({
       return;
     }
 
-    const trimmedClause = whereClause.trim();
+    let trimmedClause = whereClause.trim();
+
+    // Strip leading "WHERE" keyword if user typed it
+    if (trimmedClause.toUpperCase().startsWith('WHERE ')) {
+      trimmedClause = trimmedClause.slice(6).trim();
+    } else if (trimmedClause.toUpperCase() === 'WHERE') {
+      trimmedClause = '';
+    }
 
     // Build the full SELECT query
     let fullQuery: string;
@@ -484,7 +539,7 @@ export function WhereClauseEditor({
             onKeyDown={handleKeyDown}
             onSelect={handleSelect}
             onFocus={() => setShowSuggestions(true)}
-            placeholder={"id = 1 AND status = 'active'"}
+            placeholder={"id = 1 OR WHERE status = 'active'"}
             className={cn(
               "flex-1 h-8 bg-transparent border-0 px-3 text-sm font-mono",
               "focus-visible:ring-0 focus-visible:ring-offset-0",
@@ -535,62 +590,56 @@ export function WhereClauseEditor({
         </Button>
       </div>
 
-      {/* Suggestions dropdown */}
+      {/* Suggestions dropdown - compact popover style */}
       {showSuggestions && filteredSuggestions.length > 0 && (
         <div
           ref={suggestionsRef}
-          className="absolute top-full left-[72px] right-[70px] mt-1 bg-[#1e293b] border border-white/10 rounded-md shadow-xl z-50 max-h-64 overflow-auto"
+          className="absolute top-full left-[72px] mt-1 bg-[#1e293b] border border-white/10 rounded-md shadow-xl z-50 max-h-48 overflow-auto min-w-[200px] max-w-[320px]"
         >
-          {filteredSuggestions.slice(0, 15).map((suggestion, index) => (
+          {filteredSuggestions.slice(0, 8).map((suggestion, index) => (
             <button
               key={suggestion.name}
               onClick={() => selectSuggestion(suggestion)}
               className={cn(
-                "w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors",
+                "w-full flex items-center gap-1.5 px-2 py-1 text-left text-xs transition-colors",
                 index === selectedSuggestionIndex
                   ? "bg-blue-500/20 text-white"
                   : "text-gray-300 hover:bg-white/5"
               )}
             >
-              {/* Icon/badge for type */}
+              {/* Icon/badge for type - more compact */}
               {'isKeyword' in suggestion && suggestion.isKeyword ? (
-                <Badge variant="outline" className="h-5 px-1.5 text-[10px] border-purple-500/50 text-purple-400 shrink-0">
-                  SQL
-                </Badge>
+                <span className="text-[9px] text-purple-400 font-medium w-6 shrink-0">SQL</span>
               ) : (
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "h-5 px-1.5 text-[10px] shrink-0",
-                    suggestion.isPrimaryKey
-                      ? "border-yellow-500/50 text-yellow-400"
-                      : suggestion.isForeignKey
-                        ? "border-blue-500/50 text-blue-400"
-                        : "border-gray-500/50 text-gray-400"
-                  )}
-                >
+                <span className={cn(
+                  "text-[9px] font-medium w-6 shrink-0",
+                  suggestion.isPrimaryKey
+                    ? "text-yellow-400"
+                    : suggestion.isForeignKey
+                      ? "text-blue-400"
+                      : "text-gray-500"
+                )}>
                   {suggestion.isPrimaryKey ? 'PK' : suggestion.isForeignKey ? 'FK' : 'col'}
-                </Badge>
+                </span>
               )}
 
               {/* Name */}
               <span className="font-mono flex-1 truncate">{suggestion.name}</span>
 
-              {/* Type */}
+              {/* Type - only for columns */}
               {'type' in suggestion && suggestion.type !== 'keyword' && (
-                <span className="text-[10px] text-gray-500 font-mono shrink-0">
+                <span className="text-[9px] text-gray-500 font-mono shrink-0 ml-1">
                   {suggestion.type}
                 </span>
               )}
             </button>
           ))}
 
-          {/* Help text */}
-          <div className="px-3 py-2 border-t border-white/5 bg-[#1e293b]/50">
-            <p className="text-[10px] text-gray-500">
-              <kbd className="px-1 rounded bg-white/10 mr-1">↑↓</kbd> navigate
-              <kbd className="px-1 rounded bg-white/10 mx-1">Tab</kbd> select
-              <kbd className="px-1 rounded bg-white/10 mx-1">Enter</kbd> run
+          {/* Help text - more compact */}
+          <div className="px-2 py-1 border-t border-white/5 bg-[#1e293b]/50">
+            <p className="text-[9px] text-gray-500">
+              <kbd className="px-0.5 rounded bg-white/10">↑↓</kbd> nav
+              <kbd className="px-0.5 rounded bg-white/10 mx-1">Tab</kbd> select
             </p>
           </div>
         </div>
