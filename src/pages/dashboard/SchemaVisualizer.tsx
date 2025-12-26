@@ -290,25 +290,34 @@ function SchemaVisualizerContent() {
     try {
       // Fetch schemas first
       const schemasResponse = await connectionService.getSchemas(connectionId);
+      console.log('[ERD] Schemas response:', schemasResponse);
       const schemasData = (schemasResponse as any).schemas || schemasResponse.data || [];
+      console.log('[ERD] Parsed schemas:', schemasData);
       setAllSchemas(schemasData);
 
       // Fetch tables for all selected schemas
       const tables: TableSchema[] = [];
-      for (const schema of schemasData.filter((s: DatabaseSchemaPublic) => s.is_selected)) {
+      const selectedSchemasForFetch = schemasData.filter((s: DatabaseSchemaPublic) => s.is_selected);
+      console.log('[ERD] Selected schemas for fetch:', selectedSchemasForFetch);
+
+      for (const schema of selectedSchemasForFetch) {
         try {
           const tablesResponse = await connectionService.getTablesBySchema(connectionId, schema.schema_name);
+          console.log(`[ERD] Tables for ${schema.schema_name}:`, tablesResponse);
           const schemaTables = (tablesResponse as any).tables || tablesResponse.data || [];
           tables.push(...schemaTables);
-        } catch {
-          console.warn(`Failed to fetch tables for schema: ${schema.schema_name}`);
+        } catch (e) {
+          console.warn(`[ERD] Failed to fetch tables for schema: ${schema.schema_name}`, e);
         }
       }
+      console.log('[ERD] All tables:', tables);
       setAllTables(tables);
 
       // Fetch relations
       const relationsResponse = await connectionService.getRelations(connectionId);
+      console.log('[ERD] Relations response:', relationsResponse);
       const relations = (relationsResponse as any).relations || relationsResponse.data || [];
+      console.log('[ERD] Parsed relations:', relations);
       setAllRelations(relations);
 
       // Auto-select the first schema if none selected
