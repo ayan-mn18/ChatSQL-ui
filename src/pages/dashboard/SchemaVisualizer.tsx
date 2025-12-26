@@ -212,6 +212,7 @@ function SchemaVisualizerContent() {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Cache for all data
@@ -228,17 +229,16 @@ function SchemaVisualizerContent() {
   // Create schema color map based on available schemas order
   const schemaColors = useMemo(() => {
     const colorMap = new Map<string, string>();
-    // Use availableSchemas to ensure consistent ordering
-    const selectedSchemasList = allSchemas.filter(s => s.is_selected);
-    selectedSchemasList.forEach((schema, index) => {
+    // Use all schemas for consistent color assignment
+    allSchemas.forEach((schema, index) => {
       colorMap.set(schema.schema_name, getSchemaColor(index));
     });
     return colorMap;
   }, [allSchemas]);
 
-  // Get available schemas (only those that are selected in the connection)
+  // Get available schemas (show all schemas, not just selected ones)
   const availableSchemas = useMemo(() => {
-    return allSchemas.filter(s => s.is_selected);
+    return allSchemas;
   }, [allSchemas]);
 
   // Filter tables and relations based on selected schemas
@@ -295,12 +295,11 @@ function SchemaVisualizerContent() {
       console.log('[ERD] Parsed schemas:', schemasData);
       setAllSchemas(schemasData);
 
-      // Fetch tables for all selected schemas
+      // Fetch tables for all schemas
       const tables: TableSchema[] = [];
-      const selectedSchemasForFetch = schemasData.filter((s: DatabaseSchemaPublic) => s.is_selected);
-      console.log('[ERD] Selected schemas for fetch:', selectedSchemasForFetch);
+      console.log('[ERD] Fetching tables for all schemas:', schemasData);
 
-      for (const schema of selectedSchemasForFetch) {
+      for (const schema of schemasData) {
         try {
           const tablesResponse = await connectionService.getTablesBySchema(connectionId, schema.schema_name);
           console.log(`[ERD] Tables for ${schema.schema_name}:`, tablesResponse);
@@ -321,12 +320,11 @@ function SchemaVisualizerContent() {
       setAllRelations(relations);
 
       // Auto-select the first schema if none selected
-      const selectedSchemasList = schemasData.filter((s: DatabaseSchemaPublic) => s.is_selected);
-      if (selectedSchemasList.length > 0) {
-        // Set all schemas selected by default on first load
+      if (schemasData.length > 0) {
+        // Set first schema selected by default on first load
         setSelectedSchemas(prev => {
           if (prev.size === 0) {
-            return new Set([selectedSchemasList[0].schema_name]);
+            return new Set([schemasData[0].schema_name]);
           }
           return prev;
         });
@@ -337,6 +335,29 @@ function SchemaVisualizerContent() {
       setIsLoading(false);
     }
   }, [connectionId]);
+
+  // Sync schema from database
+  const syncSchema = useCallback(async () => {
+    if (!connectionId || isSyncing) return;
+
+    setIsSyncing(true);
+    setError(null);
+
+    try {
+      const response = await connectionService.syncSchema(connectionId);
+      console.log('[ERD] Schema sync triggered:', response);
+
+      // Wait a bit for the sync to complete, then refresh
+      setTimeout(() => {
+        fetchERDData();
+        setIsSyncing(false);
+      }, 3000);
+    } catch (err: any) {
+      console.error('[ERD] Schema sync failed:', err);
+      setError(err.message || 'Failed to sync schema');
+      setIsSyncing(false);
+    }
+  }, [connectionId, isSyncing, fetchERDData]);
 
   // Load data on mount
   useEffect(() => {
@@ -670,6 +691,20 @@ function SchemaVisualizerContent() {
               <p className="text-gray-400 text-sm max-w-md">
                 The selected schemas don't have any tables, or the schema hasn't been synced yet.
               </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2 border-white/10 bg-white/5 hover:bg-white/10 text-white"
+                onClick={syncSchema}
+                disabled={isSyncing}
+              >
+                {isSyncing ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                )}
+                {isSyncing ? 'Syncing...' : 'Sync Schema'}
+              </Button>
             </div>
           </div>
         )}
@@ -683,8 +718,22 @@ function SchemaVisualizerContent() {
               </div>
               <p className="text-white font-medium">No schemas available</p>
               <p className="text-gray-400 text-sm max-w-md">
-                The database schema hasn't been synced yet. Please sync the schema from the connection settings.
+                The database schema hasn't been synced yet. Click below to sync from the database.
               </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2 border-white/10 bg-white/5 hover:bg-white/10 text-white"
+                onClick={syncSchema}
+                disabled={isSyncing}
+              >
+                {isSyncing ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                )}
+                {isSyncing ? 'Syncing...' : 'Sync Schema'}
+              </Button>
             </div>
           </div>
         )}

@@ -316,14 +316,14 @@ export const connectionService = {
    * @param connectionId - Connection UUID
    * @param query - SQL query string
    * @param readOnly - Whether to enforce read-only mode
-   * @returns Query results
+   * @returns Query results (rows, rowCount, executionTime at top level)
    */
   executeQuery: async (
     connectionId: string,
     query: string,
     readOnly: boolean = true
-  ): Promise<ApiResponse<QueryResult>> => {
-    const response = await api.post<ApiResponse<QueryResult>>(
+  ): Promise<ExecuteQueryResponse> => {
+    const response = await api.post<ExecuteQueryResponse>(
       `/connections/${connectionId}/query`,
       { query, readOnly }
     );
@@ -400,6 +400,22 @@ export interface QueryResult {
   rowCount: number;
   executionTime: number;
   jobId?: string;
+}
+
+/**
+ * Execute query response - matches backend response structure
+ * The backend returns rows/rowCount/executionTime at the top level (not nested in data)
+ */
+export interface ExecuteQueryResponse {
+  success: boolean;
+  rows?: any[];
+  rowCount?: number;
+  executionTime?: number;
+  queryType?: string;
+  jobId?: string;
+  error?: string;
+  message?: string;
+  code?: string;
 }
 
 export default connectionService;

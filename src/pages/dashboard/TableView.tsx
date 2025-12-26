@@ -828,14 +828,15 @@ export default function TableView() {
     try {
       const result = await connectionService.executeQuery(connectionId, query, true);
 
-      if (result.success && result.data) {
-        const rows = result.data.rows || [];
+      if (result.success) {
+        // The API returns rows directly on the result object
+        const rows = result.rows || [];
         const cols = rows.length > 0 ? Object.keys(rows[0]) : [];
 
         setQueryResults({ rows, columns: cols });
         toast.success(`Query returned ${rows.length} row(s)`);
       } else {
-        toast.error(result.message || 'Query execution failed');
+        toast.error(result.message || result.error || 'Query execution failed');
       }
     } catch (error: any) {
       toast.error(error.message || 'Query execution failed');
