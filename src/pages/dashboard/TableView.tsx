@@ -72,9 +72,9 @@ import {
 import { useTableData } from '@/hooks/useTableData';
 import { useTableTabs } from '@/contexts/TableTabsContext';
 import { TableTabsBar } from '@/components/dashboard/TableTabsBarEnhanced';
-import { AdvancedFilterBuilder, TableSearchBar, ColumnManager, highlightSearchMatch, type TableSearchState, type ColumnConfig } from '@/components/table';
+import { AdvancedFilterBuilder, TableSearchBar, ColumnManager, WhereClauseEditor, highlightSearchMatch, type TableSearchState, type ColumnConfig } from '@/components/table';
 import { ColumnUpdate, FilterCondition, connectionService } from '@/services/connection.service';
-import { ERDRelation } from '@/types';
+import { ERDRelation, TableColumnDef } from '@/types';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import Editor from '@monaco-editor/react';
@@ -1045,63 +1045,73 @@ export default function TableView() {
             </div>
           </div>
 
-          {/* Toolbar row: Search + Filters + Columns */}
-          <div className="flex items-center justify-between px-4 md:px-6 py-2 border-t border-white/5 bg-[#1B2431]/50">
-            {/* Left: Search */}
-            <TableSearchBar
-              rows={queryResults?.rows || data?.rows || []}
-              columns={queryResults?.columns || displayColumns}
-              searchState={searchState}
-              onSearchStateChange={setSearchState}
-              connectionId={connectionId || ''}
+          {/* Toolbar row: WHERE Clause Editor + Search + Filters + Columns */}
+          <div className="flex flex-col gap-2 px-4 md:px-6 py-2 border-t border-white/5 bg-[#1B2431]/50">
+            {/* WHERE Clause Editor - Primary query interface */}
+            <WhereClauseEditor
               schemaName={schemaName || ''}
               tableName={tableName || ''}
+              columns={(columnsMetadata?.columns as TableColumnDef[]) || []}
               onExecuteQuery={handleExecuteQuery}
-              isExecutingQuery={isExecutingQuery}
+              isExecuting={isExecutingQuery}
             />
 
-            {/* Right: Filter + Columns */}
-            <div className="flex items-center gap-2">
-              {/* Show "Clear Query" button when query results are displayed */}
-              {queryResults && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleClearQueryResults}
-                  className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
-                >
-                  Clear Query Results
-                </Button>
-              )}
-
-              <AdvancedFilterBuilder
-                columns={allColumns}
-                activeFilters={currentOptions.filters || []}
-                onApplyFilters={handleApplyFilters}
-                onClearFilters={clearFilters}
+            {/* Secondary toolbar: Search + Filters + Columns */}
+            <div className="flex items-center justify-between">
+              {/* Left: In-memory Search */}
+              <TableSearchBar
+                rows={queryResults?.rows || data?.rows || []}
+                columns={queryResults?.columns || displayColumns}
+                searchState={searchState}
+                onSearchStateChange={setSearchState}
+                connectionId={connectionId || ''}
+                schemaName={schemaName || ''}
+                tableName={tableName || ''}
               />
 
-              <ColumnManager
-                columns={allColumns}
-                columnConfig={columnConfig}
-                onColumnConfigChange={handleColumnConfigChange}
-                primaryKeyColumn={primaryKeyColumn}
-                foreignKeyColumns={foreignKeyColumnsSet}
-              />
+              {/* Right: Filter + Columns */}
+              <div className="flex items-center gap-2">
+                {/* Show "Clear Query" button when query results are displayed */}
+                {queryResults && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleClearQueryResults}
+                    className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
+                  >
+                    Clear Results
+                  </Button>
+                )}
+
+                <AdvancedFilterBuilder
+                  columns={allColumns}
+                  activeFilters={currentOptions.filters || []}
+                  onApplyFilters={handleApplyFilters}
+                  onClearFilters={clearFilters}
+                />
+
+                <ColumnManager
+                  columns={allColumns}
+                  columnConfig={columnConfig}
+                  onColumnConfigChange={handleColumnConfigChange}
+                  primaryKeyColumn={primaryKeyColumn}
+                  foreignKeyColumns={foreignKeyColumnsSet}
+                />
+              </div>
             </div>
           </div>
         </div>
 
         {/* Query Results Banner */}
         {queryResults && (
-          <div className="flex items-center justify-between px-4 py-2 border-b border-purple-500/30 bg-purple-500/10">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-blue-500/30 bg-blue-500/10">
             <div className="flex items-center gap-2 text-sm">
-              <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">
+              <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
                 Query Results
               </Badge>
-              <span className="text-purple-300">{queryResults.rows.length} row(s) returned</span>
+              <span className="text-blue-300">{queryResults.rows.length} row(s) returned</span>
             </div>
-            <span className="text-xs text-gray-500">Read-only query results • Click "Clear Query Results" to return to table view</span>
+            <span className="text-xs text-gray-500">Read-only • Click "Clear Results" to return to table view</span>
           </div>
         )}
 

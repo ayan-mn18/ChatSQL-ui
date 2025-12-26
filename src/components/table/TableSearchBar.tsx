@@ -1,10 +1,9 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { Search, X, Play, Loader2, ChevronDown, ChevronUp, Command, CornerDownLeft } from 'lucide-react';
+import { useCallback, useRef, useEffect } from 'react';
+import { Search, X, ChevronDown, ChevronUp, Command } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import toast from 'react-hot-toast';
 
 // ============================================
 // TYPES
@@ -32,10 +31,10 @@ interface TableSearchBarProps {
   searchState: TableSearchState;
   onSearchStateChange: (state: TableSearchState) => void;
 
-  // Query execution
-  connectionId: string;
-  schemaName: string;
-  tableName: string;
+  // Optional - kept for backward compatibility but no longer used
+  connectionId?: string;
+  schemaName?: string;
+  tableName?: string;
   onExecuteQuery?: (query: string) => Promise<void>;
   isExecutingQuery?: boolean;
 }
@@ -49,12 +48,8 @@ export function TableSearchBar({
   columns,
   searchState,
   onSearchStateChange,
-  onExecuteQuery,
-  isExecutingQuery,
 }: TableSearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [isQueryMode, setIsQueryMode] = useState(false);
-  const [queryText, setQueryText] = useState('');
 
   // Focus input on Cmd/Ctrl+F
   useEffect(() => {
@@ -70,7 +65,7 @@ export function TableSearchBar({
         inputRef.current?.blur();
       }
       // Enter to navigate to next match
-      if (e.key === 'Enter' && document.activeElement === inputRef.current && !isQueryMode) {
+      if (e.key === 'Enter' && document.activeElement === inputRef.current) {
         if (e.shiftKey) {
           navigateToPreviousMatch();
         } else {
@@ -81,7 +76,7 @@ export function TableSearchBar({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [searchState, isQueryMode]);
+  }, [searchState]);
 
   // Search logic
   const performSearch = useCallback((query: string) => {
@@ -129,8 +124,6 @@ export function TableSearchBar({
       currentMatchIndex: -1,
       isHighlighting: false,
     });
-    setQueryText('');
-    setIsQueryMode(false);
   }, [onSearchStateChange]);
 
   const navigateToNextMatch = useCallback(() => {
@@ -155,81 +148,38 @@ export function TableSearchBar({
     });
   }, [searchState, onSearchStateChange]);
 
-  const handleQuerySubmit = useCallback(async () => {
-    if (!queryText.trim() || !onExecuteQuery) return;
-
-    // Basic validation for read-only query
-    const upperQuery = queryText.toUpperCase().trim();
-    if (!upperQuery.startsWith('SELECT')) {
-      toast.error('Only SELECT queries are allowed');
-      return;
-    }
-
-    // Check for dangerous keywords
-    const dangerousKeywords = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'TRUNCATE', 'ALTER', 'CREATE'];
-    for (const keyword of dangerousKeywords) {
-      if (upperQuery.includes(keyword)) {
-        toast.error(`${keyword} operations are not allowed`);
-        return;
-      }
-    }
-
-    try {
-      await onExecuteQuery(queryText);
-    } catch (error) {
-      toast.error('Query execution failed');
-    }
-  }, [queryText, onExecuteQuery]);
-
   return (
     <div className="flex items-center gap-2">
       <div className={cn(
         "relative flex items-center rounded-md transition-all duration-200",
         "bg-[#273142] border",
-        isQueryMode
-          ? "border-purple-500/50 w-[400px]"
-          : searchState.isHighlighting
-            ? "border-green-500/50 w-[280px]"
-            : "border-white/10 w-[240px] focus-within:w-[280px] focus-within:border-white/20"
+        searchState.isHighlighting
+          ? "border-green-500/50 w-[240px]"
+          : "border-white/10 w-[200px] focus-within:w-[240px] focus-within:border-white/20"
       )}>
-        {/* Search/Query icon */}
-        <div className="flex items-center justify-center w-9 h-8 shrink-0">
-          {isQueryMode ? (
-            <Play className="w-4 h-4 text-purple-400" />
-          ) : (
-            <Search className="w-4 h-4 text-gray-400" />
-          )}
+        {/* Search icon */}
+        <div className="flex items-center justify-center w-8 h-7 shrink-0">
+          <Search className="w-3.5 h-3.5 text-gray-400" />
         </div>
 
         {/* Input */}
         <Input
           ref={inputRef}
-          value={isQueryMode ? queryText : searchState.query}
-          onChange={(e) => {
-            if (isQueryMode) {
-              setQueryText(e.target.value);
-            } else {
-              performSearch(e.target.value);
-            }
-          }}
-          placeholder={isQueryMode ? "SELECT * FROM ..." : "Search in table..."}
+          value={searchState.query}
+          onChange={(e) => performSearch(e.target.value)}
+          placeholder="Search rows..."
           className={cn(
-            "flex-1 h-8 bg-transparent border-0 px-0 text-sm",
+            "flex-1 h-7 bg-transparent border-0 px-0 text-xs",
             "focus-visible:ring-0 focus-visible:ring-offset-0",
             "placeholder:text-gray-500"
           )}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && isQueryMode) {
-              handleQuerySubmit();
-            }
-          }}
         />
 
         {/* Match counter / Clear button */}
-        {(searchState.query || queryText) && (
+        {searchState.query && (
           <div className="flex items-center gap-1 pr-2">
-            {!isQueryMode && searchState.matches.length > 0 && (
-              <Badge variant="secondary" className="h-5 px-1.5 bg-green-500/20 text-green-400 text-xs">
+            {searchState.matches.length > 0 && (
+              <Badge variant="secondary" className="h-4 px-1 bg-green-500/20 text-green-400 text-[10px]">
                 {searchState.currentMatchIndex + 1}/{searchState.matches.length}
               </Badge>
             )}
@@ -237,92 +187,42 @@ export function TableSearchBar({
               onClick={handleClearSearch}
               className="p-0.5 rounded hover:bg-white/10 text-gray-400 hover:text-white"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-3 h-3" />
             </button>
           </div>
         )}
       </div>
 
       {/* Navigation buttons for search */}
-      {!isQueryMode && searchState.matches.length > 1 && (
+      {searchState.matches.length > 1 && (
         <div className="flex items-center gap-0.5">
           <Button
             variant="ghost"
             size="icon"
             onClick={navigateToPreviousMatch}
-            className="h-7 w-7 text-gray-400 hover:text-white"
+            className="h-6 w-6 text-gray-400 hover:text-white"
             title="Previous match (Shift+Enter)"
           >
-            <ChevronUp className="w-4 h-4" />
+            <ChevronUp className="w-3.5 h-3.5" />
           </Button>
           <Button
             variant="ghost"
             size="icon"
             onClick={navigateToNextMatch}
-            className="h-7 w-7 text-gray-400 hover:text-white"
+            className="h-6 w-6 text-gray-400 hover:text-white"
             title="Next match (Enter)"
           >
-            <ChevronDown className="w-4 h-4" />
+            <ChevronDown className="w-3.5 h-3.5" />
           </Button>
         </div>
       )}
 
-      {/* Toggle query mode */}
-      {onExecuteQuery && (
-        <Button
-          variant={isQueryMode ? "default" : "outline"}
-          size="sm"
-          onClick={() => {
-            if (isQueryMode) {
-              handleClearSearch();
-            } else {
-              setIsQueryMode(true);
-              onSearchStateChange({
-                query: '',
-                matches: [],
-                currentMatchIndex: -1,
-                isHighlighting: false,
-              });
-            }
-          }}
-          className={cn(
-            "h-8 gap-1.5 text-xs",
-            isQueryMode
-              ? "bg-purple-600 hover:bg-purple-700"
-              : "border-white/10 bg-transparent text-gray-400 hover:bg-white/5"
-          )}
-        >
-          <Play className="w-3 h-3" />
-          SQL
-        </Button>
-      )}
-
-      {/* Execute query button */}
-      {isQueryMode && onExecuteQuery && (
-        <Button
-          size="sm"
-          onClick={handleQuerySubmit}
-          disabled={isExecutingQuery || !queryText.trim()}
-          className="h-8 bg-purple-600 hover:bg-purple-700 gap-1.5"
-        >
-          {isExecutingQuery ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : (
-            <>
-              <CornerDownLeft className="w-3 h-3" />
-              Run
-            </>
-          )}
-        </Button>
-      )}
-
       {/* Keyboard shortcut hint */}
-      {!searchState.query && !isQueryMode && (
-        <div className="hidden md:flex items-center gap-1 text-xs text-gray-500">
-          <kbd className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">
-            <Command className="w-2.5 h-2.5 inline" />F
+      {!searchState.query && (
+        <div className="hidden md:flex items-center gap-1 text-[10px] text-gray-500">
+          <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[9px]">
+            <Command className="w-2 h-2 inline" />F
           </kbd>
-          <span>to search</span>
         </div>
       )}
     </div>
