@@ -4,6 +4,7 @@ import LandingPage from './pages/LandingPage';
 import ChatPage from './pages/ChatPage';
 import FuturisticLanding from './pages/FuturisticLanding';
 import ChatSQLLanding from './pages/ChatSQLLanding';
+import StandaloneChat from './pages/StandaloneChat';
 import DashboardLayout from './layouts/DashboardLayout';
 import ConnectionLayout from './layouts/ConnectionLayout';
 import SignInPage from './pages/auth/SignInPage';
@@ -37,6 +38,11 @@ function App() {
       <Route path="/landing" element={<FuturisticLanding />} />
       <Route path="/hexora" element={<LandingPage />} />
       <Route path="/chat" element={<ChatPage />} />
+
+      {/* Standalone Chat Route */}
+      <Route element={<ProtectedRoute />}>
+        <Route path="/chat/:connectionId" element={<StandaloneChat />} />
+      </Route>
 
       {/* Auth Routes */}
       <Route path="/auth/signin" element={<SignInPage />} />

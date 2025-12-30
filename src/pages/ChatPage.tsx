@@ -140,7 +140,7 @@ function ChatPage() {
       />
 
       <main className="flex-1 overflow-y-auto p-4">
-        <div className="max-w-4xl mx-auto mt-40">
+        <div className={`max-w-4xl mx-auto ${messages.length === 0 ? 'mt-40' : 'mt-4'}`}>
           {!dbSettings.dbUri ? (
             <div className="text-center text-gray-500 mt-8">
               Please configure your database settings first

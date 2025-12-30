@@ -26,6 +26,7 @@ import {
   Code,
   Settings2,
   Palette,
+  ExternalLink,
 } from 'lucide-react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import DataTable from '@/components/DataTable';
@@ -252,7 +253,12 @@ function AIChatSidebar({
 
   // Scroll to bottom when messages change
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesEndRef.current) {
+      // Use requestAnimationFrame for better performance
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      });
+    }
   }, [messages, streamingContent]);
 
   const loadChatSession = async () => {
@@ -376,14 +382,31 @@ function AIChatSidebar({
   }
 
   return (
-    <div className="flex flex-col h-full bg-[#0f172a] border-l border-white/10">
+    <div className="flex flex-col h-full bg-[#0f172a] border-l border-white/10 min-w-[200px]">
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-white/10">
+      <div className="flex items-center justify-between p-3 border-b border-white/10 shrink-0">
         <div className="flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-blue-400" />
           <span className="font-semibold text-white">AI Assistant</span>
         </div>
         <div className="flex items-center gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const schemas = selectedSchemas.join(',');
+                  const url = `/chat/${connectionId}?schemas=${encodeURIComponent(schemas)}`;
+                  window.open(url, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
+                }}
+                className="text-gray-400 hover:text-white"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Open Chat in New Window</TooltipContent>
+          </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="ghost" size="sm" onClick={handleClearChat} className="text-gray-400 hover:text-white">
@@ -398,159 +421,161 @@ function AIChatSidebar({
         </div>
       </div>
 
-      {/* Messages */}
-      <ScrollArea className="flex-1 p-3">
-        <div className="space-y-4">
-          {messages.length === 0 && !isStreaming && (
-            <div className="text-center text-gray-500 py-8">
-              <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm font-medium mb-2">Chat with AI Assistant</p>
-              <div className="text-xs space-y-1 text-gray-600">
-                <p>💬 Ask me anything about your database</p>
-                <p>🔍 Request SQL queries when you need them</p>
-                <p className="mt-3 italic">Try: "What tables do I have?" or "Show me all users"</p>
+      {/* Messages - Fixed height container */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="h-full overflow-y-auto p-3">
+          <div className="space-y-4">
+            {messages.length === 0 && !isStreaming && (
+              <div className="text-center text-gray-500 py-8">
+                <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <p className="text-sm font-medium mb-2">Chat with AI Assistant</p>
+                <div className="text-xs space-y-1 text-gray-600">
+                  <p>💬 Ask me anything about your database</p>
+                  <p>🔍 Request SQL queries when you need them</p>
+                  <p className="mt-3 italic">Try: "What tables do I have?" or "Show me all users"</p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
+            {messages.map((msg) => (
               <div
-                className={`max-w-[90%] rounded-lg p-3 ${msg.role === 'user'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-[#1e293b] text-gray-200'
-                  }`}
+                key={msg.id}
+                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                {/* Message Content */}
-                <div className="text-sm space-y-2">
-                  {msg.content && msg.content.split('\n\n').map((paragraph, idx) => {
-                    if (!paragraph.trim()) return null;
+                <div
+                  className={`max-w-[80%] rounded-lg p-3 ${msg.role === 'user'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-[#1e293b] text-gray-200'
+                    }`}
+                >
+                  {/* Message Content */}
+                  <div className="text-sm space-y-2">
+                    {msg.content && msg.content.split('\n\n').map((paragraph, idx) => {
+                      if (!paragraph.trim()) return null;
 
-                    // Check if paragraph is a code block
-                    if (paragraph.includes('```sql')) {
-                      const codeMatch = paragraph.match(/```sql\n([\s\S]*?)\n```/);
-                      if (codeMatch) {
-                        const sqlCode = codeMatch[1];
-                        const beforeCode = paragraph.split('```sql')[0].trim();
-                        const afterCode = paragraph.split('```')[2]?.trim();
-                        return (
-                          <div key={idx} className="space-y-2">
-                            {beforeCode && (
-                              <p className="whitespace-pre-wrap">{beforeCode}</p>
-                            )}
-                            <div className="bg-[#0f172a] rounded-md p-3 font-mono text-xs overflow-x-auto border border-white/10">
-                              <code className="text-green-400">{sqlCode}</code>
+                      // Check if paragraph is a code block
+                      if (paragraph.includes('```sql')) {
+                        const codeMatch = paragraph.match(/```sql\n([\s\S]*?)\n```/);
+                        if (codeMatch) {
+                          const sqlCode = codeMatch[1];
+                          const beforeCode = paragraph.split('```sql')[0].trim();
+                          const afterCode = paragraph.split('```')[2]?.trim();
+                          return (
+                            <div key={idx} className="space-y-2">
+                              {beforeCode && (
+                                <p className="whitespace-pre-wrap break-words">{beforeCode}</p>
+                              )}
+                              <div className="bg-[#0f172a] rounded-md p-3 font-mono text-xs overflow-x-auto border border-white/10">
+                                <code className="text-green-400 break-all">{sqlCode}</code>
+                              </div>
+                              {afterCode && (
+                                <p className="whitespace-pre-wrap break-words">{afterCode}</p>
+                              )}
                             </div>
-                            {afterCode && (
-                              <p className="whitespace-pre-wrap">{afterCode}</p>
-                            )}
-                          </div>
-                        );
+                          );
+                        }
                       }
-                    }
 
-                    // Handle bold text (**text**)
-                    const parts = paragraph.split(/(\*\*.*?\*\*)/g);
-                    return (
-                      <p key={idx} className="whitespace-pre-wrap">
-                        {parts.map((part, i) => {
-                          if (part.startsWith('**') && part.endsWith('**')) {
-                            return <strong key={i} className="font-semibold text-white">{part.slice(2, -2)}</strong>;
-                          }
-                          return <span key={i}>{part}</span>;
-                        })}
-                      </p>
-                    );
-                  })}
-                </div>
-
-                {/* SQL Insert Button */}
-                {msg.role === 'assistant' && msg.sqlGenerated && (
-                  <div className="mt-3 pt-3 border-t border-white/10">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full text-xs border-blue-500/40 text-blue-200 hover:bg-blue-500/10"
-                      onClick={() => onInsertSQL(msg.sqlGenerated!)}
-                    >
-                      <Code className="w-3 h-3 mr-1" />
-                      Insert SQL to Editor
-                    </Button>
+                      // Handle bold text (**text**)
+                      const parts = paragraph.split(/(\*\*.*?\*\*)/g);
+                      return (
+                        <p key={idx} className="whitespace-pre-wrap break-words">
+                          {parts.map((part, i) => {
+                            if (part.startsWith('**') && part.endsWith('**')) {
+                              return <strong key={i} className="font-semibold text-white">{part.slice(2, -2)}</strong>;
+                            }
+                            return <span key={i}>{part}</span>;
+                          })}
+                        </p>
+                      );
+                    })}
                   </div>
-                )}
+
+                  {/* SQL Insert Button */}
+                  {msg.role === 'assistant' && msg.sqlGenerated && (
+                    <div className="mt-3 pt-3 border-t border-white/10">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full text-xs border-blue-500/40 text-blue-200 hover:bg-blue-500/10"
+                        onClick={() => onInsertSQL(msg.sqlGenerated!)}
+                      >
+                        <Code className="w-3 h-3 mr-1" />
+                        Insert SQL to Editor
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
 
-          {isStreaming && streamingContent && (
-            <div className="flex justify-start">
-              <div className="max-w-[90%] rounded-lg p-3 bg-[#1e293b] text-gray-200">
-                <div className="text-sm space-y-2">
-                  {streamingContent.split('\n\n').map((paragraph, idx) => {
-                    if (!paragraph.trim()) return null;
+            {isStreaming && streamingContent && (
+              <div className="flex justify-start">
+                <div className="max-w-[80%] rounded-lg p-3 bg-[#1e293b] text-gray-200">
+                  <div className="text-sm space-y-2">
+                    {streamingContent.split('\n\n').map((paragraph, idx) => {
+                      if (!paragraph.trim()) return null;
 
-                    // Check if paragraph is a code block
-                    if (paragraph.includes('```sql')) {
-                      const codeMatch = paragraph.match(/```sql\n([\s\S]*?)\n```/);
-                      if (codeMatch) {
-                        const sqlCode = codeMatch[1];
-                        const beforeCode = paragraph.split('```sql')[0].trim();
-                        const afterCode = paragraph.split('```')[2]?.trim();
-                        return (
-                          <div key={idx} className="space-y-2">
-                            {beforeCode && (
-                              <p className="whitespace-pre-wrap">{beforeCode}</p>
-                            )}
-                            <div className="bg-[#0f172a] rounded-md p-3 font-mono text-xs overflow-x-auto border border-white/10">
-                              <code className="text-green-400">{sqlCode}</code>
+                      // Check if paragraph is a code block
+                      if (paragraph.includes('```sql')) {
+                        const codeMatch = paragraph.match(/```sql\n([\s\S]*?)\n```/);
+                        if (codeMatch) {
+                          const sqlCode = codeMatch[1];
+                          const beforeCode = paragraph.split('```sql')[0].trim();
+                          const afterCode = paragraph.split('```')[2]?.trim();
+                          return (
+                            <div key={idx} className="space-y-2">
+                              {beforeCode && (
+                                <p className="whitespace-pre-wrap break-words">{beforeCode}</p>
+                              )}
+                              <div className="bg-[#0f172a] rounded-md p-3 font-mono text-xs overflow-x-auto border border-white/10">
+                                <code className="text-green-400 break-all">{sqlCode}</code>
+                              </div>
+                              {afterCode && (
+                                <p className="whitespace-pre-wrap break-words">{afterCode}</p>
+                              )}
                             </div>
-                            {afterCode && (
-                              <p className="whitespace-pre-wrap">{afterCode}</p>
-                            )}
-                          </div>
-                        );
+                          );
+                        }
                       }
-                    }
 
-                    // Handle bold text (**text**)
-                    const parts = paragraph.split(/(\*\*.*?\*\*)/g);
-                    return (
-                      <p key={idx} className="whitespace-pre-wrap">
-                        {parts.map((part, i) => {
-                          if (part.startsWith('**') && part.endsWith('**')) {
-                            return <strong key={i} className="font-semibold text-white">{part.slice(2, -2)}</strong>;
-                          }
-                          return <span key={i}>{part}</span>;
-                        })}
-                      </p>
-                    );
-                  })}
-                  <span className="animate-pulse">▌</span>
+                      // Handle bold text (**text**)
+                      const parts = paragraph.split(/(\*\*.*?\*\*)/g);
+                      return (
+                        <p key={idx} className="whitespace-pre-wrap break-words">
+                          {parts.map((part, i) => {
+                            if (part.startsWith('**') && part.endsWith('**')) {
+                              return <strong key={i} className="font-semibold text-white">{part.slice(2, -2)}</strong>;
+                            }
+                            return <span key={i}>{part}</span>;
+                          })}
+                        </p>
+                      );
+                    })}
+                    <span className="animate-pulse">▌</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {isStreaming && !streamingContent && (
-            <div className="flex justify-start">
-              <div className="bg-[#1e293b] rounded-lg p-3">
-                <div className="flex items-center gap-2 text-gray-400">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span className="text-sm">Thinking...</span>
+            {isStreaming && !streamingContent && (
+              <div className="flex justify-start">
+                <div className="bg-[#1e293b] rounded-lg p-3">
+                  <div className="flex items-center gap-2 text-gray-400">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-sm">Thinking...</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} />
+          </div>
         </div>
-      </ScrollArea>
+      </div>
 
       {/* Input */}
-      <div className="p-3 border-t border-white/10">
+      <div className="p-3 border-t border-white/10 shrink-0">
         <div className="flex gap-2">
           <Textarea
             value={inputValue}
@@ -1662,7 +1687,7 @@ export default function QueryConsole() {
           {showChatSidebar && (
             <>
               <ResizableHandle withHandle className="bg-[#1e293b] w-2" />
-              <ResizablePanel defaultSize={30} minSize={20} maxSize={40}>
+              <ResizablePanel defaultSize={30} minSize={25} maxSize={70}>
                 <AIChatSidebar
                   connectionId={connectionId}
                   selectedSchemas={selectedSchemas}
