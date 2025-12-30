@@ -678,7 +678,7 @@ function SavedQueriesModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-[#1e293b] border-white/10 text-white max-w-2xl max-h-[80vh]">
+      <DialogContent className="bg-[#1e293b] border-white/10 text-white max-w-4xl w-[95vw] max-h-[90vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FolderOpen className="w-5 h-5 text-blue-400" />
@@ -707,7 +707,7 @@ function SavedQueriesModal({
         </div>
 
         {/* Queries List */}
-        <ScrollArea className="h-[400px]">
+        <div className="max-h-[500px] overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
@@ -718,78 +718,83 @@ function SavedQueriesModal({
               <p>No saved queries found</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 pr-2">
               {filteredQueries.map(query => (
                 <div
                   key={query.id}
-                  className="p-3 rounded-lg bg-[#0f172a] border border-white/5 hover:border-blue-500/30 transition-colors"
+                  className="p-4 rounded-lg bg-[#0f172a] border border-white/5 hover:border-blue-500/30 transition-colors"
                 >
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <h4 className="font-medium text-white flex items-center gap-2">
-                        {query.name}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium text-white flex items-center gap-2 flex-wrap">
+                        <span className="truncate">{query.name}</span>
                         {query.isShared && (
-                          <Badge variant="outline" className="text-xs text-blue-400 border-blue-500/30">
+                          <Badge variant="outline" className="text-xs text-blue-400 border-blue-500/30 shrink-0">
                             Shared
                           </Badge>
                         )}
                       </h4>
                       {query.description && (
-                        <p className="text-xs text-gray-400 mt-1">{query.description}</p>
+                        <p className="text-xs text-gray-400 mt-1 line-clamp-2">{query.description}</p>
                       )}
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleCopy(query.queryText, query.id)}
-                            className="h-7 w-7 p-0 text-gray-400 hover:text-white"
-                          >
-                            {copiedId === query.id ? (
-                              <Check className="w-3 h-3 text-green-400" />
-                            ) : (
-                              <Copy className="w-3 h-3" />
-                            )}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Copy SQL</TooltipContent>
-                      </Tooltip>
-                      {!isViewer && (
+                    <div className="flex items-center gap-1 ml-2 shrink-0">
+                      <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleDelete(query.id)}
-                              className="h-7 w-7 p-0 text-gray-400 hover:text-red-400"
+                              onClick={() => handleCopy(query.queryText, query.id)}
+                              className="h-8 w-8 p-0 text-gray-400 hover:text-white hover:bg-white/10"
                             >
-                              <Trash2 className="w-3 h-3" />
+                              {copiedId === query.id ? (
+                                <Check className="w-4 h-4 text-green-400" />
+                              ) : (
+                                <Copy className="w-4 h-4" />
+                              )}
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent>Delete</TooltipContent>
+                          <TooltipContent>Copy SQL</TooltipContent>
                         </Tooltip>
+                      </TooltipProvider>
+                      {!isViewer && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(query.id)}
+                                className="h-8 w-8 p-0 text-gray-400 hover:text-red-400 hover:bg-red-500/10"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Delete</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       )}
                     </div>
                   </div>
-                  <pre className="text-xs text-gray-300 bg-black/20 p-2 rounded overflow-x-auto max-h-[80px]">
-                    {query.queryText.substring(0, 200)}
-                    {query.queryText.length > 200 && '...'}
+                  <pre className="text-xs text-gray-300 bg-black/20 p-3 rounded overflow-x-auto max-h-[100px] overflow-y-auto mb-3 whitespace-pre-wrap break-all">
+                    {query.queryText.length > 300 ? `${query.queryText.substring(0, 300)}...` : query.queryText}
                   </pre>
-                  <div className="flex items-center justify-between mt-2">
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <Clock className="w-3 h-3" />
-                      {query.lastUsedAt
-                        ? `Used ${new Date(query.lastUsedAt).toLocaleDateString()}`
-                        : 'Never used'}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 text-xs text-gray-500">
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {query.lastUsedAt
+                          ? `Used ${new Date(query.lastUsedAt).toLocaleDateString()}`
+                          : 'Never used'}
+                      </div>
                       <span>•</span>
                       <span>{query.useCount} uses</span>
                     </div>
                     <Button
                       size="sm"
                       onClick={() => handleLoad(query)}
-                      className="bg-blue-600 hover:bg-blue-700 text-xs"
+                      className="bg-blue-600 hover:bg-blue-700 text-white shrink-0"
                     >
                       Load Query
                     </Button>
@@ -798,7 +803,7 @@ function SavedQueriesModal({
               ))}
             </div>
           )}
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -860,7 +865,7 @@ function SaveQueryDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-[#1e293b] border-white/10 text-white">
+      <DialogContent className="bg-[#1e293b] border-white/10 text-white max-w-2xl w-[95vw] max-h-[90vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Save className="w-5 h-5 text-blue-400" />
@@ -871,7 +876,7 @@ function SaveQueryDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
           <div>
             <Label htmlFor="query-name" className="text-gray-300">Name *</Label>
             <Input
@@ -895,7 +900,7 @@ function SaveQueryDialog({
           </div>
 
           <div className="flex items-center justify-between">
-            <div>
+            <div className="flex-1">
               <Label htmlFor="query-shared" className="text-gray-300">Share with viewers</Label>
               <p className="text-xs text-gray-500">Viewers with access to this connection can use this query</p>
             </div>
@@ -903,19 +908,19 @@ function SaveQueryDialog({
               id="query-shared"
               checked={isShared}
               onCheckedChange={setIsShared}
+              className="ml-4"
             />
           </div>
 
           <div>
             <Label className="text-gray-300">Query Preview</Label>
-            <pre className="mt-1 text-xs text-gray-400 bg-black/20 p-2 rounded max-h-[100px] overflow-auto">
-              {queryText.substring(0, 300)}
-              {queryText.length > 300 && '...'}
+            <pre className="mt-1 text-xs text-gray-400 bg-black/20 p-3 rounded max-h-[120px] overflow-y-auto whitespace-pre-wrap break-all">
+              {queryText.length > 500 ? `${queryText.substring(0, 500)}...` : queryText}
             </pre>
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="border-t border-white/10 pt-4">
           <Button variant="ghost" onClick={onClose} className="text-gray-400">
             Cancel
           </Button>
