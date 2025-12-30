@@ -32,7 +32,7 @@ export default function DataVisualization({ data }: DataVisualizationProps) {
 	// Basic validation
 	if (!data?.length || !Array.isArray(data))
 		return (
-			<div className='text-red-500 p-4 bg-red-50 rounded'>
+			<div className='text-red-400 p-4 bg-red-500/10 rounded'>
 				Sorry no relevant data found for visualization
 			</div>
 		);
@@ -115,18 +115,36 @@ export default function DataVisualization({ data }: DataVisualizationProps) {
 			plugins: {
 				legend: {
 					position: 'top' as const,
+					labels: {
+						color: '#9ca3af'
+					}
 				},
 				title: {
 					display: true,
 					text: `${categoryField
 						.replace(/_/g, ' ')
 						.replace(/\b\w/g, (l) => l.toUpperCase())} Analysis`,
+					color: '#e5e7eb'
 				},
 			},
 			scales: {
 				y: {
 					beginAtZero: true,
+					grid: {
+						color: 'rgba(255, 255, 255, 0.1)'
+					},
+					ticks: {
+						color: '#9ca3af'
+					}
 				},
+				x: {
+					grid: {
+						color: 'rgba(255, 255, 255, 0.1)'
+					},
+					ticks: {
+						color: '#9ca3af'
+					}
+				}
 			},
 		};
 
@@ -140,7 +158,7 @@ export default function DataVisualization({ data }: DataVisualizationProps) {
 		return (
 			<div className='h-[400px] mt-4'>
 				{chartData.datasets.length === 0 ? (
-					<div className='flex items-center justify-center h-full text-gray-500'>
+					<div className='flex items-center justify-center h-full text-gray-400'>
 						No numeric data available for visualization
 					</div>
 				) : shouldUsePie ? (

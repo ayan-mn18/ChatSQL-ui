@@ -1,4 +1,9 @@
-import { ArrowRight, Check, Database, Zap, Shield, Code, Cpu, Server, Layers, Terminal, Sparkles, Lock, GitBranch, Search, ChevronDown } from 'lucide-react';
+
+import os
+
+file_path = '/Users/bizer/Development/Projects/ChatSQL/ChatSQL-ui/src/pages/ChatSQLLanding.tsx'
+
+new_content = """import { ArrowRight, Check, Database, Zap, Shield, Code, Cpu, Server, Layers, Terminal, Sparkles, Lock, GitBranch, Search, ChevronDown } from 'lucide-react';
 import { useEffect } from 'react';
 import { motion, useMotionTemplate, useMotionValue, animate } from 'framer-motion';
 import { Link } from 'react-router-dom';
@@ -359,3 +364,7 @@ const ChatSQLLanding = () => {
 };
 
 export default ChatSQLLanding;
+"""
+
+with open(file_path, 'w') as f:
+    f.write(new_content)

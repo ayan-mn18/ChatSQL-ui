@@ -8,7 +8,7 @@ export default function DashboardLayout() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
 
   return (
-    <div className="flex min-h-screen bg-[#1B2431] text-white font-sans selection:bg-[#6366f1]/30">
+    <div className="flex min-h-screen bg-[#020617] text-white font-sans selection:bg-[#6366f1]/30">
       <Sidebar isCollapsed={isSidebarCollapsed} onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)} />
       <MobileNav />
       <main

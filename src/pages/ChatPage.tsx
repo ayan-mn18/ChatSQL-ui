@@ -129,7 +129,7 @@ function ChatPage() {
 
 
   return (
-    <div className="flex flex-col h-screen bg-white">
+    <div className="flex flex-col h-screen bg-[#020617] text-white">
       <Navbar
         showSettings
         onSettingsClick={() => setIsSettingsOpen(true)}
@@ -137,6 +137,7 @@ function ChatPage() {
           hasDbUri: !!dbSettings.dbUri,
           showTooltip
         }}
+        darkMode
       />
 
       <main className="flex-1 overflow-y-auto p-4">
@@ -161,7 +162,7 @@ function ChatPage() {
         </div>
       </main>
 
-      <footer className="border-t border-gray-200 bg-white">
+      <footer className="border-t border-white/10 bg-[#020617]">
         <div className="max-w-4xl mx-auto p-4">
           {dbSettings.dbUri && messages.length === 0 && showSampleQueries && (
             <SampleQueries onQueryClick={handleSampleQueryClick} />
@@ -172,7 +173,7 @@ function ChatPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={dbSettings.dbUri ? "Enter your query or question..." : "Configure database settings first"}
-              className="flex-1 rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 rounded-lg border border-white/10 bg-[#1e293b] text-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-500"
               disabled={isLoading}
             />
             <button

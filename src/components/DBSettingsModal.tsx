@@ -160,28 +160,28 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-[#1e293b] rounded-lg shadow-xl w-full max-w-md mx-4 border border-white/10">
+        <div className="flex items-center justify-between p-4 border-b border-white/10">
           <div className="flex items-center gap-2">
-            <SettingsIcon className="w-5 h-5 text-blue-600" />
-            <h2 className="text-lg font-semibold text-gray-900">Settings</h2>
+            <SettingsIcon className="w-5 h-5 text-blue-400" />
+            <h2 className="text-lg font-semibold text-white">Settings</h2>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-500 transition-colors"
+            className="text-gray-400 hover:text-white transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="border-b border-gray-200">
+        <div className="border-b border-white/10">
           <nav className="flex -mb-px" aria-label="Tabs">
             <button
               onClick={() => setActiveTab('database')}
               className={`w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm ${activeTab === 'database'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-blue-500 text-blue-400'
+                : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-white/20'
                 }`}
             >
               <div className="flex items-center justify-center gap-2">
@@ -192,8 +192,8 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
             <button
               onClick={() => setActiveTab('ai')}
               className={`w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm ${activeTab === 'ai'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-blue-500 text-blue-400'
+                : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-white/20'
                 }`}
             >
               <div className="flex items-center justify-center gap-2">
@@ -215,14 +215,14 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
                   onChange={(e) => handleUseDefaultDb(e.target.checked)}
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                 />
-                <label htmlFor="useDefaultDb" className="ml-2 block text-sm text-gray-900">
+                <label htmlFor="useDefaultDb" className="ml-2 block text-sm text-white">
                   Use Dummy database for testing
                 </label>
               </div>
 
               {/* Connection Name */}
               <div>
-                <label htmlFor="dbName" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="dbName" className="block text-sm font-medium text-gray-300 mb-1">
                   Connection Name
                 </label>
                 <input
@@ -230,7 +230,7 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
                   id="dbName"
                   value={dbName}
                   onChange={(e) => setDbName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+                  className="w-full px-3 py-2 border border-white/10 bg-[#0f172a] text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-white/5 disabled:text-gray-500"
                   placeholder="My Production DB"
                   required
                   disabled={useDefaultDb}
@@ -240,7 +240,7 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
               {/* Host & Port */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2">
-                  <label htmlFor="host" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="host" className="block text-sm font-medium text-gray-300 mb-1">
                     Host
                   </label>
                   <input
@@ -251,14 +251,14 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
                       setHost(e.target.value);
                       setConnectionStatus('none');
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+                    className="w-full px-3 py-2 border border-white/10 bg-[#0f172a] text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-white/5 disabled:text-gray-500"
                     placeholder="localhost"
                     required
                     disabled={useDefaultDb}
                   />
                 </div>
                 <div>
-                  <label htmlFor="port" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="port" className="block text-sm font-medium text-gray-300 mb-1">
                     Port
                   </label>
                   <input
@@ -269,7 +269,7 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
                       setPort(parseInt(e.target.value) || 5432);
                       setConnectionStatus('none');
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+                    className="w-full px-3 py-2 border border-white/10 bg-[#0f172a] text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-white/5 disabled:text-gray-500"
                     placeholder="5432"
                     required
                     disabled={useDefaultDb}
@@ -279,7 +279,7 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
 
               {/* Database Name */}
               <div>
-                <label htmlFor="database" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="database" className="block text-sm font-medium text-gray-300 mb-1">
                   Database
                 </label>
                 <input
@@ -290,7 +290,7 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
                     setDatabase(e.target.value);
                     setConnectionStatus('none');
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+                  className="w-full px-3 py-2 border border-white/10 bg-[#0f172a] text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-white/5 disabled:text-gray-500"
                   placeholder="postgres"
                   required
                   disabled={useDefaultDb}
@@ -299,7 +299,7 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
 
               {/* Username */}
               <div>
-                <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-1">
                   Username
                 </label>
                 <input
@@ -310,7 +310,7 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
                     setUsername(e.target.value);
                     setConnectionStatus('none');
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+                  className="w-full px-3 py-2 border border-white/10 bg-[#0f172a] text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-white/5 disabled:text-gray-500"
                   placeholder="postgres"
                   required
                   disabled={useDefaultDb}
@@ -319,7 +319,7 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
 
               {/* Password */}
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">
                   Password
                 </label>
                 <div className="relative">
@@ -331,7 +331,7 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
                       setPassword(e.target.value);
                       setConnectionStatus('none');
                     }}
-                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+                    className="w-full px-3 py-2 pr-10 border border-white/10 bg-[#0f172a] text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-white/5 disabled:text-gray-500"
                     placeholder="••••••••"
                     required
                     disabled={useDefaultDb}
@@ -361,7 +361,7 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   disabled={useDefaultDb}
                 />
-                <label htmlFor="ssl" className="ml-2 block text-sm text-gray-900">
+                <label htmlFor="ssl" className="ml-2 block text-sm text-white">
                   Use SSL connection
                 </label>
               </div>
@@ -380,7 +380,7 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
                         ? 'bg-green-100 text-green-700 border border-green-300'
                         : connectionStatus === 'error'
                           ? 'bg-red-100 text-red-700 border border-red-300'
-                          : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+                          : 'bg-gray-100 text-gray-300 border border-gray-300 hover:bg-gray-200'
                       }`}
                   >
                     {isTestingConnection ? (
@@ -452,7 +452,7 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
           ) : (
             <div className="space-y-4">
               <div>
-                <label htmlFor="aiModel" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="aiModel" className="block text-sm font-medium text-gray-300 mb-1">
                   AI Model
                 </label>
                 <div className="relative">
@@ -484,7 +484,7 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="px-4 py-2 text-sm font-medium text-gray-300 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               Cancel
             </button>

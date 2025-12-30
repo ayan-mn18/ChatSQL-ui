@@ -80,7 +80,7 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
   return (
     <div
       className={cn(
-        "h-screen bg-[#1B2431] border-r border-white/5 flex-col text-white fixed left-0 top-0 z-40 transition-all duration-300 ease-in-out hidden md:flex",
+        "h-screen bg-[#020617] border-r border-white/5 flex-col text-white fixed left-0 top-0 z-40 transition-all duration-300 ease-in-out hidden md:flex",
         isExpanded ? "w-64 shadow-2xl shadow-black/50" : "w-20"
       )}
       onMouseEnter={() => setIsHovered(true)}
