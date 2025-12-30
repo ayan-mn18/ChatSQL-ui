@@ -164,7 +164,7 @@ function QueryTabBar({
             group flex items-center gap-2 px-3 py-1.5 rounded-t text-sm cursor-pointer
             transition-colors min-w-[120px] max-w-[200px]
             ${activeTabId === tab.id
-              ? 'bg-[#1e293b] text-white border-t-2 border-blue-500'
+              ? 'bg-[#6366f1] text-white border-t-2 border-[#8b5cf6] shadow-md'
               : 'text-gray-400 hover:text-white hover:bg-white/5'
             }
           `}
@@ -1059,6 +1059,50 @@ export default function QueryConsole() {
     editorRef.current = editor;
     monacoRef.current = monaco;
 
+    // Define custom theme with enhanced selection colors
+    monaco.editor.defineTheme('chatsql-dark', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: 'keyword', foreground: '569CD6', fontStyle: 'bold' },
+        { token: 'string', foreground: 'CE9178' },
+        { token: 'number', foreground: 'B5CEA8' },
+        { token: 'comment', foreground: '6A9955', fontStyle: 'italic' },
+        { token: 'type', foreground: '4EC9B0' },
+      ],
+      colors: {
+        'editor.background': '#0f172a',
+        'editor.foreground': '#f1f5f9',
+        'editor.lineHighlightBackground': '#1e293b',
+        'editor.selectionBackground': '#6366f1', // Indigo selection background
+        'editor.inactiveSelectionBackground': '#4f46e5', // Darker indigo for inactive selection
+        'editor.selectionHighlightBackground': '#3730a3', // Even darker for highlight
+        'editor.wordHighlightBackground': '#1e3a8a',
+        'editor.wordHighlightStrongBackground': '#1e3a8a',
+        'editor.findMatchBackground': '#fbbf24', // Yellow for find matches
+        'editor.findMatchHighlightBackground': '#f59e0b', // Orange for find highlights
+        'editorCursor.foreground': '#60a5fa',
+        'editorLineNumber.foreground': '#64748b',
+        'editorLineNumber.activeForeground': '#f1f5f9',
+        'editorWidget.background': '#1e293b',
+        'editorWidget.border': '#334155',
+        'editorSuggestWidget.background': '#1e293b',
+        'editorSuggestWidget.border': '#334155',
+        'editorSuggestWidget.selectedBackground': '#3b82f6',
+        'list.activeSelectionBackground': '#3b82f6',
+        'list.inactiveSelectionBackground': '#1e40af',
+        'input.background': '#1e293b',
+        'input.border': '#334155',
+        'scrollbar.shadow': '#00000000',
+        'scrollbarSlider.background': '#334155',
+        'scrollbarSlider.hoverBackground': '#475569',
+        'scrollbarSlider.activeBackground': '#64748b',
+      }
+    });
+
+    // Apply the custom dark theme
+    monaco.editor.setTheme('chatsql-dark');
+
     // Configure SQL language
     monaco.languages.registerCompletionItemProvider('sql', {
       provideCompletionItems: (model: any, position: any) => {
@@ -1400,11 +1444,16 @@ export default function QueryConsole() {
                   disabled={activeTab?.isRunning || !!error}
                 >
                   {activeTab?.isRunning ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Running...
+                    </>
                   ) : (
-                    <Play className="w-4 h-4 mr-2" />
+                    <>
+                      <Play className="w-4 h-4 mr-2" />
+                      Run
+                    </>
                   )}
-                  Run
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Run Query (Ctrl+Enter)</TooltipContent>
@@ -1553,7 +1602,7 @@ export default function QueryConsole() {
                     value={activeTab?.query || ''}
                     onChange={(value) => activeTab && updateTabQuery(activeTab.id, value || '')}
                     onMount={handleEditorDidMount}
-                    theme="vs-dark"
+                    theme="chatsql-dark"
                     options={{
                       minimap: { enabled: false },
                       fontSize: 14,
@@ -1592,15 +1641,15 @@ export default function QueryConsole() {
                         )}
                       </div>
                       <TabsList className="bg-[#1B2431] border border-white/5">
-                        <TabsTrigger value="table" className="data-[state=active]:bg-[#3b82f6]">
+                        <TabsTrigger value="table" className="data-[state=active]:bg-[#6366f1] data-[state=active]:text-white">
                           <TableIcon className="w-4 h-4 mr-2" />
                           Table
                         </TabsTrigger>
-                        <TabsTrigger value="chart" className="data-[state=active]:bg-[#3b82f6]">
+                        <TabsTrigger value="chart" className="data-[state=active]:bg-[#6366f1] data-[state=active]:text-white">
                           <BarChart3 className="w-4 h-4 mr-2" />
                           Chart
                         </TabsTrigger>
-                        <TabsTrigger value="logs" className="data-[state=active]:bg-[#3b82f6]">
+                        <TabsTrigger value="logs" className="data-[state=active]:bg-[#6366f1] data-[state=active]:text-white">
                           <AlertCircle className="w-4 h-4 mr-2" />
                           Logs
                         </TabsTrigger>
@@ -1622,7 +1671,15 @@ export default function QueryConsole() {
 
                     <div className="flex-1 relative overflow-hidden">
                       <TabsContent value="table" className="h-full w-full m-0 absolute inset-0">
-                        {activeTab?.results ? (
+                        {activeTab?.isRunning ? (
+                          <div className="flex items-center justify-center h-full">
+                            <div className="text-center">
+                              <Loader2 className="w-12 h-12 mx-auto mb-4 animate-spin text-cyan-400" />
+                              <p className="text-gray-300 text-lg">Executing query...</p>
+                              <p className="text-gray-500 text-sm mt-2">Please wait while we fetch your data</p>
+                            </div>
+                          </div>
+                        ) : activeTab?.results ? (
                           <DataTable
                             data={activeTab.results.data}
                             columns={activeTab.results.columns}
@@ -1638,7 +1695,15 @@ export default function QueryConsole() {
                       </TabsContent>
 
                       <TabsContent value="chart" className="h-full w-full m-0 p-4 absolute inset-0">
-                        {chartData ? (
+                        {activeTab?.isRunning ? (
+                          <div className="flex items-center justify-center h-full">
+                            <div className="text-center">
+                              <Loader2 className="w-12 h-12 mx-auto mb-4 animate-spin text-cyan-400" />
+                              <p className="text-gray-300 text-lg">Generating chart...</p>
+                              <p className="text-gray-500 text-sm mt-2">Analyzing your data</p>
+                            </div>
+                          </div>
+                        ) : chartData ? (
                           <div className="h-full">
                             {chartConfig.type === 'bar' && <Bar data={chartData} options={{ responsive: true, maintainAspectRatio: false }} />}
                             {chartConfig.type === 'line' && <Line data={chartData} options={{ responsive: true, maintainAspectRatio: false }} />}
