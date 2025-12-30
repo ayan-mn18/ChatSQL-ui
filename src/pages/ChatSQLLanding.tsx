@@ -108,11 +108,11 @@ const ChatSQLLanding = () => {
   return (
     <div className="min-h-screen bg-[#020617] text-white selection:bg-indigo-500/30">
       <Navbar />
-      
+
       {/* Hero Section */}
       <section className="relative pt-32 pb-20 px-6 overflow-hidden">
         <SquareGrid />
-        
+
         <div className="max-w-5xl mx-auto text-center relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -140,7 +140,7 @@ const ChatSQLLanding = () => {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="text-lg md:text-xl text-gray-400 mb-10 max-w-2xl mx-auto leading-relaxed"
           >
-            Build, query, and manage your SQL databases using natural language. 
+            Build, query, and manage your SQL databases using natural language.
             The modern SQL editor designed for the AI era.
           </motion.p>
 
@@ -245,38 +245,38 @@ const ChatSQLLanding = () => {
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Everything you need to manage data</h2>
             <p className="text-gray-400 max-w-2xl mx-auto">
-              Stop wrestling with complex SQL clients. ChatSQL gives you a modern, 
+              Stop wrestling with complex SQL clients. ChatSQL gives you a modern,
               AI-powered environment to visualize, query, and manage your databases.
             </p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <FeatureCard 
+            <FeatureCard
               icon={Zap}
               title="AI-Powered Queries"
               description="Write queries in plain English. Our advanced AI understands your schema and generates optimized SQL instantly."
             />
-            <FeatureCard 
+            <FeatureCard
               icon={Layers}
               title="Visual Schema Builder"
               description="Design your database schema visually. Drag and drop tables, define relationships, and export SQL."
             />
-            <FeatureCard 
+            <FeatureCard
               icon={Shield}
               title="Enterprise Security"
               description="Bank-grade encryption for your connections. Role-based access control and audit logs included."
             />
-            <FeatureCard 
+            <FeatureCard
               icon={GitBranch}
               title="Version Control"
               description="Track changes to your schema and queries. Rollback to previous versions with a single click."
             />
-            <FeatureCard 
+            <FeatureCard
               icon={Search}
               title="Smart Search"
               description="Find anything in your database instantly. Search across tables, columns, and saved queries."
             />
-            <FeatureCard 
+            <FeatureCard
               icon={Code}
               title="API Generation"
               description="Automatically generate REST and GraphQL APIs from your database schema in seconds."
@@ -289,13 +289,13 @@ const ChatSQLLanding = () => {
       <section className="py-24 px-6">
         <div className="max-w-4xl mx-auto text-center bg-gradient-to-b from-[#0f172a] to-[#020617] border border-white/10 rounded-2xl p-12 relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent" />
-          
+
           <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to modernize your workflow?</h2>
           <p className="text-gray-400 mb-8 max-w-xl mx-auto">
-            Join thousands of developers who are building faster with ChatSQL. 
+            Join thousands of developers who are building faster with ChatSQL.
             Start for free, no credit card required.
           </p>
-          
+
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link to="/dashboard" className="bg-white text-black hover:bg-gray-200 px-8 py-3 rounded-lg font-semibold transition-all w-full sm:w-auto">
               Get Started Now
@@ -319,7 +319,7 @@ const ChatSQLLanding = () => {
               The modern database client for the AI era.
             </p>
           </div>
-          
+
           <div>
             <h4 className="font-semibold mb-4">Product</h4>
             <ul className="space-y-2 text-sm text-gray-400">
@@ -329,7 +329,7 @@ const ChatSQLLanding = () => {
               <li><a href="#" className="hover:text-white transition-colors">Changelog</a></li>
             </ul>
           </div>
-          
+
           <div>
             <h4 className="font-semibold mb-4">Resources</h4>
             <ul className="space-y-2 text-sm text-gray-400">
@@ -339,7 +339,7 @@ const ChatSQLLanding = () => {
               <li><a href="#" className="hover:text-white transition-colors">Blog</a></li>
             </ul>
           </div>
-          
+
           <div>
             <h4 className="font-semibold mb-4">Company</h4>
             <ul className="space-y-2 text-sm text-gray-400">
