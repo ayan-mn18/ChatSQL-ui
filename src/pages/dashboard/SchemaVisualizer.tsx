@@ -252,11 +252,15 @@ function SchemaVisualizerContent() {
 
     // Only include relations where both source and target tables are visible
     const filteredRelations = allRelations.filter(rel => {
+      if (!rel.source_schema || !rel.source_table || !rel.target_schema || !rel.target_table) {
+        return false;
+      }
       const sourceId = `${rel.source_schema}.${rel.source_table}`;
       const targetId = `${rel.target_schema}.${rel.target_table}`;
       return filteredTableIds.has(sourceId) && filteredTableIds.has(targetId);
     });
 
+    console.log(`[ERD] Filtered data: ${filteredTables.length} tables, ${filteredRelations.length} relations (from ${allRelations.length} total)`);
     return { tables: filteredTables, relations: filteredRelations };
   }, [allTables, allRelations, selectedSchemas]);
 
@@ -291,7 +295,7 @@ function SchemaVisualizerContent() {
       // Fetch schemas first
       const schemasResponse = await connectionService.getSchemas(connectionId);
       console.log('[ERD] Schemas response:', schemasResponse);
-      const schemasData = (schemasResponse as any).schemas || schemasResponse.data || [];
+      const schemasData = schemasResponse.data || [];
       console.log('[ERD] Parsed schemas:', schemasData);
       setAllSchemas(schemasData);
 
@@ -303,7 +307,7 @@ function SchemaVisualizerContent() {
         try {
           const tablesResponse = await connectionService.getTablesBySchema(connectionId, schema.schema_name);
           console.log(`[ERD] Tables for ${schema.schema_name}:`, tablesResponse);
-          const schemaTables = (tablesResponse as any).tables || tablesResponse.data || [];
+          const schemaTables = tablesResponse.data || [];
           tables.push(...schemaTables);
         } catch (e) {
           console.warn(`[ERD] Failed to fetch tables for schema: ${schema.schema_name}`, e);
@@ -315,7 +319,13 @@ function SchemaVisualizerContent() {
       // Fetch relations
       const relationsResponse = await connectionService.getRelations(connectionId);
       console.log('[ERD] Relations response:', relationsResponse);
-      const relations = (relationsResponse as any).relations || relationsResponse.data || [];
+
+      let relations: ERDRelation[] = [];
+      // Handle various response formats
+      if (relationsResponse && typeof relationsResponse === 'object') {
+        relations = relationsResponse.data || [];
+      }
+
       console.log('[ERD] Parsed relations:', relations);
       setAllRelations(relations);
 

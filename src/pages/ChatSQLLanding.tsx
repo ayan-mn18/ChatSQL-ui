@@ -159,7 +159,10 @@ export default function ChatSQLLanding() {
             className="text-5xl md:text-7xl font-bold text-white mb-8 tracking-tight leading-[1.1]"
           >
             Your database, <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">
+            <span
+              className="inline-block bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent pb-1"
+              style={{ WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
+            >
               fluent in human.
             </span>
           </motion.h1>
