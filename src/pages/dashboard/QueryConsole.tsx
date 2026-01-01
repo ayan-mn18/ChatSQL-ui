@@ -1035,10 +1035,9 @@ export default function QueryConsole() {
     setLoadingSchemas(true);
     try {
       const response = await connectionService.getSchemas(connectionId);
-      const schemasData = (response as any).schemas || response.data;
-      if (response.success && schemasData) {
-        setSchemas(schemasData);
-        const preSelected = schemasData
+      if (response.success && response.data) {
+        setSchemas(response.data);
+        const preSelected = response.data
           .filter((s: DatabaseSchemaPublic) => s.is_selected)
           .map((s: DatabaseSchemaPublic) => s.schema_name);
         setSelectedSchemas(preSelected.length > 0 ? preSelected : ['public']);

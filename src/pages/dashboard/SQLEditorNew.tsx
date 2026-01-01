@@ -151,12 +151,10 @@ export default function SQLEditor() {
     setLoadingSchemas(true);
     try {
       const response = await connectionService.getSchemas(connectionId);
-      // Backend returns { success, schemas } not { success, data }
-      const schemasData = (response as any).schemas || response.data;
-      if (response.success && schemasData) {
-        setSchemas(schemasData);
+      if (response.success && response.data) {
+        setSchemas(response.data);
         // Pre-select schemas that are marked as selected
-        const preSelected = schemasData
+        const preSelected = response.data
           .filter((s: DatabaseSchemaPublic) => s.is_selected)
           .map((s: DatabaseSchemaPublic) => s.schema_name);
         setSelectedSchemas(preSelected.length > 0 ? preSelected : ['public']);

@@ -257,8 +257,7 @@ export default function UserManagementPage() {
     setLoadingSchemas(true);
     try {
       const response = await connectionService.getSchemas(connectionId);
-      // Backend returns { success, schemas } (not { success, data })
-      const schemas = (response as any).schemas ?? response.data ?? [];
+      const schemas = response.data ?? [];
       if (response.success) {
         setAvailableSchemas(schemas);
 
@@ -272,7 +271,7 @@ export default function UserManagementPage() {
             const tablesResponses = await Promise.all(
               schemaNames.map(schema => connectionService.getTablesBySchema(connectionId, schema))
             );
-            const allTables: TableSchema[] = tablesResponses.flatMap(r => ((r as any).tables ?? r.data ?? []) as TableSchema[]);
+            const allTables: TableSchema[] = tablesResponses.flatMap(r => (r.data ?? []) as TableSchema[]);
             setAvailableTables(allTables);
             const allTableKeys = allTables.map(t => `${t.schema_name}.${t.table_name}`);
             setCurrentPermission(prev => (prev ? { ...prev, selectedTables: allTableKeys } : prev));
@@ -321,7 +320,7 @@ export default function UserManagementPage() {
     setLoadingTables(true);
     try {
       const response = await connectionService.getTablesBySchema(currentPermission.connectionId, schemaName);
-      const tables = ((response as any).tables ?? response.data ?? []) as TableSchema[];
+      const tables = (response.data ?? []) as TableSchema[];
 
       const merged = [...availableTables, ...tables].filter((t, idx, arr) => {
         const key = `${t.schema_name}.${t.table_name}`;
@@ -353,7 +352,7 @@ export default function UserManagementPage() {
       const tablesResponses = await Promise.all(
         schemaNames.map(schema => connectionService.getTablesBySchema(currentPermission.connectionId, schema))
       );
-      const allTables: TableSchema[] = tablesResponses.flatMap(r => ((r as any).tables ?? r.data ?? []) as TableSchema[]);
+      const allTables: TableSchema[] = tablesResponses.flatMap(r => (r.data ?? []) as TableSchema[]);
       setAvailableTables(allTables);
       setCurrentPermission(prev => (prev ? { ...prev, selectedTables: allTables.map(t => `${t.schema_name}.${t.table_name}`) } : prev));
     } catch (error) {
