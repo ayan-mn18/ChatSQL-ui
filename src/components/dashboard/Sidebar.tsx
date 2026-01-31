@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, Link } from 'react-router-dom';
 import { Database, Users, Zap, LogOut, User as UserIcon, ChevronUp, Sparkles, CreditCard, Crown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -137,7 +137,7 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
         {/* Pricing CTA Section - Only visible when expanded */}
         {isExpanded && !isViewer && (
           <div className="mt-4 p-4 rounded-2xl bg-gradient-to-br from-indigo-900/40 to-slate-900/40 border border-indigo-500/20 relative overflow-hidden group">
-            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
 
             <div className="flex items-center gap-3 mb-3 relative z-10">
               <div className="p-2 rounded-lg bg-indigo-500/20 text-indigo-300">
@@ -150,11 +150,11 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
             </div>
 
             <Button
-              onClick={() => navigate('/dashboard/pricing')}
+              asChild
               size="sm"
-              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/25 border-none h-8 text-xs font-semibold"
+              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/25 border-none h-8 text-xs font-semibold relative z-10"
             >
-              View Pricing
+              <Link to="/dashboard/pricing">View Pricing</Link>
             </Button>
           </div>
         )}
@@ -162,15 +162,14 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
         {/* Pricing Icon for collapsed state */}
         {!isExpanded && !isViewer && (
           <div className="flex justify-center mt-2">
-            <button
-              onClick={() => navigate('/dashboard/pricing')}
+            <Link
+              to="/dashboard/pricing"
               className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500/10 to-transparent flex items-center justify-center text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/20 transition-all border border-indigo-500/20"
             >
               <CreditCard className="w-5 h-5" />
-            </button>
+            </Link>
           </div>
         )}
-
       </nav>
 
       {/* User Profile */}
