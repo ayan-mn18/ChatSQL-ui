@@ -90,7 +90,7 @@ const BentoCard = ({ children, className = "", delay = 0 }: { children: React.Re
   </motion.div>
 );
 
-const PricingCard = ({ tier, price, features, recommended = false }: { tier: string, price: string, features: string[], recommended?: boolean }) => (
+const PricingCard = ({ tier, price, period, features, recommended = false, isLifetime = false }: { tier: string, price: string, period?: string, features: string[], recommended?: boolean, isLifetime?: boolean }) => (
   <motion.div
     whileHover={{ y: -8 }}
     className={`relative p-8 rounded-3xl border ${recommended ? 'border-indigo-500/50 bg-indigo-500/5' : 'border-white/10 bg-white/[0.02]'} backdrop-blur-sm flex flex-col h-full`}
@@ -100,30 +100,38 @@ const PricingCard = ({ tier, price, features, recommended = false }: { tier: str
         MOST POPULAR
       </div>
     )}
+    {isLifetime && (
+      <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-xs font-bold text-white shadow-lg shadow-purple-500/25">
+        BEST VALUE
+      </div>
+    )}
 
     <div className="mb-8">
       <h3 className="text-lg font-medium text-slate-300 mb-2">{tier}</h3>
       <div className="flex items-baseline gap-1">
         <span className="text-4xl font-bold text-white">{price}</span>
-        {price !== 'Custom' && <span className="text-slate-500">/month</span>}
+        {period && <span className="text-slate-500">{period}</span>}
       </div>
+      {isLifetime && <p className="text-emerald-400 text-xs mt-1">Pay once, use forever</p>}
     </div>
 
     <div className="flex-1 space-y-4 mb-8">
       {features.map((feature, i) => (
         <div key={i} className="flex items-start gap-3 text-sm text-slate-400">
-          <CheckCircle2 className={`w-5 h-5 shrink-0 ${recommended ? 'text-indigo-400' : 'text-slate-600'}`} />
+          <CheckCircle2 className={`w-5 h-5 shrink-0 ${recommended ? 'text-indigo-400' : isLifetime ? 'text-purple-400' : 'text-slate-600'}`} />
           <span>{feature}</span>
         </div>
       ))}
     </div>
 
-    <button className={`w-full py-3 rounded-xl text-sm font-semibold transition-all ${recommended
+    <a href={price === 'Custom' ? '/contact?plan=enterprise' : '/auth/signup'} className={`w-full py-3 rounded-xl text-sm font-semibold transition-all text-center block ${recommended
       ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/25'
-      : 'bg-white/10 hover:bg-white/20 text-white'
+      : isLifetime
+        ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white shadow-lg shadow-purple-500/25'
+        : 'bg-white/10 hover:bg-white/20 text-white'
       }`}>
-      {price === 'Custom' ? 'Contact Sales' : 'Start Free Trial'}
-    </button>
+      {price === 'Custom' ? 'Contact Sales' : price === '$0' ? 'Get Started Free' : 'Get Started'}
+    </a>
   </motion.div>
 );
 
@@ -397,40 +405,58 @@ export default function ChatSQLLanding() {
             </div>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
             <PricingCard
-              tier="Starter"
+              tier="Free"
               price="$0"
+              period="/month"
               features={[
-                "1 Database Connection",
-                "50 AI Queries / month",
+                "2 Database Connections",
+                "10,000 AI Tokens / month",
+                "500 Queries / month",
                 "Basic Schema Visualization",
+                "Query history (7 days)",
                 "Community Support"
               ]}
             />
             <PricingCard
               tier="Pro"
-              price={billingCycle === 'monthly' ? "$49" : "$39"}
+              price={billingCycle === 'monthly' ? "$10" : "$8"}
+              period="/month"
               recommended={true}
               features={[
-                "5 Database Connections",
-                "Unlimited AI Queries",
-                "Advanced Visualization",
-                "Team Dashboards",
-                "Priority Support",
-                "Query History & Export"
+                "10 Database Connections",
+                "100,000 AI Tokens / month",
+                "5,000 Queries / month",
+                "Query history (90 days)",
+                "Priority Email Support",
+                "Export to CSV/JSON"
+              ]}
+            />
+            <PricingCard
+              tier="Lifetime"
+              price="$100"
+              period=" one-time"
+              isLifetime={true}
+              features={[
+                "50 Database Connections",
+                "Unlimited AI Tokens",
+                "Unlimited Queries",
+                "Unlimited Query History",
+                "All Pro Features",
+                "Future Updates Included"
               ]}
             />
             <PricingCard
               tier="Enterprise"
               price="Custom"
               features={[
-                "Unlimited Connections",
-                "Custom AI Model Fine-tuning",
+                "Unlimited Everything",
                 "SSO & Audit Logs",
-                "Dedicated Success Manager",
+                "24/7 Dedicated Support",
+                "Team Collaboration",
                 "On-premise Deployment",
-                "SLA Guarantee"
+                "Custom SLA Guarantee"
               ]}
             />
           </div>

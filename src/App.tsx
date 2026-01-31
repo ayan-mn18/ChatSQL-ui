@@ -24,6 +24,10 @@ import {
 import UserManagementPage from './pages/dashboard/UserManagementPage';
 import ForceChangePasswordPage from './pages/auth/ForceChangePasswordPage';
 import MyAccessPage from './pages/dashboard/MyAccessPage';
+import PricingPage from './pages/dashboard/PricingPage';
+import BillingPage from './pages/dashboard/BillingPage';
+import { CheckoutSuccess, CheckoutCancelled } from './pages/dashboard/CheckoutSuccess';
+import ContactPage from './pages/ContactPage';
 
 function AdminOnlyUserManagement() {
   const { user } = useAuth();
@@ -50,6 +54,9 @@ function App() {
       <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
 
+      {/* Contact Page (public) */}
+      <Route path="/contact" element={<ContactPage />} />
+
       {/* Dashboard Routes */}
       <Route element={<ProtectedRoute />}>
         <Route path="/auth/force-change-password" element={<ForceChangePasswordPage />} />
@@ -59,6 +66,10 @@ function App() {
           <Route path="usage" element={<UsageDashboard />} />
           <Route path="users" element={<AdminOnlyUserManagement />} />
           <Route path="access" element={<MyAccessPage />} />
+          <Route path="pricing" element={<PricingPage />} />
+          <Route path="billing" element={<BillingPage />} />
+          <Route path="checkout/success" element={<CheckoutSuccess />} />
+          <Route path="checkout/cancelled" element={<CheckoutCancelled />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>
 

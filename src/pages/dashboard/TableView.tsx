@@ -29,6 +29,8 @@ import {
   AlertTriangle,
   ClipboardPaste,
   Rows3,
+  Lock,
+  Zap,
 } from 'lucide-react';
 import {
   Table,
@@ -79,6 +81,7 @@ import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import Editor from '@monaco-editor/react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { usageService } from '@/services/usage.service';
 
 // ============================================
 // HELPER: Calculate column width based on column name
@@ -232,6 +235,7 @@ export default function TableView() {
   const [insertValues, setInsertValues] = useState<Record<string, string>>({});
   const [relations, setRelations] = useState<ERDRelation[]>([]);
   const [highlightedRows, setHighlightedRows] = useState<Set<number>>(new Set());
+  const [isReadOnly, setIsReadOnly] = useState(false);
 
   // Search state
   const [searchState, setSearchState] = useState<TableSearchState>({
@@ -310,6 +314,19 @@ export default function TableView() {
       addTab({ connectionId, schemaName, tableName });
     }
   }, [connectionId, schemaName, tableName, addTab]);
+
+  // Check read-only status on mount
+  useEffect(() => {
+    const checkReadOnlyStatus = async () => {
+      try {
+        const result = await usageService.getReadOnlyStatus();
+        setIsReadOnly(result.data?.isReadOnly || false);
+      } catch (error) {
+        console.error('Failed to check read-only status:', error);
+      }
+    };
+    checkReadOnlyStatus();
+  }, []);
 
   // Fetch data on mount
   useEffect(() => {
@@ -964,6 +981,33 @@ export default function TableView() {
   return (
     <TooltipProvider>
       <div className="h-screen flex flex-col bg-[#1B2431] overflow-hidden">
+        {/* Read-only Mode Banner */}
+        {isReadOnly && (
+          <div className="shrink-0 bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-red-500/20 border-b border-amber-500/30 px-4 py-3 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-full bg-amber-500/20">
+                <Lock className="w-4 h-4 text-amber-400" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-amber-300">
+                  Read-Only Mode Active
+                </p>
+                <p className="text-xs text-amber-400/80">
+                  You've exhausted your free tier. Insert, update, and delete operations are disabled. Upgrade to unlock full access.
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => navigate('/dashboard/pricing')}
+              className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shrink-0"
+            >
+              <Zap className="w-4 h-4 mr-2" />
+              Upgrade Now
+            </Button>
+          </div>
+        )}
+
         {/* Tabs Bar */}
         <TableTabsBar />
 
@@ -1014,25 +1058,49 @@ export default function TableView() {
                     <Copy className="w-4 h-4 mr-2" />
                     Copy ({selectedRows.size})
                   </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => setShowDeleteDialog(true)}
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete ({selectedRows.size})
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => !isReadOnly && setShowDeleteDialog(true)}
+                        disabled={isReadOnly}
+                        className={isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete ({selectedRows.size})
+                      </Button>
+                    </TooltipTrigger>
+                    {isReadOnly && (
+                      <TooltipContent>
+                        <p>Upgrade to delete rows</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
                 </>
               )}
 
-              <Button
-                size="sm"
-                onClick={() => setShowInsertDialog(true)}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Row
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    onClick={() => !isReadOnly && setShowInsertDialog(true)}
+                    disabled={isReadOnly}
+                    className={cn(
+                      "bg-blue-600 hover:bg-blue-700",
+                      isReadOnly && "opacity-50 cursor-not-allowed"
+                    )}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Row
+                  </Button>
+                </TooltipTrigger>
+                {isReadOnly && (
+                  <TooltipContent>
+                    <p>Upgrade to add rows</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
 
               <Button
                 variant="outline"

@@ -107,6 +107,42 @@ export interface TokenHistoryItem {
   connection_name: string;
 }
 
+export interface SubscriptionInfo {
+  id: string;
+  userId: string;
+  planType: string;
+  status: string;
+  isLifetime: boolean;
+  amount: number;
+  currency: string;
+  currentPeriodStart?: string;
+  currentPeriodEnd?: string;
+  cancelAtPeriodEnd: boolean;
+  dodoSubscriptionId?: string;
+  dodoCustomerId?: string;
+}
+
+export interface PaymentRecord {
+  id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  planType: string;
+  description?: string;
+  paymentMethod?: string;
+  receiptUrl?: string;
+  createdAt: string;
+}
+
+export interface ReadOnlyStatus {
+  isReadOnly: boolean;
+  planType: string;
+  tokensUsed: number;
+  tokensLimit: number;
+  queriesUsed: number;
+  queriesLimit: number;
+}
+
 // ============================================
 // USAGE SERVICE
 // ============================================
@@ -143,6 +179,105 @@ export const usageService = {
     };
   }> => {
     const response = await api.get<any>(`/usage/tokens?page=${page}&pageSize=${pageSize}`);
+    return response.data;
+  },
+
+  // ============================================
+  // PAYMENT METHODS
+  // ============================================
+
+  /**
+   * Create a checkout session for plan upgrade
+   */
+  createCheckout: async (planType: 'pro_monthly' | 'pro_yearly' | 'lifetime'): Promise<{
+    success: boolean;
+    data?: { checkoutUrl: string; sessionId: string };
+    message?: string;
+  }> => {
+    const response = await api.post<any>('/payments/checkout', { planType });
+    return response.data;
+  },
+
+  /**
+   * Get user's current subscription
+   */
+  getSubscription: async (): Promise<{
+    success: boolean;
+    data: {
+      subscription: SubscriptionInfo | null;
+      isReadOnly: boolean;
+      planType: string;
+      tokensUsed: number;
+      tokensLimit: number;
+      queriesUsed: number;
+      queriesLimit: number;
+    };
+  }> => {
+    const response = await api.get<any>('/payments/subscription');
+    return response.data;
+  },
+
+  /**
+   * Cancel current subscription
+   */
+  cancelSubscription: async (): Promise<{ success: boolean; message?: string }> => {
+    const response = await api.post<any>('/payments/cancel');
+    return response.data;
+  },
+
+  /**
+   * Get payment history
+   */
+  getPaymentHistory: async (page = 1, pageSize = 20): Promise<{
+    success: boolean;
+    data: PaymentRecord[];
+    pagination: {
+      page: number;
+      pageSize: number;
+      totalCount: number;
+      totalPages: number;
+    };
+  }> => {
+    const response = await api.get<any>(`/payments/history?page=${page}&pageSize=${pageSize}`);
+    return response.data;
+  },
+
+  /**
+   * Get read-only status
+   */
+  getReadOnlyStatus: async (): Promise<{ success: boolean; data: ReadOnlyStatus }> => {
+    const response = await api.get<any>('/payments/read-only-status');
+    return response.data;
+  },
+
+  /**
+   * Submit contact form
+   */
+  submitContactForm: async (data: {
+    name: string;
+    email: string;
+    message: string;
+    company?: string;
+    phone?: string;
+    subject?: string;
+    requestType?: string;
+    planInterest?: string;
+  }): Promise<{ success: boolean; message?: string; data?: { id: string } }> => {
+    const response = await api.post<any>('/contact', data);
+    return response.data;
+  },
+
+  /**
+   * Submit enterprise inquiry
+   */
+  submitEnterpriseInquiry: async (data: {
+    name: string;
+    email: string;
+    message: string;
+    company?: string;
+    phone?: string;
+  }): Promise<{ success: boolean; message?: string }> => {
+    const response = await api.post<any>('/contact/enterprise', data);
     return response.data;
   },
 };

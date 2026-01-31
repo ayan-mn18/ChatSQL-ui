@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -287,6 +288,7 @@ function UsageDashboardSkeleton() {
 }
 
 export default function UsageDashboard() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<UsageDashboardData | null>(null);
   const [plans, setPlans] = useState<PlanConfiguration[]>([]);
@@ -478,7 +480,10 @@ export default function UsageDashboard() {
             </div>
 
             {data.plan.type !== 'enterprise' && (
-              <Button className="bg-purple-600 hover:bg-purple-700 text-white shrink-0">
+              <Button
+                className="bg-purple-600 hover:bg-purple-700 text-white shrink-0"
+                onClick={() => navigate('/dashboard/pricing')}
+              >
                 <ArrowUpRight className="w-4 h-4 mr-2" />
                 Upgrade Plan
               </Button>
@@ -764,6 +769,13 @@ export default function UsageDashboard() {
                             ? 'bg-purple-600 hover:bg-purple-700'
                             : 'border-white/10'
                         )}
+                        onClick={() => {
+                          if (plan.plan_type === 'enterprise') {
+                            navigate('/contact?plan=enterprise');
+                          } else {
+                            navigate('/dashboard/pricing');
+                          }
+                        }}
                       >
                         {plan.plan_type === 'enterprise' ? 'Contact Sales' : 'Upgrade'}
                       </Button>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Play, Sparkles, Save, Download, BarChart3, Table as TableIcon, ChevronRight, ChevronLeft, AlertCircle, ArrowUpDown, Filter, MoreHorizontal, ChevronDown } from 'lucide-react';
+import { Play, Sparkles, Save, Download, BarChart3, Table as TableIcon, ChevronRight, ChevronLeft, AlertCircle, ArrowUpDown, Filter, MoreHorizontal, ChevronDown, Lock, Zap } from 'lucide-react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import DataTable from '@/components/DataTable';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -10,6 +11,7 @@ import Editor from 'react-simple-code-editor';
 import Prism from '@/lib/prism-setup';
 import 'prismjs/components/prism-sql';
 import 'prismjs/themes/prism-tomorrow.css';
+import { usageService } from '@/services/usage.service';
 
 import {
   Chart as ChartJS,
@@ -39,7 +41,37 @@ ChartJS.register(
 
 import { mockDatabase } from '@/lib/mockData';
 
+// Read-only mode upgrade banner component
+function ReadOnlyBanner({ onUpgrade }: { onUpgrade: () => void }) {
+  return (
+    <div className="bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-red-500/20 border-b border-amber-500/30 px-4 py-3 flex items-center justify-between gap-4">
+      <div className="flex items-center gap-3">
+        <div className="p-2 rounded-full bg-amber-500/20">
+          <Lock className="w-4 h-4 text-amber-400" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-amber-300">
+            Read-Only Mode Active
+          </p>
+          <p className="text-xs text-amber-400/80">
+            You've exhausted your free tier. Only SELECT queries are allowed. Upgrade to unlock full access.
+          </p>
+        </div>
+      </div>
+      <Button
+        size="sm"
+        onClick={onUpgrade}
+        className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shrink-0"
+      >
+        <Zap className="w-4 h-4 mr-2" />
+        Upgrade Now
+      </Button>
+    </div>
+  );
+}
+
 export default function SQLEditor() {
+  const navigate = useNavigate();
   const [query, setQuery] = useState(`SELECT 
   o.id,
   u.first_name || ' ' || u.last_name as customer,
@@ -55,8 +87,31 @@ LIMIT 100;`);
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [, setActiveTab] = useState('table');
   const [error, setError] = useState<string | null>(null);
+  const [isReadOnly, setIsReadOnly] = useState(false);
 
   const parser = new Parser();
+
+  // Check read-only status on mount
+  useEffect(() => {
+    const checkReadOnlyStatus = async () => {
+      try {
+        const result = await usageService.getReadOnlyStatus();
+        setIsReadOnly(result.data?.isReadOnly || false);
+      } catch (error) {
+        console.error('Failed to check read-only status:', error);
+      }
+    };
+    checkReadOnlyStatus();
+  }, []);
+
+  // Helper to check if query is SELECT only
+  const isSelectOnlyQuery = (sql: string): boolean => {
+    const trimmed = sql.trim().toUpperCase();
+    const dangerousKeywords = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'TRUNCATE', 'ALTER', 'CREATE', 'GRANT', 'REVOKE'];
+    return !dangerousKeywords.some(keyword =>
+      trimmed.startsWith(keyword) || trimmed.includes(` ${keyword} `)
+    );
+  };
 
   const validateSQL = (sql: string) => {
     if (!sql.trim()) {
@@ -245,6 +300,11 @@ LIMIT 100;`);
       setError('Query cannot be empty');
       return;
     }
+    // Check read-only mode enforcement
+    if (isReadOnly && !isSelectOnlyQuery(query)) {
+      setError('Read-only mode: Only SELECT queries are allowed. Upgrade to run INSERT, UPDATE, DELETE queries.');
+      return;
+    }
     // Otherwise success (no-op for mock)
     console.log('Running query:', query);
   };
@@ -254,6 +314,11 @@ LIMIT 100;`);
 
   return (
     <div className="h-screen flex flex-col bg-[#1B2431]">
+      {/* Read-only Mode Banner */}
+      {isReadOnly && (
+        <ReadOnlyBanner onUpgrade={() => navigate('/dashboard/pricing')} />
+      )}
+
       {/* Toolbar */}
       <div className="h-16 border-b border-white/5 flex items-center justify-between px-4 md:px-6 bg-[#1B2431] shrink-0">
         <div className="flex items-center gap-3">
