@@ -259,28 +259,28 @@ export default function PricingPage() {
   const [isYearly, setIsYearly] = useState(true);
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
-  const plans = [
+  const plans: Plan[] = [
     {
       id: 'free',
       name: 'Free',
-      description: 'Perfect for trying out ChatSQL',
+      description: 'Perfect for getting started with ChatSQL',
       price: 0,
       period: 'month',
-      tokensLimit: 50000,
-      queriesLimit: 100,
-      connectionsLimit: 1,
+      tokensLimit: 10000,
+      queriesLimit: 500,
+      connectionsLimit: 2,
       features: [
-        '50k AI tokens / month',
-        '100 queries / month',
-        '1 Database connection',
+        '10k AI tokens / month',
+        '500 queries / month',
+        '2 Database connections',
         'Basic query generation',
-        'Standard support'
+        'Community support'
       ],
       notIncluded: [
         'Advanced visualizations',
         'Query optimization',
         'Data export',
-        'Team collaboration'
+        'Priority support'
       ],
       color: "from-slate-500 to-slate-400"
     },
@@ -288,21 +288,21 @@ export default function PricingPage() {
       id: 'pro',
       name: 'Pro',
       description: 'For professionals and small teams',
-      price: isYearly ? 29 : 35,
-      originalPrice: isYearly ? 35 : undefined,
+      price: isYearly ? 8 : 10,
+      originalPrice: isYearly ? 10 : undefined,
       period: 'month',
-      tokensLimit: 500000,
-      queriesLimit: 2000,
-      connectionsLimit: 5,
+      tokensLimit: 100000,
+      queriesLimit: 5000,
+      connectionsLimit: 10,
       isPopular: true,
       features: [
-        '500k AI tokens / month',
-        '2,000 queries / month',
-        '5 Database connections',
+        '100k AI tokens / month',
+        '5,000 queries / month',
+        '10 Database connections',
         'Advanced visualizations',
         'Query optimization',
         'CSV/Excel export',
-        'Priority support'
+        'Priority email support'
       ],
       color: "from-indigo-500 to-purple-500"
     },
@@ -310,17 +310,17 @@ export default function PricingPage() {
       id: 'lifetime',
       name: 'Lifetime',
       description: 'One-time payment, forever access',
-      price: 499,
-      originalPrice: 999,
+      price: 100,
+      originalPrice: 299,
       period: 'one-time',
       tokensLimit: -1,
       queriesLimit: -1,
-      connectionsLimit: 20,
+      connectionsLimit: 50,
       isLifetime: true,
       features: [
         'Unlimited AI tokens',
         'Unlimited queries',
-        '20 Database connections',
+        '50 Database connections',
         'All Pro features included',
         'Early access to new features',
         'Lifetime updates',
