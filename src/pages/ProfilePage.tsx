@@ -93,9 +93,12 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-white">Account Settings</h1>
+    <div className="max-w-4xl mx-auto p-8 space-y-12">
+      <div className="flex items-center justify-between border-b border-gray-800 pb-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-white tracking-tight">Settings</h1>
+          <p className="text-gray-400 text-sm mt-1">Manage your account preferences and security.</p>
+        </div>
         <button
           onClick={async () => {
             try {
@@ -105,178 +108,189 @@ export default function ProfilePage() {
               console.error('Logout failed', error);
             }
           }}
-          className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 font-medium rounded-lg border border-red-500/20 transition-colors flex items-center gap-2"
+          className="px-4 py-2 hover:bg-gray-800/50 text-gray-400 hover:text-white font-medium text-sm rounded-lg transition-colors flex items-center gap-2"
         >
           <LogOut className="w-4 h-4" />
-          Log Out
+          Log out
         </button>
       </div>
 
-      {/* Profile Information */}
-      <div className="bg-[#1B2431]/40 backdrop-blur-xl border border-gray-800 rounded-2xl p-8">
-        <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-          <User className="w-5 h-5 text-blue-500" />
-          Profile Information
-        </h2>
+      <div className="space-y-12">
+        {/* Profile Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="space-y-1">
+            <h2 className="text-lg font-medium text-white">Profile</h2>
+            <p className="text-sm text-gray-400">Update your personal information.</p>
+          </div>
 
-        <form onSubmit={handleUpdateProfile} className="space-y-6">
-          {updateMessage.text && (
-            <div className={`p-4 rounded-xl text-sm ${updateMessage.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
-              }`}>
-              {updateMessage.text}
-            </div>
-          )}
+          <div className="lg:col-span-2 space-y-6">
+            <form onSubmit={handleUpdateProfile} className="space-y-6">
+              {updateMessage.text && (
+                <div className={`p-3 rounded-lg text-sm ${updateMessage.type === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                  {updateMessage.text}
+                </div>
+              )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">Username</label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full bg-[#0B1120] border border-gray-800 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">Email</label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                <input
-                  type="email"
-                  value={user?.email || ''}
-                  disabled
-                  className="w-full bg-[#0B1120]/50 border border-gray-800 rounded-xl py-3 pl-10 pr-4 text-gray-400 cursor-not-allowed"
-                />
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">Username</label>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full bg-transparent border border-gray-800 rounded-lg py-2.5 px-3 text-white text-sm focus:border-gray-600 focus:ring-0 transition-colors placeholder-gray-600"
+                    placeholder="Enter username"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">Email address</label>
+                  <input
+                    type="email"
+                    value={user?.email || ''}
+                    disabled
+                    className="w-full bg-gray-900/30 border border-gray-800 rounded-lg py-2.5 px-3 text-gray-500 text-sm cursor-not-allowed"
+                  />
+                </div>
               </div>
-            </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="px-4 py-2 bg-white text-black hover:bg-gray-200 font-medium text-sm rounded-lg transition-colors flex items-center gap-2"
+                >
+                  {isUpdating ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div className="h-px bg-gray-800" />
+
+        {/* Security Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="space-y-1">
+            <h2 className="text-lg font-medium text-white">Password</h2>
+            <p className="text-sm text-gray-400">Ensure your account is secure.</p>
           </div>
 
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={isUpdating}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
-            >
-              {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Save Changes
-            </button>
+          <div className="lg:col-span-2 space-y-6">
+            <form onSubmit={handleChangePassword} className="space-y-6">
+              {passwordMessage.text && (
+                <div className={`p-3 rounded-lg text-sm ${passwordMessage.type === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                  {passwordMessage.text}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">Current password</label>
+                  <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="w-full bg-transparent border border-gray-800 rounded-lg py-2.5 px-3 text-white text-sm focus:border-gray-600 focus:ring-0 transition-colors"
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-300">New password</label>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full bg-transparent border border-gray-800 rounded-lg py-2.5 px-3 text-white text-sm focus:border-gray-600 focus:ring-0 transition-colors"
+                      minLength={8}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-300">Confirm password</label>
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full bg-transparent border border-gray-800 rounded-lg py-2.5 px-3 text-white text-sm focus:border-gray-600 focus:ring-0 transition-colors"
+                      minLength={8}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={isChangingPassword}
+                  className="px-4 py-2 bg-white text-black hover:bg-gray-200 font-medium text-sm rounded-lg transition-colors flex items-center gap-2"
+                >
+                  {isChangingPassword ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                  Update password
+                </button>
+              </div>
+            </form>
           </div>
-        </form>
-      </div>
+        </div>
 
-      {/* Change Password */}
-      <div className="bg-[#1B2431]/40 backdrop-blur-xl border border-gray-800 rounded-2xl p-8">
-        <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-          <Lock className="w-5 h-5 text-blue-500" />
-          Change Password
-        </h2>
+        <div className="h-px bg-gray-800" />
 
-        <form onSubmit={handleChangePassword} className="space-y-6">
-          {passwordMessage.text && (
-            <div className={`p-4 rounded-xl text-sm ${passwordMessage.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
-              }`}>
-              {passwordMessage.text}
-            </div>
-          )}
+        {/* Danger Zone */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="space-y-1">
+            <h2 className="text-lg font-medium text-red-500">Danger Zone</h2>
+            <p className="text-sm text-gray-400">Actions here cannot be undone.</p>
+          </div>
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">Current Password</label>
-              <input
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                className="w-full bg-[#0B1120] border border-gray-800 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-300">New Password</label>
+          <div className="lg:col-span-2">
+            {!showDeleteConfirm ? (
+              <div className="flex items-center justify-between p-4 border border-red-900/30 rounded-lg bg-red-900/5">
+                <div>
+                  <h3 className="text-sm font-medium text-white">Delete account</h3>
+                  <p className="text-sm text-gray-400 mt-1">Permanently remove your account and all of its contents.</p>
+                </div>
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="px-4 py-2 text-red-500 hover:text-red-400 hover:bg-red-500/10 font-medium text-sm rounded-lg transition-colors"
+                >
+                  Delete account
+                </button>
+              </div>
+            ) : (
+              <div className="p-6 border border-red-900/30 rounded-lg bg-red-900/5 space-y-4">
+                <div>
+                  <h3 className="text-sm font-medium text-white">Confirm deletion</h3>
+                  <p className="text-sm text-gray-400 mt-1">Please enter your password to confirm. This action cannot be reversed.</p>
+                </div>
                 <input
                   type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full bg-[#0B1120] border border-gray-800 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                  required
-                  minLength={8}
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  className="w-full bg-black/20 border border-red-900/30 rounded-lg py-2.5 px-3 text-white text-sm focus:border-red-500/50 focus:ring-0 transition-colors placeholder-red-900/30"
+                  placeholder="Enter your password"
                 />
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={handleDeleteAccount}
+                    disabled={!deletePassword || isDeleting}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium text-sm rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    {isDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                    Confirm delete
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowDeleteConfirm(false);
+                      setDeletePassword('');
+                    }}
+                    className="px-4 py-2 text-gray-400 hover:text-white font-medium text-sm rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-300">Confirm New Password</label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full bg-[#0B1120] border border-gray-800 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                  required
-                  minLength={8}
-                />
-              </div>
-            </div>
+            )}
           </div>
-
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={isChangingPassword}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
-            >
-              {isChangingPassword ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Update Password
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* Delete Account */}
-      <div className="bg-red-500/5 border border-red-500/20 rounded-2xl p-8">
-        <h2 className="text-xl font-semibold text-red-500 mb-4 flex items-center gap-2">
-          <AlertTriangle className="w-5 h-5" />
-          Danger Zone
-        </h2>
-        <p className="text-gray-400 mb-6">
-          Deleting your account is permanent and cannot be undone. All your data, including connections and query history, will be erased.
-        </p>
-
-        {!showDeleteConfirm ? (
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="px-6 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 font-medium rounded-lg border border-red-500/20 transition-colors flex items-center gap-2"
-          >
-            <Trash2 className="w-4 h-4" />
-            Delete Account
-          </button>
-        ) : (
-          <div className="space-y-4 max-w-md">
-            <p className="text-sm text-gray-300">Please enter your password to confirm deletion:</p>
-            <input
-              type="password"
-              value={deletePassword}
-              onChange={(e) => setDeletePassword(e.target.value)}
-              className="w-full bg-[#0B1120] border border-red-500/30 rounded-xl py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-red-500/50"
-              placeholder="Enter your password"
-            />
-            <div className="flex gap-3">
-              <button
-                onClick={handleDeleteAccount}
-                disabled={!deletePassword || isDeleting}
-                className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
-              >
-                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm Deletion'}
-              </button>
-              <button
-                onClick={() => {
-                  setShowDeleteConfirm(false);
-                  setDeletePassword('');
-                }}
-                className="px-6 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );

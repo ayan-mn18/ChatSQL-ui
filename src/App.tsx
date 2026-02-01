@@ -21,7 +21,7 @@ import {
   SQLEditor,
   SchemaVisualizer
 } from './pages';
-import UserManagementPage from './pages/dashboard/UserManagementPage';
+import { UserManagementPage } from './pages/dashboard/UserManagement';
 import ForceChangePasswordPage from './pages/auth/ForceChangePasswordPage';
 import MyAccessPage from './pages/dashboard/MyAccessPage';
 import PricingPage from './pages/dashboard/PricingPage';
