@@ -388,20 +388,28 @@ function AIChatSidebar({
         onClick={onToggle}
       >
         <MessageSquare className="w-4 h-4 mr-2" />
-        AI Chat
+        SQL Copilot
       </Button>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-[#0f172a] border-l border-white/10 min-w-[200px]">
+    <div className="flex flex-col h-full bg-gradient-to-b from-[#0c1222] to-[#0f172a] border-l border-white/5 min-w-[200px]">
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-white/10 shrink-0">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-blue-400" />
-          <span className="font-semibold text-white">AI Assistant</span>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0 bg-[#0c1222]/80 backdrop-blur-sm">
+        <div className="flex items-center gap-2.5">
+          <div className="relative">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-blue-500/20">
+              <Sparkles className="w-4 h-4 text-white" />
+            </div>
+            <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-[#0c1222]" />
+          </div>
+          <div className="flex flex-col">
+            <span className="font-semibold text-white text-sm tracking-tight">SQL Copilot</span>
+            <span className="text-[10px] text-emerald-400/80 font-medium">Online</span>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -412,22 +420,22 @@ function AIChatSidebar({
                   const url = `/chat/${connectionId}?schemas=${encodeURIComponent(schemas)}`;
                   window.open(url, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
                 }}
-                className="text-gray-400 hover:text-white"
+                className="h-8 w-8 p-0 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg"
               >
                 <ExternalLink className="w-4 h-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Open Chat in New Window</TooltipContent>
+            <TooltipContent>Open in New Window</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="sm" onClick={handleClearChat} className="text-gray-400 hover:text-white">
+              <Button variant="ghost" size="sm" onClick={handleClearChat} className="h-8 w-8 p-0 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg">
                 <Trash2 className="w-4 h-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>Clear Chat</TooltipContent>
           </Tooltip>
-          <Button variant="ghost" size="sm" onClick={onToggle} className="text-gray-400 hover:text-white">
+          <Button variant="ghost" size="sm" onClick={onToggle} className="h-8 w-8 p-0 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg">
             <PanelRightClose className="w-4 h-4" />
           </Button>
         </div>
@@ -435,16 +443,25 @@ function AIChatSidebar({
 
       {/* Messages - Fixed height container */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        <div className="h-full overflow-y-auto p-3">
-          <div className="space-y-4">
+        <div className="h-full overflow-y-auto px-4 py-3 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+          <div className="space-y-5">
             {messages.length === 0 && !isStreaming && (
-              <div className="text-center text-gray-500 py-8">
-                <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                <p className="text-sm font-medium mb-2">Chat with AI Assistant</p>
-                <div className="text-xs space-y-1 text-gray-600">
-                  <p>💬 Ask me anything about your database</p>
-                  <p>🔍 Request SQL queries when you need them</p>
-                  <p className="mt-3 italic">Try: "What tables do I have?" or "Show me all users"</p>
+              <div className="flex flex-col items-center justify-center py-12 px-4">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-400/20 flex items-center justify-center mb-4 border border-white/5">
+                  <Sparkles className="w-8 h-8 text-blue-400" />
+                </div>
+                <h3 className="text-base font-semibold text-white mb-1.5">SQL Copilot</h3>
+                <p className="text-sm text-slate-400 text-center mb-6">Your AI-powered database assistant</p>
+                <div className="w-full space-y-2">
+                  <button className="w-full text-left px-4 py-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 hover:border-white/10 transition-all group">
+                    <p className="text-sm text-slate-300 group-hover:text-white transition-colors">💬 "What tables do I have?"</p>
+                  </button>
+                  <button className="w-full text-left px-4 py-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 hover:border-white/10 transition-all group">
+                    <p className="text-sm text-slate-300 group-hover:text-white transition-colors">🔍 "Show me all users"</p>
+                  </button>
+                  <button className="w-full text-left px-4 py-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 hover:border-white/10 transition-all group">
+                    <p className="text-sm text-slate-300 group-hover:text-white transition-colors">📊 "Count orders by status"</p>
+                  </button>
                 </div>
               </div>
             )}
@@ -455,13 +472,13 @@ function AIChatSidebar({
                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[85%] rounded-lg p-3 ${msg.role === 'user'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-[#1e293b] text-gray-200'
+                  className={`max-w-[90%] ${msg.role === 'user'
+                    ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-2xl rounded-br-md px-4 py-3 shadow-lg shadow-blue-500/10'
+                    : 'bg-white/[0.03] border border-white/5 text-slate-200 rounded-2xl rounded-bl-md px-4 py-3'
                     }`}
                 >
                   {/* Message Content */}
-                  <div className="text-sm space-y-3">
+                  <div className="text-[13px] leading-relaxed space-y-3">
                     {msg.content && msg.content.split('\n\n').map((paragraph, idx) => {
                       if (!paragraph.trim()) return null;
 
@@ -519,8 +536,8 @@ function AIChatSidebar({
 
             {isStreaming && streamingContent && (
               <div className="flex justify-start">
-                <div className="max-w-[85%] rounded-lg p-3 bg-[#1e293b] text-gray-200">
-                  <div className="text-sm space-y-3">
+                <div className="max-w-[90%] bg-white/[0.03] border border-white/5 text-slate-200 rounded-2xl rounded-bl-md px-4 py-3">
+                  <div className="text-[13px] leading-relaxed space-y-3">
                     {streamingContent.split('\n\n').map((paragraph, idx) => {
                       if (!paragraph.trim()) return null;
 
@@ -565,10 +582,14 @@ function AIChatSidebar({
 
             {isStreaming && !streamingContent && (
               <div className="flex justify-start">
-                <div className="bg-[#1e293b] rounded-lg p-3">
-                  <div className="flex items-center gap-2 text-gray-400">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span className="text-sm">Thinking...</span>
+                <div className="bg-white/[0.03] border border-white/5 rounded-2xl rounded-bl-md px-4 py-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex gap-1">
+                      <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                    <span className="text-[13px] text-slate-400">Generating response...</span>
                   </div>
                 </div>
               </div>
@@ -580,28 +601,32 @@ function AIChatSidebar({
       </div>
 
       {/* Input */}
-      <div className="p-3 border-t border-white/10 shrink-0">
-        <div className="flex gap-2">
-          <Textarea
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask me anything or request a SQL query..."
-            className="flex-1 bg-[#1e293b] border-white/10 text-white placeholder:text-gray-500 min-h-[60px] max-h-[120px] resize-none"
-            disabled={isStreaming}
-          />
+      <div className="p-4 border-t border-white/5 shrink-0 bg-[#0c1222]/50">
+        <div className="flex gap-3 items-end">
+          <div className="flex-1 relative">
+            <Textarea
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask about your data or request SQL..."
+              className="w-full bg-white/[0.03] border-white/5 hover:border-white/10 focus:border-blue-500/50 text-white text-[13px] placeholder:text-slate-500 min-h-[52px] max-h-[120px] resize-none rounded-xl pr-4 transition-colors"
+              disabled={isStreaming}
+            />
+          </div>
           <Button
             onClick={handleSendMessage}
             disabled={!inputValue.trim() || isStreaming}
-            className="bg-blue-600 text-white hover:bg-blue-700 px-4"
+            size="lg"
+            className="h-[52px] w-[52px] p-0 bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl shadow-lg shadow-blue-500/20 transition-all hover:shadow-blue-500/30 hover:scale-[1.02] disabled:opacity-50 disabled:shadow-none disabled:hover:scale-100"
           >
             {isStreaming ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
-              <Sparkles className="w-4 h-4" />
+              <Sparkles className="w-5 h-5" />
             )}
           </Button>
         </div>
+        <p className="text-[10px] text-slate-500 mt-2 text-center">Press Enter to send • Shift+Enter for new line</p>
       </div>
     </div>
   );
@@ -1575,15 +1600,15 @@ export default function QueryConsole() {
                   onClick={() => setShowChatSidebar(!showChatSidebar)}
                   className={
                     showChatSidebar
-                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 border-0'
                       : 'border-blue-500/40 text-white hover:bg-white/5 hover:text-white'
                   }
                 >
-                  <MessageSquare className="w-4 h-4 mr-2" />
-                  AI Chat
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  SQL Copilot
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Toggle AI Assistant</TooltipContent>
+              <TooltipContent>Toggle SQL Copilot</TooltipContent>
             </Tooltip>
           </div>
         </div>
