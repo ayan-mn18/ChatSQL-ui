@@ -45,6 +45,7 @@ export interface StreamChunk {
   content?: string;
   messageId?: string;
   sql?: string;
+  intent?: string;
   reasoning?: {
     steps: string[];
     optimization_notes: string[];
