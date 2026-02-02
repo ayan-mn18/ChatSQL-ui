@@ -16,6 +16,7 @@ import {
 import { chatService, ChatMessage, StreamChunk } from '@/services/chat.service';
 import { connectionService } from '@/services/connection.service';
 import { DatabaseSchemaPublic } from '@/types';
+import { SQLCodeBlock } from '@/components/ui/sql-code-block';
 import toast from 'react-hot-toast';
 
 export default function StandaloneChatPage() {
@@ -171,6 +172,17 @@ export default function StandaloneChatPage() {
     toast.success('SQL saved to file');
   };
 
+  // Helper function to render formatted text with bold
+  const renderFormattedText = (text: string) => {
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={i} className="font-semibold text-white">{part.slice(2, -2)}</strong>;
+      }
+      return <span key={i}>{part}</span>;
+    });
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -246,54 +258,51 @@ export default function StandaloneChatPage() {
                     {msg.content && msg.content.split('\n\n').map((paragraph, idx) => {
                       if (!paragraph.trim()) return null;
 
+                      // Check if paragraph contains a SQL code block
                       if (paragraph.includes('```sql')) {
-                        const codeMatch = paragraph.match(/```sql\n([\s\S]*?)\n```/);
+                        const codeMatch = paragraph.match(/```sql\n?([\s\S]*?)\n?```/);
                         if (codeMatch) {
-                          const sqlCode = codeMatch[1];
+                          const sqlCode = codeMatch[1].trim();
                           const beforeCode = paragraph.split('```sql')[0].trim();
                           const afterCode = paragraph.split('```')[2]?.trim();
                           return (
-                            <div key={idx} className="space-y-2">
+                            <div key={idx} className="space-y-3">
                               {beforeCode && (
-                                <p className="whitespace-pre-wrap break-words">{beforeCode}</p>
+                                <p className="whitespace-pre-wrap break-words">{renderFormattedText(beforeCode)}</p>
                               )}
-                              <div className="bg-[#0f172a] rounded-md p-3 font-mono text-xs overflow-x-auto border border-white/10">
-                                <code className="text-green-400 break-all">{sqlCode}</code>
-                              </div>
+                              <SQLCodeBlock
+                                code={sqlCode}
+                                showLineNumbers={sqlCode.split('\n').length > 1}
+                                showCopyButton
+                                maxHeight="300px"
+                              />
                               {afterCode && (
-                                <p className="whitespace-pre-wrap break-words">{afterCode}</p>
+                                <p className="whitespace-pre-wrap break-words">{renderFormattedText(afterCode)}</p>
                               )}
                             </div>
                           );
                         }
                       }
 
-                      const parts = paragraph.split(/(\*\*.*?\*\*)/g);
+                      // Handle regular text with bold formatting
                       return (
                         <p key={idx} className="whitespace-pre-wrap break-words">
-                          {parts.map((part, i) => {
-                            if (part.startsWith('**') && part.endsWith('**')) {
-                              return <strong key={i} className="font-semibold text-white">{part.slice(2, -2)}</strong>;
-                            }
-                            return <span key={i}>{part}</span>;
-                          })}
+                          {renderFormattedText(paragraph)}
                         </p>
                       );
                     })}
                   </div>
 
-                  {msg.role === 'assistant' && msg.sqlGenerated && (
-                    <div className="mt-4 pt-3 border-t border-white/10">
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="flex-1 text-xs border-blue-500/40 text-blue-200 hover:bg-blue-500/10"
-                          onClick={() => handleCopySQL(msg.sqlGenerated!)}
-                        >
-                          <Copy className="w-3 h-3 mr-1" />
-                          Copy SQL
-                        </Button>
+                  {/* Show SQL actions if there's sqlGenerated but no code block in content */}
+                  {msg.role === 'assistant' && msg.sqlGenerated && !msg.content?.includes('```sql') && (
+                    <div className="mt-4">
+                      <SQLCodeBlock
+                        code={msg.sqlGenerated}
+                        showLineNumbers={msg.sqlGenerated.split('\n').length > 1}
+                        showCopyButton
+                        maxHeight="300px"
+                      />
+                      <div className="mt-2 flex gap-2">
                         <Button
                           size="sm"
                           variant="outline"
@@ -301,7 +310,7 @@ export default function StandaloneChatPage() {
                           onClick={() => handleSaveSQL(msg.sqlGenerated!)}
                         >
                           <Download className="w-3 h-3 mr-1" />
-                          Save SQL
+                          Save to File
                         </Button>
                       </div>
                     </div>
@@ -317,41 +326,40 @@ export default function StandaloneChatPage() {
                     {streamingContent.split('\n\n').map((paragraph, idx) => {
                       if (!paragraph.trim()) return null;
 
+                      // Check if paragraph contains a SQL code block
                       if (paragraph.includes('```sql')) {
-                        const codeMatch = paragraph.match(/```sql\n([\s\S]*?)\n```/);
+                        const codeMatch = paragraph.match(/```sql\n?([\s\S]*?)\n?```/);
                         if (codeMatch) {
-                          const sqlCode = codeMatch[1];
+                          const sqlCode = codeMatch[1].trim();
                           const beforeCode = paragraph.split('```sql')[0].trim();
                           const afterCode = paragraph.split('```')[2]?.trim();
                           return (
-                            <div key={idx} className="space-y-2">
+                            <div key={idx} className="space-y-3">
                               {beforeCode && (
-                                <p className="whitespace-pre-wrap break-words">{beforeCode}</p>
+                                <p className="whitespace-pre-wrap break-words">{renderFormattedText(beforeCode)}</p>
                               )}
-                              <div className="bg-[#0f172a] rounded-md p-3 font-mono text-xs overflow-x-auto border border-white/10">
-                                <code className="text-green-400 break-all">{sqlCode}</code>
-                              </div>
+                              <SQLCodeBlock
+                                code={sqlCode}
+                                showLineNumbers={sqlCode.split('\n').length > 1}
+                                showCopyButton
+                                maxHeight="300px"
+                              />
                               {afterCode && (
-                                <p className="whitespace-pre-wrap break-words">{afterCode}</p>
+                                <p className="whitespace-pre-wrap break-words">{renderFormattedText(afterCode)}</p>
                               )}
                             </div>
                           );
                         }
                       }
 
-                      const parts = paragraph.split(/(\*\*.*?\*\*)/g);
+                      // Handle regular text with bold formatting
                       return (
                         <p key={idx} className="whitespace-pre-wrap break-words">
-                          {parts.map((part, i) => {
-                            if (part.startsWith('**') && part.endsWith('**')) {
-                              return <strong key={i} className="font-semibold text-white">{part.slice(2, -2)}</strong>;
-                            }
-                            return <span key={i}>{part}</span>;
-                          })}
+                          {renderFormattedText(paragraph)}
                         </p>
                       );
                     })}
-                    <span className="animate-pulse">▌</span>
+                    <span className="animate-pulse text-blue-400">▌</span>
                   </div>
                 </div>
               </div>
