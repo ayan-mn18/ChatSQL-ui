@@ -1695,9 +1695,13 @@ export default function QueryConsole() {
   };
 
   const handleInsertSQL = (sql: string) => {
-    if (!activeTab || !activeTabId) return;
+    if (!activeTab || !activeTabId) {
+      toast.error('No active query tab');
+      return;
+    }
     // Clean up the SQL
-    const cleanSQL = sql.replace(/\\n/g, '\n');
+    const cleanSQL = sql.replace(/\\n/g, '\n').trim();
+
     // Get the model for this tab and update it
     const model = editorModelsRef.current.get(activeTabId);
     if (model) {
@@ -1711,6 +1715,15 @@ export default function QueryConsole() {
         () => null
       );
     }
+
+    // Also update the tab state directly
+    updateTabQuery(activeTabId, cleanSQL);
+
+    // Update the editor ref value too if available
+    if (editorRef.current) {
+      editorRef.current.setValue(cleanSQL);
+    }
+
     toast.success('SQL inserted into editor');
   };
 
