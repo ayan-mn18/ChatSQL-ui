@@ -25,7 +25,7 @@ const sqlDarkTheme = {
   styles: [
     {
       types: ['comment', 'prolog', 'doctype', 'cdata'],
-      style: { color: '#6b7280', fontStyle: 'italic' as const },
+      style: { color: '#64748b', fontStyle: 'italic' as const },
     },
     {
       types: ['punctuation'],
@@ -37,15 +37,15 @@ const sqlDarkTheme = {
     },
     {
       types: ['selector', 'attr-name', 'string', 'char', 'builtin'],
-      style: { color: '#34d399' },
+      style: { color: '#4ade80' },
     },
     {
       types: ['operator', 'entity', 'url'],
-      style: { color: '#f59e0b' },
+      style: { color: '#fbbf24' },
     },
     {
       types: ['atrule', 'attr-value', 'keyword'],
-      style: { color: '#60a5fa', fontWeight: 'bold' as const },
+      style: { color: '#818cf8', fontWeight: 'bold' as const },
     },
     {
       types: ['function', 'class-name'],
@@ -60,7 +60,7 @@ const sqlDarkTheme = {
 
 export function SQLCodeBlock({
   code,
-  title = 'Generated SQL',
+  title = 'SQL',
   showLineNumbers = true,
   showCopyButton = true,
   showInsertButton = false,
@@ -84,26 +84,18 @@ export function SQLCodeBlock({
   const formattedCode = formatSQL(code);
 
   return (
-    <div className={cn('rounded-xl overflow-hidden border border-white/[0.08] bg-[#0c1222] shadow-xl shadow-black/20', className)}>
+    <div className={cn('rounded-lg overflow-hidden bg-[#0f172a] border border-slate-700', className)}>
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-slate-800/50 to-slate-800/30 border-b border-white/[0.05]">
-        <div className="flex items-center gap-2">
-          <div className="flex gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
-            <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/80" />
-            <div className="w-2.5 h-2.5 rounded-full bg-green-500/80" />
-          </div>
-          <span className="text-[11px] font-medium text-slate-400 ml-1">{title}</span>
-        </div>
+      <div className="flex items-center justify-between px-3 py-1.5 bg-[#0c1322] border-b border-slate-700">
+        <span className="text-xs text-slate-500">{title}</span>
         <div className="flex items-center gap-1">
           {showInsertButton && onInsert && (
             <Button
               size="sm"
               variant="ghost"
               onClick={handleInsert}
-              className="h-6 px-2 text-[10px] font-medium text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-md"
+              className="h-6 px-2 text-xs text-indigo-400 hover:text-indigo-300 hover:bg-slate-700"
             >
-              <Code2 className="w-3 h-3 mr-1" />
               Insert
             </Button>
           )}
@@ -113,16 +105,16 @@ export function SQLCodeBlock({
               variant="ghost"
               onClick={handleCopy}
               className={cn(
-                'h-6 px-2 text-[10px] font-medium transition-all rounded-md',
+                'h-6 px-2 text-xs',
                 copied
-                  ? 'text-emerald-400 bg-emerald-500/10'
-                  : 'text-slate-400 hover:text-white hover:bg-white/10'
+                  ? 'text-green-400'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
               )}
             >
               {copied ? (
                 <>
                   <Check className="w-3 h-3 mr-1" />
-                  Copied!
+                  Copied
                 </>
               ) : (
                 <>
@@ -136,11 +128,11 @@ export function SQLCodeBlock({
       </div>
 
       {/* Code */}
-      <div className="overflow-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent" style={{ maxHeight }}>
+      <div className="overflow-auto" style={{ maxHeight }}>
         <Highlight theme={sqlDarkTheme} code={formattedCode} language="sql">
           {({ className: highlightClassName, style, tokens, getLineProps, getTokenProps }) => (
             <pre
-              className={cn(highlightClassName, 'px-4 py-3 text-[12px] leading-relaxed font-mono m-0')}
+              className={cn(highlightClassName, 'px-3 py-2.5 text-[13px] leading-relaxed font-mono m-0')}
               style={{ ...style, background: 'transparent' }}
             >
               {tokens.map((line, i) => {
@@ -149,10 +141,10 @@ export function SQLCodeBlock({
                   <div
                     key={i}
                     {...lineProps}
-                    className={cn(lineProps.className, 'table-row hover:bg-white/[0.02] transition-colors')}
+                    className={cn(lineProps.className, 'table-row')}
                   >
                     {showLineNumbers && (
-                      <span className="table-cell pr-4 text-right text-slate-600/60 select-none w-8 text-[11px]">
+                      <span className="table-cell pr-3 text-right text-slate-600 select-none w-6 text-xs">
                         {i + 1}
                       </span>
                     )}

@@ -27,6 +27,11 @@ import {
   Settings2,
   Palette,
   ExternalLink,
+  AlignLeft,
+  Columns,
+  Terminal,
+  Undo2,
+  Redo2,
 } from 'lucide-react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import DataTable from '@/components/DataTable';
@@ -157,22 +162,22 @@ function QueryTabBar({
   };
 
   return (
-    <div className="flex items-center gap-1 px-2 py-1 bg-[#0f172a] border-b border-white/5 overflow-x-auto">
+    <div className="flex items-center gap-0.5 px-2 h-9 bg-slate-900 border-b border-slate-800 overflow-x-auto">
       {tabs.map(tab => (
         <div
           key={tab.id}
           className={`
-            group flex items-center gap-2 px-3 py-1.5 rounded-t text-sm cursor-pointer
-            transition-colors min-w-[120px] max-w-[200px]
+            group flex items-center gap-2 px-3 h-8 rounded-md text-[13px] cursor-pointer
+            transition-all duration-150 min-w-[100px] max-w-[180px]
             ${activeTabId === tab.id
-              ? 'bg-[#6366f1] text-white border-t-2 border-[#8b5cf6] shadow-md'
-              : 'text-gray-400 hover:text-white hover:bg-white/5'
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'
             }
           `}
           onClick={() => onTabSelect(tab.id)}
           onDoubleClick={() => handleDoubleClick(tab.id, tab.title)}
         >
-          {tab.isRunning && <Loader2 className="w-3 h-3 animate-spin text-green-400" />}
+          {tab.isRunning && <Loader2 className="w-3 h-3 animate-spin text-emerald-400 shrink-0" />}
           {editingTabId === tab.id ? (
             <input
               type="text"
@@ -183,20 +188,20 @@ function QueryTabBar({
                 if (e.key === 'Enter') handleTitleSave(tab.id);
                 if (e.key === 'Escape') setEditingTabId(null);
               }}
-              className="bg-transparent border-none outline-none w-full text-white text-sm"
+              className="bg-transparent border-none outline-none w-full text-white text-[13px]"
               autoFocus
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
             <span className="truncate">{tab.title}</span>
           )}
-          {tab.isDirty && <span className="text-blue-400">•</span>}
+          {tab.isDirty && <span className="text-indigo-400 shrink-0">•</span>}
           <button
             onClick={(e) => {
               e.stopPropagation();
               onTabClose(tab.id);
             }}
-            className="opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity"
+            className="opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity ml-auto shrink-0"
           >
             <X className="w-3 h-3" />
           </button>
@@ -207,7 +212,7 @@ function QueryTabBar({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 w-7 p-0 text-gray-400 hover:text-white"
+            className="h-7 w-7 p-0 text-slate-500 hover:text-white hover:bg-slate-800 ml-1"
             onClick={onNewTab}
           >
             <Plus className="w-4 h-4" />
@@ -245,12 +250,81 @@ function AIChatSidebar({
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamingContentRef = useRef<string>(''); // Track accumulated content for closure
 
-  // Helper function to render formatted text with bold, etc.
+  // Helper function to render formatted text with bold, headings, bullets, etc.
   const renderFormattedText = (text: string) => {
-    const parts = text.split(/(\*\*.*?\*\*)/g);
+    // Split by lines to handle headings and bullets
+    const lines = text.split('\n');
+
+    return lines.map((line, lineIdx) => {
+      const trimmedLine = line.trim();
+
+      // Handle bold headings like **Reasoning:** or **Generated SQL:**
+      const boldHeadingMatch = trimmedLine.match(/^\*\*([^*]+):\*\*$/);
+      if (boldHeadingMatch) {
+        return (
+          <div key={lineIdx} className="mt-4 mb-2 first:mt-0">
+            <span className="text-[13px] font-bold text-white tracking-wide uppercase">{boldHeadingMatch[1]}:</span>
+          </div>
+        );
+      }
+
+      // Handle regular headings (lines ending with colon)
+      if (/^[A-Z][a-zA-Z\s]+:$/.test(trimmedLine)) {
+        return (
+          <div key={lineIdx} className="mt-4 mb-2 first:mt-0">
+            <span className="text-[13px] font-bold text-white tracking-wide uppercase">{trimmedLine}</span>
+          </div>
+        );
+      }
+
+      // Handle bullet points (•, -, or * but NOT ** which is bold)
+      if (trimmedLine.startsWith('•') || trimmedLine.startsWith('- ') || (trimmedLine.startsWith('* ') && !trimmedLine.startsWith('**'))) {
+        const bulletContent = trimmedLine.replace(/^[•\-\*]\s*/, '').trim();
+        return (
+          <div key={lineIdx} className="flex gap-2.5 ml-0.5 my-1">
+            <span className="text-indigo-400 text-lg leading-none">•</span>
+            <span className="text-slate-300">{renderInlineFormatting(bulletContent)}</span>
+          </div>
+        );
+      }
+
+      // Handle numbered lists
+      if (/^\d+\.\s/.test(trimmedLine)) {
+        const match = trimmedLine.match(/^(\d+)\.\s(.*)/);
+        if (match) {
+          return (
+            <div key={lineIdx} className="flex gap-2.5 ml-0.5 my-1">
+              <span className="text-indigo-400 font-semibold min-w-[1.5rem] text-right">{match[1]}.</span>
+              <span className="text-slate-300">{renderInlineFormatting(match[2])}</span>
+            </div>
+          );
+        }
+      }
+
+      // Regular line with inline formatting
+      if (trimmedLine) {
+        return <div key={lineIdx} className="text-slate-300">{renderInlineFormatting(line)}</div>;
+      }
+
+      return null;
+    });
+  };
+
+  // Helper for inline formatting (bold, code, etc.)
+  const renderInlineFormatting = (text: string) => {
+    // Handle **bold** and `code`
+    const parts = text.split(/(\*\*.*?\*\*|`[^`]+`)/g);
     return parts.map((part, i) => {
       if (part.startsWith('**') && part.endsWith('**')) {
-        return <strong key={i} className="font-semibold text-white">{part.slice(2, -2)}</strong>;
+        const content = part.slice(2, -2);
+        // Check if it's a heading-like pattern inside text
+        if (content.endsWith(':')) {
+          return <strong key={i} className="font-bold text-white">{content}</strong>;
+        }
+        return <strong key={i} className="font-semibold text-white">{content}</strong>;
+      }
+      if (part.startsWith('`') && part.endsWith('`')) {
+        return <code key={i} className="px-1.5 py-0.5 bg-slate-700/80 rounded text-indigo-300 text-[12px] font-mono">{part.slice(1, -1)}</code>;
       }
       return <span key={i}>{part}</span>;
     });
@@ -384,32 +458,24 @@ function AIChatSidebar({
       <Button
         variant="ghost"
         size="sm"
-        className="fixed right-4 top-20 z-50 bg-[#0f172a] border border-blue-500/30 text-white hover:bg-white/5 hover:text-white"
+        className="fixed right-4 top-20 z-50 bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 hover:text-white"
         onClick={onToggle}
       >
         <MessageSquare className="w-4 h-4 mr-2" />
-        SQL Copilot
+        Chat
       </Button>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-b from-[#0c1222] to-[#0f172a] border-l border-white/5 min-w-[200px]">
+    <div className="flex flex-col h-full bg-slate-900 border-l border-slate-800 min-w-[200px]">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0 bg-[#0c1222]/80 backdrop-blur-sm">
-        <div className="flex items-center gap-2.5">
-          <div className="relative">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-blue-500/20">
-              <Sparkles className="w-4 h-4 text-white" />
-            </div>
-            <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-[#0c1222]" />
-          </div>
-          <div className="flex flex-col">
-            <span className="font-semibold text-white text-sm tracking-tight">SQL Copilot</span>
-            <span className="text-[10px] text-emerald-400/80 font-medium">Online</span>
-          </div>
+      <div className="flex items-center justify-between px-4 h-12 border-b border-slate-800 shrink-0">
+        <div className="flex items-center gap-2">
+          <MessageSquare className="w-4 h-4 text-slate-400" />
+          <span className="font-medium text-slate-200 text-sm">Chat</span>
         </div>
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -420,47 +486,46 @@ function AIChatSidebar({
                   const url = `/chat/${connectionId}?schemas=${encodeURIComponent(schemas)}`;
                   window.open(url, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
                 }}
-                className="h-8 w-8 p-0 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg"
+                className="h-7 w-7 p-0 text-slate-500 hover:text-slate-300 hover:bg-slate-800"
               >
-                <ExternalLink className="w-4 h-4" />
+                <ExternalLink className="w-3.5 h-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>Open in New Window</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="sm" onClick={handleClearChat} className="h-8 w-8 p-0 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg">
-                <Trash2 className="w-4 h-4" />
+              <Button variant="ghost" size="sm" onClick={handleClearChat} className="h-7 w-7 p-0 text-slate-500 hover:text-slate-300 hover:bg-slate-800">
+                <Trash2 className="w-3.5 h-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>Clear Chat</TooltipContent>
           </Tooltip>
-          <Button variant="ghost" size="sm" onClick={onToggle} className="h-8 w-8 p-0 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg">
-            <PanelRightClose className="w-4 h-4" />
+          <Button variant="ghost" size="sm" onClick={onToggle} className="h-7 w-7 p-0 text-slate-500 hover:text-slate-300 hover:bg-slate-800">
+            <PanelRightClose className="w-3.5 h-3.5" />
           </Button>
         </div>
       </div>
 
       {/* Messages - Fixed height container */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        <div className="h-full overflow-y-auto px-4 py-3 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-          <div className="space-y-5">
+        <div className="h-full overflow-y-auto px-3 py-4">
+          <div className="space-y-4">
             {messages.length === 0 && !isStreaming && (
-              <div className="flex flex-col items-center justify-center py-12 px-4">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-400/20 flex items-center justify-center mb-4 border border-white/5">
-                  <Sparkles className="w-8 h-8 text-blue-400" />
+              <div className="flex flex-col items-center justify-center py-8 px-3">
+                <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center mb-3">
+                  <Sparkles className="w-5 h-5 text-slate-400" />
                 </div>
-                <h3 className="text-base font-semibold text-white mb-1.5">SQL Copilot</h3>
-                <p className="text-sm text-slate-400 text-center mb-6">Your AI-powered database assistant</p>
-                <div className="w-full space-y-2">
-                  <button className="w-full text-left px-4 py-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 hover:border-white/10 transition-all group">
-                    <p className="text-sm text-slate-300 group-hover:text-white transition-colors">💬 "What tables do I have?"</p>
+                <p className="text-sm text-slate-400 text-center mb-4">Ask anything about your database</p>
+                <div className="w-full space-y-1.5">
+                  <button className="w-full text-left px-3 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 text-xs text-slate-400 hover:text-slate-300 transition-colors">
+                    "What tables do I have?"
                   </button>
-                  <button className="w-full text-left px-4 py-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 hover:border-white/10 transition-all group">
-                    <p className="text-sm text-slate-300 group-hover:text-white transition-colors">🔍 "Show me all users"</p>
+                  <button className="w-full text-left px-3 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 text-xs text-slate-400 hover:text-slate-300 transition-colors">
+                    "Show me recent orders"
                   </button>
-                  <button className="w-full text-left px-4 py-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 hover:border-white/10 transition-all group">
-                    <p className="text-sm text-slate-300 group-hover:text-white transition-colors">📊 "Count orders by status"</p>
+                  <button className="w-full text-left px-3 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 text-xs text-slate-400 hover:text-slate-300 transition-colors">
+                    "Count users by status"
                   </button>
                 </div>
               </div>
@@ -473,12 +538,12 @@ function AIChatSidebar({
               >
                 <div
                   className={`max-w-[90%] ${msg.role === 'user'
-                    ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-2xl rounded-br-md px-4 py-3 shadow-lg shadow-blue-500/10'
-                    : 'bg-white/[0.03] border border-white/5 text-slate-200 rounded-2xl rounded-bl-md px-4 py-3'
+                    ? 'bg-indigo-600 text-white rounded-2xl rounded-br-sm px-3.5 py-2.5'
+                    : 'text-slate-300 py-2'
                     }`}
                 >
                   {/* Message Content */}
-                  <div className="text-[13px] leading-relaxed space-y-3">
+                  <div className="text-sm leading-relaxed space-y-1">
                     {msg.content && msg.content.split('\n\n').map((paragraph, idx) => {
                       if (!paragraph.trim()) return null;
 
@@ -536,8 +601,8 @@ function AIChatSidebar({
 
             {isStreaming && streamingContent && (
               <div className="flex justify-start">
-                <div className="max-w-[90%] bg-white/[0.03] border border-white/5 text-slate-200 rounded-2xl rounded-bl-md px-4 py-3">
-                  <div className="text-[13px] leading-relaxed space-y-3">
+                <div className="max-w-[90%] text-slate-300 py-2">
+                  <div className="text-sm leading-relaxed space-y-1">
                     {streamingContent.split('\n\n').map((paragraph, idx) => {
                       if (!paragraph.trim()) return null;
 
@@ -574,7 +639,7 @@ function AIChatSidebar({
                         </p>
                       );
                     })}
-                    <span className="animate-pulse text-blue-400">▌</span>
+                    <span className="animate-pulse text-indigo-400">▌</span>
                   </div>
                 </div>
               </div>
@@ -582,14 +647,10 @@ function AIChatSidebar({
 
             {isStreaming && !streamingContent && (
               <div className="flex justify-start">
-                <div className="bg-white/[0.03] border border-white/5 rounded-2xl rounded-bl-md px-4 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex gap-1">
-                      <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </div>
-                    <span className="text-[13px] text-slate-400">Generating response...</span>
+                <div className="py-2">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
+                    <span className="text-sm text-slate-400">Thinking...</span>
                   </div>
                 </div>
               </div>
@@ -601,32 +662,28 @@ function AIChatSidebar({
       </div>
 
       {/* Input */}
-      <div className="p-4 border-t border-white/5 shrink-0 bg-[#0c1222]/50">
-        <div className="flex gap-3 items-end">
-          <div className="flex-1 relative">
-            <Textarea
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask about your data or request SQL..."
-              className="w-full bg-white/[0.03] border-white/5 hover:border-white/10 focus:border-blue-500/50 text-white text-[13px] placeholder:text-slate-500 min-h-[52px] max-h-[120px] resize-none rounded-xl pr-4 transition-colors"
-              disabled={isStreaming}
-            />
-          </div>
+      <div className="p-3 border-t border-slate-800 shrink-0">
+        <div className="flex gap-2 items-end">
+          <Textarea
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask anything or request a SQL query..."
+            className="flex-1 bg-slate-800 border-slate-700 focus:border-slate-600 text-slate-200 text-sm placeholder:text-slate-500 min-h-[44px] max-h-[120px] resize-none rounded-lg"
+            disabled={isStreaming}
+          />
           <Button
             onClick={handleSendMessage}
             disabled={!inputValue.trim() || isStreaming}
-            size="lg"
-            className="h-[52px] w-[52px] p-0 bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl shadow-lg shadow-blue-500/20 transition-all hover:shadow-blue-500/30 hover:scale-[1.02] disabled:opacity-50 disabled:shadow-none disabled:hover:scale-100"
+            className="h-[44px] px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg disabled:opacity-40"
           >
             {isStreaming ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <Sparkles className="w-5 h-5" />
+              'Send'
             )}
           </Button>
         </div>
-        <p className="text-[10px] text-slate-500 mt-2 text-center">Press Enter to send • Shift+Enter for new line</p>
       </div>
     </div>
   );
@@ -981,7 +1038,7 @@ export default function QueryConsole() {
   const {
     activeTabId,
     addTab,
-    removeTab,
+    removeTab: removeTabFromStore,
     setActiveTab,
     updateTabQuery,
     updateTabResults,
@@ -994,6 +1051,22 @@ export default function QueryConsole() {
   // Monaco editor ref
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<Monaco | null>(null);
+  // Store editor models per tab (each model has its own undo/redo stack)
+  const editorModelsRef = useRef<Map<string, any>>(new Map());
+  const editorViewStatesRef = useRef<Map<string, any>>(new Map());
+  const previousTabIdRef = useRef<string | null>(null);
+
+  // Wrapper to clean up model when tab is removed
+  const removeTab = (tabId: string) => {
+    // Dispose of the model for this tab
+    const model = editorModelsRef.current.get(tabId);
+    if (model) {
+      model.dispose();
+      editorModelsRef.current.delete(tabId);
+    }
+    editorViewStatesRef.current.delete(tabId);
+    removeTabFromStore(tabId);
+  };
 
   // State
   const [error, setError] = useState<string | null>(null);
@@ -1038,6 +1111,62 @@ export default function QueryConsole() {
 
   // Get active tab
   const activeTab = getActiveTab();
+  const activeTabIdRef = useRef<string | null>(activeTabId);
+
+  // Update activeTabIdRef when activeTabId changes
+  useEffect(() => {
+    activeTabIdRef.current = activeTabId;
+  }, [activeTabId]);
+
+  // ============================================
+  // SAVE/RESTORE EDITOR MODEL PER TAB (separate undo/redo stacks)
+  // ============================================
+
+  useEffect(() => {
+    if (!editorRef.current || !monacoRef.current || !activeTabId) return;
+
+    const monaco = monacoRef.current;
+    const editor = editorRef.current;
+
+    // Save view state of previous tab
+    if (previousTabIdRef.current && previousTabIdRef.current !== activeTabId) {
+      const viewState = editor.saveViewState();
+      if (viewState) {
+        editorViewStatesRef.current.set(previousTabIdRef.current, viewState);
+      }
+    }
+
+    // Get or create model for this tab
+    let model = editorModelsRef.current.get(activeTabId);
+    if (!model) {
+      // Create a new model for this tab with a unique URI
+      const uri = monaco.Uri.parse(`inmemory://tab-${activeTabId}.sql`);
+      model = monaco.editor.createModel(activeTab?.query || '', 'sql', uri);
+      editorModelsRef.current.set(activeTabId, model);
+      
+      // Add content change listener to sync with tab state
+      model.onDidChangeContent(() => {
+        const currentTabId = activeTabIdRef.current;
+        if (currentTabId && model) {
+          updateTabQuery(currentTabId, model.getValue());
+        }
+      });
+    }
+
+    // Set the model on the editor (this switches undo/redo stack)
+    if (editor.getModel() !== model) {
+      editor.setModel(model);
+    }
+
+    // Restore view state for current tab (cursor position, scroll, etc.)
+    const savedViewState = editorViewStatesRef.current.get(activeTabId);
+    if (savedViewState) {
+      editor.restoreViewState(savedViewState);
+    }
+
+    // Update previous tab reference
+    previousTabIdRef.current = activeTabId;
+  }, [activeTabId]);
 
   // ============================================
   // INITIALIZE TABS FOR CONNECTION
@@ -1093,44 +1222,74 @@ export default function QueryConsole() {
     editorRef.current = editor;
     monacoRef.current = monaco;
 
-    // Define custom theme with enhanced selection colors
+    // Define custom theme with enhanced SQL syntax highlighting
     monaco.editor.defineTheme('chatsql-dark', {
       base: 'vs-dark',
       inherit: true,
       rules: [
-        { token: 'keyword', foreground: '569CD6', fontStyle: 'bold' },
-        { token: 'string', foreground: 'CE9178' },
-        { token: 'number', foreground: 'B5CEA8' },
-        { token: 'comment', foreground: '6A9955', fontStyle: 'italic' },
-        { token: 'type', foreground: '4EC9B0' },
+        // SQL Keywords - bright blue
+        { token: 'keyword', foreground: '7dd3fc', fontStyle: 'bold' },
+        { token: 'keyword.sql', foreground: '7dd3fc', fontStyle: 'bold' },
+        // Strings - green
+        { token: 'string', foreground: '4ade80' },
+        { token: 'string.sql', foreground: '4ade80' },
+        // Numbers - orange
+        { token: 'number', foreground: 'fb923c' },
+        { token: 'number.sql', foreground: 'fb923c' },
+        // Comments - gray italic
+        { token: 'comment', foreground: '64748b', fontStyle: 'italic' },
+        { token: 'comment.sql', foreground: '64748b', fontStyle: 'italic' },
+        // Types/Functions - purple
+        { token: 'type', foreground: 'c084fc' },
+        { token: 'predefined.sql', foreground: 'c084fc' },
+        // Operators - yellow
+        { token: 'operator', foreground: 'fbbf24' },
+        { token: 'operator.sql', foreground: 'fbbf24' },
+        // Identifiers - light cyan
+        { token: 'identifier', foreground: 'e2e8f0' },
+        // Delimiters - slate
+        { token: 'delimiter', foreground: '94a3b8' },
       ],
       colors: {
-        'editor.background': '#0f172a',
-        'editor.foreground': '#f1f5f9',
-        'editor.lineHighlightBackground': '#1e293b',
-        'editor.selectionBackground': '#6366f1', // Indigo selection background
-        'editor.inactiveSelectionBackground': '#4f46e5', // Darker indigo for inactive selection
-        'editor.selectionHighlightBackground': '#3730a3', // Even darker for highlight
-        'editor.wordHighlightBackground': '#1e3a8a',
-        'editor.wordHighlightStrongBackground': '#1e3a8a',
-        'editor.findMatchBackground': '#fbbf24', // Yellow for find matches
-        'editor.findMatchHighlightBackground': '#f59e0b', // Orange for find highlights
-        'editorCursor.foreground': '#60a5fa',
-        'editorLineNumber.foreground': '#64748b',
-        'editorLineNumber.activeForeground': '#f1f5f9',
-        'editorWidget.background': '#1e293b',
-        'editorWidget.border': '#334155',
-        'editorSuggestWidget.background': '#1e293b',
-        'editorSuggestWidget.border': '#334155',
+        'editor.background': '#0a0f1a',
+        'editor.foreground': '#e2e8f0',
+        'editor.lineHighlightBackground': '#1e293b50',
+        'editor.lineHighlightBorder': '#334155',
+        'editor.selectionBackground': '#6366f180',
+        'editor.inactiveSelectionBackground': '#4f46e540',
+        'editor.selectionHighlightBackground': '#3730a340',
+        'editor.wordHighlightBackground': '#1e3a8a40',
+        'editor.wordHighlightStrongBackground': '#1e3a8a60',
+        'editor.findMatchBackground': '#fbbf2480',
+        'editor.findMatchHighlightBackground': '#f59e0b40',
+        'editorCursor.foreground': '#7dd3fc',
+        'editorCursor.background': '#0a0f1a',
+        'editorLineNumber.foreground': '#475569',
+        'editorLineNumber.activeForeground': '#94a3b8',
+        'editorIndentGuide.background': '#1e293b',
+        'editorIndentGuide.activeBackground': '#334155',
+        'editorWidget.background': '#0f172a',
+        'editorWidget.border': '#1e293b',
+        'editorSuggestWidget.background': '#0f172a',
+        'editorSuggestWidget.border': '#1e293b',
+        'editorSuggestWidget.foreground': '#e2e8f0',
         'editorSuggestWidget.selectedBackground': '#3b82f6',
+        'editorSuggestWidget.highlightForeground': '#7dd3fc',
+        'editorHoverWidget.background': '#0f172a',
+        'editorHoverWidget.border': '#1e293b',
         'list.activeSelectionBackground': '#3b82f6',
         'list.inactiveSelectionBackground': '#1e40af',
-        'input.background': '#1e293b',
-        'input.border': '#334155',
+        'list.hoverBackground': '#1e293b',
+        'input.background': '#0f172a',
+        'input.border': '#1e293b',
+        'input.foreground': '#e2e8f0',
         'scrollbar.shadow': '#00000000',
         'scrollbarSlider.background': '#334155',
         'scrollbarSlider.hoverBackground': '#475569',
         'scrollbarSlider.activeBackground': '#64748b',
+        'editorGutter.background': '#0a0f1a',
+        'editorBracketMatch.background': '#6366f140',
+        'editorBracketMatch.border': '#6366f1',
       }
     });
 
@@ -1406,6 +1565,126 @@ export default function QueryConsole() {
   }, [activeTab?.results, chartConfig, chartColors]);
 
   // ============================================
+  // SQL FORMATTER
+  // ============================================
+
+  const formatSQL = (sql: string): string => {
+    if (!sql.trim()) return sql;
+
+    // Keywords that should start on a new line
+    const newlineKeywords = [
+      'SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN',
+      'INNER JOIN', 'OUTER JOIN', 'FULL JOIN', 'CROSS JOIN', 'ON', 'GROUP BY',
+      'ORDER BY', 'HAVING', 'LIMIT', 'OFFSET', 'UNION', 'EXCEPT', 'INTERSECT',
+      'INSERT INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE FROM', 'CREATE TABLE',
+      'ALTER TABLE', 'DROP TABLE', 'CREATE INDEX', 'WITH', 'CASE', 'WHEN',
+      'THEN', 'ELSE', 'END'
+    ];
+
+    let formatted = sql.trim();
+
+    // First, extract string literals and replace with placeholders
+    // This prevents commas/keywords inside strings from being processed
+    const strings: string[] = [];
+    formatted = formatted.replace(/'(?:[^'\\]|\\.)*'/g, (match) => {
+      const idx = strings.length;
+      strings.push(match);
+      return `___STR${idx}___`;
+    });
+
+    // Normalize all whitespace to single spaces
+    formatted = formatted.replace(/\s+/g, ' ');
+
+    // Add newlines before major keywords
+    newlineKeywords.forEach(keyword => {
+      const regex = new RegExp(`\\s${keyword}\\s`, 'gi');
+      formatted = formatted.replace(regex, `\n${keyword} `);
+    });
+
+    // Handle commas - only add newlines for top-level commas (not inside parentheses)
+    let result = '';
+    let parenDepth = 0;
+    for (let i = 0; i < formatted.length; i++) {
+      const char = formatted[i];
+      if (char === '(') {
+        parenDepth++;
+        result += char;
+      } else if (char === ')') {
+        parenDepth--;
+        result += char;
+      } else if (char === ',' && parenDepth === 0) {
+        // Top-level comma - add newline and indent
+        result += ',\n  ';
+        // Skip any following whitespace
+        while (i + 1 < formatted.length && formatted[i + 1] === ' ') {
+          i++;
+        }
+      } else {
+        result += char;
+      }
+    }
+    formatted = result;
+
+    // Restore string literals
+    for (let i = 0; i < strings.length; i++) {
+      formatted = formatted.replace(`___STR${i}___`, strings[i]);
+    }
+
+    // Indent lines that don't start with main keywords
+    const lines = formatted.split('\n');
+    const mainKeywords = ['SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'FULL', 'CROSS', 'GROUP', 'ORDER', 'HAVING', 'LIMIT', 'OFFSET', 'UNION', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'ALTER', 'DROP', 'WITH'];
+
+    formatted = lines.map((line, idx) => {
+      const trimmed = line.trim();
+      if (idx === 0) return trimmed;
+
+      const startsWithMain = mainKeywords.some(kw =>
+        trimmed.toUpperCase().startsWith(kw)
+      );
+
+      if (!startsWithMain && trimmed) {
+        return '  ' + trimmed;
+      }
+      return trimmed;
+    }).join('\n');
+
+    return formatted;
+  };
+
+  const handleFormatSQL = () => {
+    if (!activeTab?.query.trim() || !activeTabId) return;
+
+    const formatted = formatSQL(activeTab.query);
+    // Get the model for this tab and update it (this preserves undo stack)
+    const model = editorModelsRef.current.get(activeTabId);
+    if (model) {
+      // Use pushEditOperations to allow undo
+      model.pushEditOperations(
+        [],
+        [{
+          range: model.getFullModelRange(),
+          text: formatted
+        }],
+        () => null
+      );
+    }
+    toast.success('SQL formatted');
+  };
+
+  // Undo/Redo handlers
+  const handleUndo = () => {
+    if (editorRef.current) {
+      editorRef.current.trigger('keyboard', 'undo', null);
+    }
+  };
+
+  const handleRedo = () => {
+    if (editorRef.current) {
+      editorRef.current.trigger('keyboard', 'redo', null);
+    }
+  };
+
+  // ============================================
   // HANDLERS
   // ============================================
 
@@ -1416,12 +1695,21 @@ export default function QueryConsole() {
   };
 
   const handleInsertSQL = (sql: string) => {
-    if (!activeTab) return;
+    if (!activeTab || !activeTabId) return;
     // Clean up the SQL
     const cleanSQL = sql.replace(/\\n/g, '\n');
-    updateTabQuery(activeTab.id, cleanSQL);
-    if (editorRef.current) {
-      editorRef.current.setValue(cleanSQL);
+    // Get the model for this tab and update it
+    const model = editorModelsRef.current.get(activeTabId);
+    if (model) {
+      // Use pushEditOperations to allow undo
+      model.pushEditOperations(
+        [],
+        [{
+          range: model.getFullModelRange(),
+          text: cleanSQL
+        }],
+        () => null
+      );
     }
     toast.success('SQL inserted into editor');
   };
@@ -1448,11 +1736,11 @@ export default function QueryConsole() {
 
   if (!connectionId) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#1B2431]">
-        <div className="text-center text-gray-400">
-          <Database className="w-16 h-16 mx-auto mb-4 opacity-50" />
-          <h2 className="text-xl font-semibold text-white mb-2">No Connection Selected</h2>
-          <p>Please select a database connection to use the Query Console</p>
+      <div className="h-screen flex items-center justify-center bg-slate-950">
+        <div className="text-center text-slate-500">
+          <Database className="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <h2 className="text-lg font-medium text-slate-300 mb-1">No Connection Selected</h2>
+          <p className="text-sm">Select a database connection to start querying</p>
         </div>
       </div>
     );
@@ -1464,27 +1752,27 @@ export default function QueryConsole() {
 
   return (
     <TooltipProvider>
-      <div className="h-screen flex flex-col bg-[#1B2431]">
+      <div className="h-screen flex flex-col bg-slate-950">
         {/* Toolbar */}
-        <div className="h-14 border-b border-white/5 flex items-center justify-between px-4 bg-[#1B2431] shrink-0">
+        <div className="h-12 border-b border-slate-800 flex items-center justify-between px-3 bg-slate-900 shrink-0">
           {/* Left: Run & Actions */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   size="sm"
-                  className="bg-[#10b981] hover:bg-[#059669] text-white"
+                  className="h-8 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-[13px]"
                   onClick={handleRunQuery}
                   disabled={activeTab?.isRunning || !!error}
                 >
                   {activeTab?.isRunning ? (
                     <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Running...
+                      <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                      Running
                     </>
                   ) : (
                     <>
-                      <Play className="w-4 h-4 mr-2" />
+                      <Play className="w-3.5 h-3.5 mr-1.5" />
                       Run
                     </>
                   )}
@@ -1493,33 +1781,84 @@ export default function QueryConsole() {
               <TooltipContent>Run Query (Ctrl+Enter)</TooltipContent>
             </Tooltip>
 
+            <div className="h-5 w-px bg-slate-700 mx-1" />
+
+            {/* Format SQL Button */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleFormatSQL}
+                  disabled={!activeTab?.query.trim()}
+                  className="h-8 px-2.5 text-slate-400 hover:text-white hover:bg-slate-800 text-[13px]"
+                >
+                  <AlignLeft className="w-3.5 h-3.5 mr-1.5" />
+                  Format
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Format SQL</TooltipContent>
+            </Tooltip>
+
+            {/* Undo Button */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleUndo}
+                  className="h-8 w-8 p-0 text-slate-400 hover:text-white hover:bg-slate-800"
+                >
+                  <Undo2 className="w-3.5 h-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Undo (⌘Z)</TooltipContent>
+            </Tooltip>
+
+            {/* Redo Button */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRedo}
+                  className="h-8 w-8 p-0 text-slate-400 hover:text-white hover:bg-slate-800"
+                >
+                  <Redo2 className="w-3.5 h-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Redo (⌘⇧Z)</TooltipContent>
+            </Tooltip>
+
+            <div className="h-5 w-px bg-slate-700 mx-1" />
+
             {/* Schema Selector */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="border-white/10 bg-white/5 text-white">
-                  <Database className="w-4 h-4 mr-2" />
+                <Button variant="ghost" size="sm" className="h-8 px-2.5 text-slate-400 hover:text-white hover:bg-slate-800 text-[13px]">
+                  <Database className="w-3.5 h-3.5 mr-1.5" />
                   {selectedSchemas.length === 1 ? selectedSchemas[0] : `${selectedSchemas.length} schemas`}
-                  <ChevronDown className="w-4 h-4 ml-2" />
+                  <ChevronDown className="w-3.5 h-3.5 ml-1.5" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="bg-[#273142] border-white/10 text-white min-w-[220px]">
-                <DropdownMenuLabel className="text-gray-400 text-xs px-2 py-1.5">Select schemas</DropdownMenuLabel>
+              <DropdownMenuContent className="bg-slate-800 border-slate-700 text-white min-w-[200px]">
+                <DropdownMenuLabel className="text-slate-400 text-xs px-2 py-1.5">Select schemas</DropdownMenuLabel>
                 <div className="px-2 pb-2 flex gap-2">
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
-                    className="h-7 text-xs flex-1 border-white/10 bg-white/5 hover:bg-white/10 hover:text-white"
+                    className="h-6 text-xs flex-1 text-slate-400 hover:text-white hover:bg-slate-700"
                     onClick={(e) => {
                       e.preventDefault();
                       toggleAllSchemas(true);
                     }}
                   >
-                    Select All
+                    All
                   </Button>
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
-                    className="h-7 text-xs flex-1 border-white/10 bg-white/5 hover:bg-white/10 hover:text-white"
+                    className="h-6 text-xs flex-1 text-slate-400 hover:text-white hover:bg-slate-700"
                     onClick={(e) => {
                       e.preventDefault();
                       toggleAllSchemas(false);
@@ -1528,21 +1867,21 @@ export default function QueryConsole() {
                     Clear
                   </Button>
                 </div>
-                <DropdownMenuSeparator className="bg-white/10" />
-                <div className="max-h-[300px] overflow-y-auto scrollbar-thin">
+                <DropdownMenuSeparator className="bg-slate-700" />
+                <div className="max-h-[300px] overflow-y-auto">
                   {schemas.map(schema => (
                     <DropdownMenuCheckboxItem
                       key={schema.id}
                       checked={selectedSchemas.includes(schema.schema_name)}
                       onCheckedChange={() => toggleSchema(schema.schema_name)}
-                      className="text-white hover:bg-white/10 cursor-pointer"
+                      className="text-slate-300 hover:bg-slate-700 cursor-pointer text-[13px]"
                       onSelect={(e) => e.preventDefault()}
                     >
                       <span className="flex items-center justify-between w-full gap-2">
                         <span className="truncate">{schema.schema_name}</span>
-                        <Badge variant="outline" className="text-[10px] border-white/10 bg-white/5 text-gray-400 shrink-0">
+                        <span className="text-[10px] text-slate-500 shrink-0">
                           {schema.table_count}
-                        </Badge>
+                        </span>
                       </span>
                     </DropdownMenuCheckboxItem>
                   ))}
@@ -1550,7 +1889,7 @@ export default function QueryConsole() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <div className="h-6 w-px bg-white/10" />
+            <div className="h-5 w-px bg-slate-700 mx-1" />
 
             {/* Save & Load */}
             {!isViewer && (
@@ -1561,9 +1900,9 @@ export default function QueryConsole() {
                     size="sm"
                     onClick={() => setShowSaveDialog(true)}
                     disabled={!activeTab?.query.trim()}
-                    className="text-gray-400 hover:text-white"
+                    className="h-8 w-8 p-0 text-slate-400 hover:text-white hover:bg-slate-800"
                   >
-                    <Save className="w-4 h-4" />
+                    <Save className="w-3.5 h-3.5" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Save Query</TooltipContent>
@@ -1576,9 +1915,9 @@ export default function QueryConsole() {
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowSavedQueries(true)}
-                  className="text-gray-400 hover:text-white"
+                  className="h-8 w-8 p-0 text-slate-400 hover:text-white hover:bg-slate-800"
                 >
-                  <FolderOpen className="w-4 h-4" />
+                  <FolderOpen className="w-3.5 h-3.5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Saved Queries</TooltipContent>
@@ -1588,27 +1927,26 @@ export default function QueryConsole() {
           {/* Right: AI Chat Toggle */}
           <div className="flex items-center gap-2">
             {isViewer && (
-              <Badge variant="outline" className="text-yellow-400 border-yellow-500/30">
-                Viewer Mode
+              <Badge variant="outline" className="text-amber-400 border-amber-500/30 text-xs">
+                Viewer
               </Badge>
             )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant={showChatSidebar ? 'default' : 'outline'}
+                  variant={showChatSidebar ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setShowChatSidebar(!showChatSidebar)}
-                  className={
-                    showChatSidebar
-                      ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 border-0'
-                      : 'border-blue-500/40 text-white hover:bg-white/5 hover:text-white'
-                  }
+                  className={`h-8 px-2.5 text-[13px] ${showChatSidebar
+                    ? 'bg-indigo-600 text-white hover:bg-indigo-500'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                    }`}
                 >
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  SQL Copilot
+                  <MessageSquare className="w-3.5 h-3.5 mr-1.5" />
+                  Chat
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Toggle SQL Copilot</TooltipContent>
+              <TooltipContent>Toggle Chat</TooltipContent>
             </Tooltip>
           </div>
         </div>
@@ -1629,18 +1967,18 @@ export default function QueryConsole() {
             <ResizablePanelGroup direction="vertical" className="h-full">
               {/* Editor Panel */}
               <ResizablePanel defaultSize={40} minSize={20}>
-                <div className="h-full flex flex-col bg-[#0f172a]">
+                <div className="h-full flex flex-col bg-[#0a0f1a]">
                   <Editor
                     height="100%"
                     defaultLanguage="sql"
-                    value={activeTab?.query || ''}
-                    onChange={(value) => activeTab && updateTabQuery(activeTab.id, value || '')}
                     onMount={handleEditorDidMount}
                     theme="chatsql-dark"
                     options={{
                       minimap: { enabled: false },
                       fontSize: 14,
-                      fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+                      fontFamily: '"JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", "Consolas", monospace',
+                      fontLigatures: true,
+                      fontWeight: '400',
                       lineNumbers: 'on',
                       scrollBeyondLastLine: false,
                       automaticLayout: true,
@@ -1648,59 +1986,90 @@ export default function QueryConsole() {
                       wordWrap: 'on',
                       suggestOnTriggerCharacters: true,
                       quickSuggestions: true,
+                      padding: { top: 16, bottom: 16 },
+                      lineHeight: 22,
+                      letterSpacing: 0.5,
+                      renderLineHighlight: 'all',
+                      renderLineHighlightOnlyWhenFocus: false,
+                      cursorBlinking: 'smooth',
+                      cursorSmoothCaretAnimation: 'on',
+                      cursorStyle: 'line',
+                      cursorWidth: 2,
+                      smoothScrolling: true,
+                      bracketPairColorization: { enabled: true },
+                      guides: {
+                        bracketPairs: true,
+                        indentation: true,
+                        highlightActiveBracketPair: true,
+                      },
+                      renderWhitespace: 'none',
+                      scrollbar: {
+                        vertical: 'auto',
+                        horizontal: 'auto',
+                        useShadows: false,
+                        verticalScrollbarSize: 10,
+                        horizontalScrollbarSize: 10,
+                      },
+                      overviewRulerBorder: false,
+                      hideCursorInOverviewRuler: true,
+                      matchBrackets: 'always',
+                      lineDecorationsWidth: 8,
+                      lineNumbersMinChars: 4,
                     }}
                   />
                   {error && (
-                    <div className="bg-red-500/10 border-t border-red-500/20 px-4 py-2 flex items-center gap-2 text-red-400 text-sm">
-                      <AlertCircle className="w-4 h-4" />
+                    <div className="bg-red-950/50 border-t border-red-900/50 px-3 py-2 flex items-center gap-2 text-red-400 text-xs">
+                      <AlertCircle className="w-3.5 h-3.5" />
                       <span>{error}</span>
                     </div>
                   )}
                 </div>
               </ResizablePanel>
 
-              <ResizableHandle withHandle className="bg-[#1e293b] h-2" />
+              <ResizableHandle withHandle className="bg-slate-800 h-1.5" />
 
               {/* Results Panel */}
               <ResizablePanel defaultSize={60} minSize={20}>
-                <div className="h-full bg-[#1B2431] flex flex-col">
+                <div className="h-full bg-slate-950 flex flex-col">
                   <Tabs value={activeResultTab} onValueChange={setActiveResultTab} className="flex-1 flex flex-col">
-                    <div className="flex items-center justify-between px-4 py-2 border-b border-white/5 bg-[#273142]">
-                      <div className="flex items-center gap-3">
-                        <h3 className="text-sm font-semibold text-white">Results</h3>
+                    <div className="flex items-center justify-between px-3 h-10 border-b border-slate-800 bg-slate-900">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px] font-medium text-slate-300">Results</span>
                         {activeTab?.results && (
-                          <Badge variant="outline" className="text-xs text-gray-400">
-                            {activeTab.results.rowCount} rows in {activeTab.results.executionTime}ms
-                          </Badge>
+                          <span className="text-xs text-slate-500">
+                            {activeTab.results.rowCount} rows • {activeTab.results.executionTime}ms
+                          </span>
                         )}
                       </div>
-                      <TabsList className="bg-[#1B2431] border border-white/5">
-                        <TabsTrigger value="table" className="data-[state=active]:bg-[#6366f1] data-[state=active]:text-white">
-                          <TableIcon className="w-4 h-4 mr-2" />
-                          Table
-                        </TabsTrigger>
-                        <TabsTrigger value="chart" className="data-[state=active]:bg-[#6366f1] data-[state=active]:text-white">
-                          <BarChart3 className="w-4 h-4 mr-2" />
-                          Chart
-                        </TabsTrigger>
-                        <TabsTrigger value="logs" className="data-[state=active]:bg-[#6366f1] data-[state=active]:text-white">
-                          <AlertCircle className="w-4 h-4 mr-2" />
-                          Logs
-                        </TabsTrigger>
-                      </TabsList>
+                      <div className="flex items-center gap-2">
+                        <TabsList className="bg-slate-800 border-0 h-7 p-0.5">
+                          <TabsTrigger value="table" className="h-6 px-2 text-xs data-[state=active]:bg-slate-700 data-[state=active]:text-white text-slate-400">
+                            <TableIcon className="w-3 h-3 mr-1" />
+                            Table
+                          </TabsTrigger>
+                          <TabsTrigger value="chart" className="h-6 px-2 text-xs data-[state=active]:bg-slate-700 data-[state=active]:text-white text-slate-400">
+                            <BarChart3 className="w-3 h-3 mr-1" />
+                            Chart
+                          </TabsTrigger>
+                          <TabsTrigger value="logs" className="h-6 px-2 text-xs data-[state=active]:bg-slate-700 data-[state=active]:text-white text-slate-400">
+                            <Terminal className="w-3 h-3 mr-1" />
+                            Logs
+                          </TabsTrigger>
+                        </TabsList>
 
-                      {/* Chart Config Button */}
-                      {activeResultTab === 'chart' && activeTab?.results && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowChartConfig(true)}
-                          className="border-white/10 bg-white/5 hover:bg-white/10 text-gray-300"
-                        >
-                          <Settings2 className="w-4 h-4 mr-2" />
-                          Configure Chart
-                        </Button>
-                      )}
+                        {/* Chart Config Button */}
+                        {activeResultTab === 'chart' && activeTab?.results && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowChartConfig(true)}
+                            className="h-7 px-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800"
+                          >
+                            <Settings2 className="w-3 h-3 mr-1" />
+                            Configure
+                          </Button>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex-1 relative overflow-hidden">
@@ -1708,9 +2077,8 @@ export default function QueryConsole() {
                         {activeTab?.isRunning ? (
                           <div className="flex items-center justify-center h-full">
                             <div className="text-center">
-                              <Loader2 className="w-12 h-12 mx-auto mb-4 animate-spin text-cyan-400" />
-                              <p className="text-gray-300 text-lg">Executing query...</p>
-                              <p className="text-gray-500 text-sm mt-2">Please wait while we fetch your data</p>
+                              <Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin text-indigo-400" />
+                              <p className="text-slate-300 text-sm">Executing query...</p>
                             </div>
                           </div>
                         ) : activeTab?.results ? (
@@ -1719,10 +2087,10 @@ export default function QueryConsole() {
                             columns={activeTab.results.columns}
                           />
                         ) : (
-                          <div className="flex items-center justify-center h-full text-gray-500">
+                          <div className="flex items-center justify-center h-full text-slate-500">
                             <div className="text-center">
-                              <TableIcon className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                              <p>Run a query to see results</p>
+                              <TableIcon className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                              <p className="text-sm">Run a query to see results</p>
                             </div>
                           </div>
                         )}
@@ -1732,9 +2100,8 @@ export default function QueryConsole() {
                         {activeTab?.isRunning ? (
                           <div className="flex items-center justify-center h-full">
                             <div className="text-center">
-                              <Loader2 className="w-12 h-12 mx-auto mb-4 animate-spin text-cyan-400" />
-                              <p className="text-gray-300 text-lg">Generating chart...</p>
-                              <p className="text-gray-500 text-sm mt-2">Analyzing your data</p>
+                              <Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin text-indigo-400" />
+                              <p className="text-slate-300 text-sm">Generating chart...</p>
                             </div>
                           </div>
                         ) : chartData ? (
@@ -1745,20 +2112,20 @@ export default function QueryConsole() {
                             {chartConfig.type === 'doughnut' && <Doughnut data={chartData} options={{ responsive: true, maintainAspectRatio: false }} />}
                           </div>
                         ) : (
-                          <div className="flex items-center justify-center h-full text-gray-500">
+                          <div className="flex items-center justify-center h-full text-slate-500">
                             <div className="text-center">
-                              <BarChart3 className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                              <p>Run a query to visualize data</p>
+                              <BarChart3 className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                              <p className="text-sm">Run a query to visualize data</p>
                             </div>
                           </div>
                         )}
                       </TabsContent>
 
                       <TabsContent value="logs" className="h-full w-full m-0 absolute inset-0">
-                        <ScrollArea className="h-full p-4">
-                          <div className="font-mono text-xs space-y-1">
+                        <ScrollArea className="h-full p-3">
+                          <div className="font-mono text-xs space-y-0.5">
                             {executionLogs.length === 0 ? (
-                              <p className="text-gray-500">No execution logs yet</p>
+                              <p className="text-slate-500">No execution logs yet</p>
                             ) : (
                               executionLogs.map((log, i) => (
                                 <div
