@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import Editor, { Monaco } from '@monaco-editor/react';
+import { Highlight } from 'prism-react-renderer';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -710,10 +711,14 @@ function SavedQueriesModal({
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [selectedQuery, setSelectedQuery] = useState<SavedQuery | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<'recent' | 'name' | 'used'>('recent');
 
   useEffect(() => {
     if (isOpen && connectionId) {
       loadSavedQueries();
+      setSelectedQuery(null);
     }
   }, [isOpen, connectionId]);
 
@@ -739,6 +744,8 @@ function SavedQueriesModal({
     try {
       await savedQueriesService.delete(connectionId, queryId);
       setSavedQueries(prev => prev.filter(q => q.id !== queryId));
+      if (selectedQuery?.id === queryId) setSelectedQuery(null);
+      setDeleteConfirm(null);
       toast.success('Query deleted');
     } catch (error) {
       toast.error('Failed to delete query');
@@ -757,139 +764,281 @@ function SavedQueriesModal({
     onClose();
   };
 
-  const filteredQueries = savedQueries.filter(
-    q => q.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      q.queryText.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      q.description?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredQueries = savedQueries
+    .filter(
+      q => q.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        q.queryText.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        q.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => {
+      if (sortBy === 'name') return a.name.localeCompare(b.name);
+      if (sortBy === 'used') return (b.useCount || 0) - (a.useCount || 0);
+      return new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime();
+    });
+
+  const formatDate = (date: string) => {
+    const d = new Date(date);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return d.toLocaleDateString();
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-[#1e293b] border-white/10 text-white max-w-4xl w-[95vw] max-h-[90vh] overflow-hidden">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <FolderOpen className="w-5 h-5 text-blue-400" />
-            Saved Queries
-          </DialogTitle>
-          <DialogDescription className="text-gray-400">
-            {isViewer ? 'Browse shared queries' : 'Manage your saved SQL queries'}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 border-slate-700/50 text-white max-w-6xl w-[95vw] h-[85vh] p-0 overflow-hidden">
+        {/* Accent gradient line */}
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
 
-        {/* Search */}
-        <div className="flex gap-2 my-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              placeholder="Search queries..."
-              className="pl-10 bg-[#0f172a] border-white/10 text-white"
-            />
+        <div className="flex h-full">
+          {/* Left Panel - Query List */}
+          <div className="w-[400px] border-r border-slate-700/50 flex flex-col">
+            {/* Header */}
+            <div className="p-5 border-b border-slate-700/50">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-500/20">
+                  <FolderOpen className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white">Saved Queries</h2>
+                  <p className="text-xs text-slate-400">
+                    {isViewer ? 'Browse shared queries' : `${savedQueries.length} queries saved`}
+                  </p>
+                </div>
+              </div>
+
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <Input
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  placeholder="Search queries..."
+                  className="pl-10 bg-slate-800/50 border-slate-700/50 text-white placeholder:text-slate-500 focus:border-blue-500/50 focus:ring-blue-500/20"
+                />
+              </div>
+
+              {/* Sort Options */}
+              <div className="flex items-center gap-2 mt-3">
+                <span className="text-xs text-slate-500">Sort:</span>
+                {(['recent', 'name', 'used'] as const).map((sort) => (
+                  <button
+                    key={sort}
+                    onClick={() => setSortBy(sort)}
+                    className={`px-2.5 py-1 text-xs rounded-lg transition-all ${sortBy === sort
+                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                      }`}
+                  >
+                    {sort === 'recent' ? 'Recent' : sort === 'name' ? 'Name' : 'Most Used'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Query List */}
+            <ScrollArea className="flex-1 p-3">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-400 mb-3" />
+                  <p className="text-sm text-slate-400">Loading queries...</p>
+                </div>
+              ) : filteredQueries.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="p-4 rounded-full bg-slate-800/50 mb-4">
+                    <FolderOpen className="w-10 h-10 text-slate-600" />
+                  </div>
+                  <p className="text-slate-400 font-medium">No queries found</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {searchTerm ? 'Try a different search term' : 'Save your first query to get started'}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredQueries.map((query) => (
+                    <div
+                      key={query.id}
+                      onClick={() => setSelectedQuery(query)}
+                      className={`group p-3 rounded-xl cursor-pointer transition-all duration-200 ${selectedQuery?.id === query.id
+                        ? 'bg-blue-500/10 border border-blue-500/30 shadow-lg shadow-blue-500/5'
+                        : 'bg-slate-800/30 border border-transparent hover:bg-slate-800/50 hover:border-slate-700/50'
+                        }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-medium text-white text-sm truncate">{query.name}</h4>
+                            {query.isShared && (
+                              <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-500/20 text-purple-400 border border-purple-500/20">
+                                Shared
+                              </span>
+                            )}
+                          </div>
+                          {query.description && (
+                            <p className="text-xs text-slate-500 mt-1 line-clamp-1">{query.description}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleCopy(query.queryText, query.id); }}
+                            className="p-1.5 rounded-lg hover:bg-slate-700/50 text-slate-400 hover:text-white transition-colors"
+                          >
+                            {copiedId === query.id ? (
+                              <Check className="w-3.5 h-3.5 text-green-400" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-500">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {formatDate(query.updatedAt || query.createdAt)}
+                        </span>
+                        <span>•</span>
+                        <span>{query.useCount || 0} uses</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
           </div>
-          <Button onClick={handleSearch} variant="outline" className="border-white/10">
-            <Search className="w-4 h-4" />
-          </Button>
-        </div>
 
-        {/* Queries List */}
-        <div className="max-h-[500px] overflow-y-auto">
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
-            </div>
-          ) : filteredQueries.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <FolderOpen className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p>No saved queries found</p>
-            </div>
-          ) : (
-            <div className="space-y-2 pr-2">
-              {filteredQueries.map(query => (
-                <div
-                  key={query.id}
-                  className="p-4 rounded-lg bg-[#0f172a] border border-white/5 hover:border-blue-500/30 transition-colors"
-                >
-                  <div className="flex items-start justify-between mb-3">
+          {/* Right Panel - Query Preview */}
+          <div className="flex-1 flex flex-col bg-slate-900/50">
+            {selectedQuery ? (
+              <>
+                {/* Preview Header */}
+                <div className="p-5 border-b border-slate-700/50">
+                  <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-white flex items-center gap-2 flex-wrap">
-                        <span className="truncate">{query.name}</span>
-                        {query.isShared && (
-                          <Badge variant="outline" className="text-xs text-blue-400 border-blue-500/30 shrink-0">
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-xl font-semibold text-white truncate">{selectedQuery.name}</h3>
+                        {selectedQuery.isShared && (
+                          <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">
+                            <Sparkles className="w-3 h-3 mr-1" />
                             Shared
                           </Badge>
                         )}
-                      </h4>
-                      {query.description && (
-                        <p className="text-xs text-gray-400 mt-1 line-clamp-2">{query.description}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 ml-2 shrink-0">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleCopy(query.queryText, query.id)}
-                              className="h-8 w-8 p-0 text-gray-400 hover:text-white hover:bg-white/10"
-                            >
-                              {copiedId === query.id ? (
-                                <Check className="w-4 h-4 text-green-400" />
-                              ) : (
-                                <Copy className="w-4 h-4" />
-                              )}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Copy SQL</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                      {!isViewer && (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDelete(query.id)}
-                                className="h-8 w-8 p-0 text-gray-400 hover:text-red-400 hover:bg-red-500/10"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Delete</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      )}
-                    </div>
-                  </div>
-                  <pre className="text-xs text-gray-300 bg-black/20 p-3 rounded overflow-x-auto max-h-[100px] overflow-y-auto mb-3 whitespace-pre-wrap break-all">
-                    {query.queryText.length > 300 ? `${query.queryText.substring(0, 300)}...` : query.queryText}
-                  </pre>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 text-xs text-gray-500">
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {query.lastUsedAt
-                          ? `Used ${new Date(query.lastUsedAt).toLocaleDateString()}`
-                          : 'Never used'}
                       </div>
-                      <span>•</span>
-                      <span>{query.useCount} uses</span>
+                      {selectedQuery.description && (
+                        <p className="text-sm text-slate-400 mt-2">{selectedQuery.description}</p>
+                      )}
                     </div>
-                    <Button
-                      size="sm"
-                      onClick={() => handleLoad(query)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white shrink-0"
+                    <button
+                      onClick={() => setSelectedQuery(null)}
+                      className="p-2 rounded-lg hover:bg-slate-700/50 text-slate-400 hover:text-white transition-colors"
                     >
-                      Load Query
-                    </Button>
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Stats */}
+                  <div className="flex items-center gap-6 mt-4 pt-4 border-t border-slate-700/30">
+                    <div>
+                      <p className="text-xs text-slate-500 uppercase tracking-wide">Created</p>
+                      <p className="text-sm text-white mt-0.5">{formatDate(selectedQuery.createdAt)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 uppercase tracking-wide">Last Used</p>
+                      <p className="text-sm text-white mt-0.5">
+                        {selectedQuery.lastUsedAt ? formatDate(selectedQuery.lastUsedAt) : 'Never'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 uppercase tracking-wide">Usage Count</p>
+                      <p className="text-sm text-white mt-0.5">{selectedQuery.useCount || 0} times</p>
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+
+                {/* Code Preview */}
+                <div className="flex-1 p-5 overflow-auto">
+                  <SQLCodeBlock
+                    code={selectedQuery.queryText}
+                    showLineNumbers={selectedQuery.queryText.split('\n').length > 1}
+                    showCopyButton={false}
+                    maxHeight="350px"
+                    className="shadow-lg"
+                  />
+                </div>
+
+                {/* Actions Footer */}
+                <div className="p-5 border-t border-slate-700/50 bg-slate-900/80">
+                  <div className="flex items-center justify-between">
+                    {!isViewer && (
+                      <div>
+                        {deleteConfirm === selectedQuery.id ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-red-400">Delete this query?</span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setDeleteConfirm(null)}
+                              className="text-slate-400 hover:text-white"
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => handleDelete(selectedQuery.id)}
+                              className="bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30"
+                            >
+                              Confirm Delete
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDeleteConfirm(selectedQuery.id)}
+                            className="text-slate-400 hover:text-red-400 hover:bg-red-500/10"
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 ml-auto">
+                      <Button
+                        variant="outline"
+                        onClick={() => handleCopy(selectedQuery.queryText, selectedQuery.id)}
+                        className="border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white"
+                      >
+                        <Copy className="w-4 h-4 mr-2" />
+                        Copy SQL
+                      </Button>
+                      <Button
+                        onClick={() => handleLoad(selectedQuery)}
+                        className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-lg shadow-blue-500/20"
+                      >
+                        <Play className="w-4 h-4 mr-2" />
+                        Load Query
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+                <div className="p-6 rounded-2xl bg-gradient-to-br from-slate-800/50 to-slate-800/20 border border-slate-700/30 mb-6">
+                  <Code className="w-12 h-12 text-slate-600" />
+                </div>
+                <h3 className="text-lg font-medium text-white mb-2">Select a Query</h3>
+                <p className="text-sm text-slate-500 max-w-sm">
+                  Choose a saved query from the list to preview and load it into your editor
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -950,76 +1099,163 @@ function SaveQueryDialog({
 
   if (isViewer) return null;
 
+  const lineCount = queryText.split('\n').length;
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-[#1e293b] border-white/10 text-white max-w-2xl w-[95vw] max-h-[90vh] overflow-hidden">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Save className="w-5 h-5 text-blue-400" />
-            Save Query
-          </DialogTitle>
-          <DialogDescription className="text-gray-400">
-            Save this query to your collection for quick access later
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 border-slate-700/50 text-white sm:max-w-[800px] w-[calc(100vw-2rem)] max-h-[90vh] p-0 overflow-y-auto">
+        {/* Accent gradient line */}
+        <div className="sticky top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-emerald-500 via-blue-500 to-purple-500 z-10" />
 
-        <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
-          <div>
-            <Label htmlFor="query-name" className="text-gray-300">Name *</Label>
+        {/* Header */}
+        <div className="p-7 pb-6">
+          <div className="flex items-center gap-5">
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-blue-500/20 border border-emerald-500/20">
+              <Save className="w-7 h-7 text-emerald-400" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-white">Save Query</h2>
+              <p className="text-base text-slate-400">Add to your collection</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-7 pb-7 space-y-5">
+          {/* Name Input */}
+          <div className="space-y-2.5">
+            <Label htmlFor="query-name" className="text-base font-medium text-slate-300 flex items-center gap-1">
+              Query Name
+              <span className="text-red-400">*</span>
+            </Label>
             <Input
               id="query-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., Monthly Active Users"
-              className="mt-1 bg-[#0f172a] border-white/10 text-white"
+              className="bg-slate-800/50 border-slate-700/50 text-white placeholder:text-slate-500 focus:border-blue-500/50 focus:ring-blue-500/20 h-11 text-base"
             />
           </div>
 
-          <div>
-            <Label htmlFor="query-description" className="text-gray-300">Description</Label>
+          {/* Description Input */}
+          <div className="space-y-2.5">
+            <Label htmlFor="query-description" className="text-base font-medium text-slate-300">
+              Description
+              <span className="text-slate-500 font-normal ml-1">(optional)</span>
+            </Label>
             <Textarea
               id="query-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional description..."
-              className="mt-1 bg-[#0f172a] border-white/10 text-white min-h-[80px]"
+              placeholder="What does this query do?"
+              className="bg-slate-800/50 border-slate-700/50 text-white placeholder:text-slate-500 focus:border-blue-500/50 focus:ring-blue-500/20 min-h-[100px] resize-none text-base"
             />
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <Label htmlFor="query-shared" className="text-gray-300">Share with viewers</Label>
-              <p className="text-xs text-gray-500">Viewers with access to this connection can use this query</p>
+          {/* Share Toggle */}
+          <div className="flex items-center justify-between p-4 rounded-xl bg-slate-800/30 border border-slate-700/30">
+            <div className="flex items-center gap-4">
+              <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                <Sparkles className="w-5 h-5 text-purple-400" />
+              </div>
+              <div>
+                <Label htmlFor="query-shared" className="text-base font-medium text-slate-200 cursor-pointer">
+                  Share with team
+                </Label>
+                <p className="text-sm text-slate-500">Allow viewers to use this query</p>
+              </div>
             </div>
             <Switch
               id="query-shared"
               checked={isShared}
               onCheckedChange={setIsShared}
-              className="ml-4"
+              className="data-[state=checked]:bg-purple-500 scale-110"
             />
           </div>
 
-          <div>
-            <Label className="text-gray-300">Query Preview</Label>
-            <pre className="mt-1 text-xs text-gray-400 bg-black/20 p-3 rounded max-h-[120px] overflow-y-auto whitespace-pre-wrap break-all">
-              {queryText.length > 500 ? `${queryText.substring(0, 500)}...` : queryText}
-            </pre>
+          {/* Query Preview */}
+          <div className="space-y-2.5">
+            <Label className="text-base font-medium text-slate-300 flex items-center justify-between">
+              <span>Query Preview</span>
+              <span className="text-sm font-normal text-slate-500">{lineCount} lines</span>
+            </Label>
+            <div className="rounded-xl overflow-hidden border border-slate-700/50 bg-slate-900">
+              {/* Code Header */}
+              <div className="flex items-center px-4 py-2 bg-slate-800/50 border-b border-slate-700/50">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/80" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-green-500/80" />
+                </div>
+                <span className="text-xs text-slate-500 ml-3 font-medium uppercase tracking-wide">SQL</span>
+              </div>
+              <div className="overflow-auto max-h-[180px]">
+                <Highlight
+                  theme={{
+                    plain: { color: '#e2e8f0', backgroundColor: 'transparent' },
+                    styles: [
+                      { types: ['comment'], style: { color: '#6b7280', fontStyle: 'italic' as const } },
+                      { types: ['punctuation'], style: { color: '#9ca3af' } },
+                      { types: ['number', 'boolean', 'constant'], style: { color: '#f472b6' } },
+                      { types: ['string', 'char'], style: { color: '#34d399' } },
+                      { types: ['operator'], style: { color: '#fbbf24' } },
+                      { types: ['keyword'], style: { color: '#818cf8', fontWeight: '600' as const } },
+                      { types: ['function'], style: { color: '#60a5fa' } },
+                      { types: ['variable'], style: { color: '#fb923c' } },
+                    ],
+                  }}
+                  code={queryText.length > 600 ? `${queryText.substring(0, 600)}...` : queryText}
+                  language="sql"
+                >
+                  {({ className, tokens, getLineProps, getTokenProps }) => (
+                    <pre
+                      className={`${className} p-4 text-sm font-mono leading-relaxed m-0`}
+                      style={{ background: 'transparent' }}
+                    >
+                      {tokens.map((line, i) => (
+                        <div key={i} {...getLineProps({ line, key: i })}>
+                          <span className="inline-block w-8 text-right pr-4 text-slate-600 select-none text-xs">
+                            {i + 1}
+                          </span>
+                          {line.map((token, key) => (
+                            <span key={key} {...getTokenProps({ token, key })} />
+                          ))}
+                        </div>
+                      ))}
+                    </pre>
+                  )}
+                </Highlight>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-4 pt-4">
+            <Button
+              variant="ghost"
+              onClick={onClose}
+              className="text-slate-400 hover:text-white hover:bg-slate-700/50 h-10 px-5 text-base"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={!name.trim() || saving}
+              className="bg-gradient-to-r from-emerald-500 to-blue-600 hover:from-emerald-600 hover:to-blue-700 text-white shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed h-10 px-6 text-base"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-5 h-5 mr-2" />
+                  Save Query
+                </>
+              )}
+            </Button>
           </div>
         </div>
-
-        <DialogFooter className="border-t border-white/10 pt-4">
-          <Button variant="ghost" onClick={onClose} className="text-gray-400">
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={!name.trim() || saving}
-            className="bg-blue-600 text-white hover:bg-blue-700"
-          >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-            Save Query
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
