@@ -1143,7 +1143,7 @@ export default function QueryConsole() {
       const uri = monaco.Uri.parse(`inmemory://tab-${activeTabId}.sql`);
       model = monaco.editor.createModel(activeTab?.query || '', 'sql', uri);
       editorModelsRef.current.set(activeTabId, model);
-      
+
       // Add content change listener to sync with tab state
       model.onDidChangeContent(() => {
         const currentTabId = activeTabIdRef.current;
