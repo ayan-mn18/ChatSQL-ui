@@ -38,7 +38,7 @@ import { cn } from '@/lib/utils';
 // SMART TAB NAME GENERATION
 // ============================================
 
-function getSmartTabName(tab: TableTab, allTabs: TableTab[], maxLength: number = 18): string {
+function getSmartTabName(tab: TableTab, allTabs: TableTab[], maxLength: number = 28): string {
   const { schemaName, tableName } = tab;
 
   // Check if there are other tables with the same name in different schemas
@@ -130,7 +130,7 @@ function SortableTab({
           style={style}
           className={cn(
             'group relative flex items-center gap-2 px-3 py-2 cursor-pointer',
-            'border-r border-white/5 min-w-[100px] max-w-[180px]',
+            'border-r border-white/5 min-w-[80px] max-w-[240px]',
             'transition-all duration-150',
             isActive
               ? 'bg-[#273142] text-white'
