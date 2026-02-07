@@ -410,12 +410,28 @@ export interface ExecuteQueryResponse {
   success: boolean;
   rows?: any[];
   rowCount?: number;
+  affectedRows?: number;
+  returning?: any[];
   executionTime?: number;
   queryType?: string;
   jobId?: string;
   error?: string;
   message?: string;
   code?: string;
+  errorDetails?: {
+    message: string;
+    detail?: string;
+    hint?: string;
+    position?: number;
+    line?: number;
+    errorColumn?: number;
+    code?: string;
+    constraint?: string;
+    table?: string;
+    schema?: string;
+    dataType?: string;
+    queryExcerpt?: string;
+  };
 }
 
 export default connectionService;

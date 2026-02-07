@@ -19,6 +19,7 @@ import {
   FolderOpen,
   Copy,
   Check,
+  CheckCircle2,
   Trash2,
   Search,
   Clock,
@@ -105,6 +106,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { DatabaseSchemaPublic } from '@/types';
 import { SQLCodeBlock } from '@/components/ui/sql-code-block';
 import { ChatPanel } from '@/components/chat/ChatPanel';
+import QueryExecutionLog, { type ExecutionLogEntry } from '@/components/QueryExecutionLog';
+import { detectSQLQueryType, isReadOnlyQuery, truncateSQL } from '@/lib/sql-utils';
+import { registerSQLCompletionProvider } from '@/lib/sql-autocomplete';
 
 // ============================================
 // TYPES
@@ -117,13 +121,8 @@ interface ChartConfig {
   title: string;
 }
 
-interface SchemaMetadata {
-  tables: Array<{
-    schema: string;
-    name: string;
-    columns: Array<{ name: string; type: string }>;
-  }>;
-}
+// Re-export SchemaMetadata from autocomplete module
+import type { SchemaMetadata } from '@/lib/sql-autocomplete';
 
 // ============================================
 // QUERY TAB BAR COMPONENT
@@ -858,7 +857,7 @@ export default function QueryConsole() {
   const [showChatSidebar, setShowChatSidebar] = useState(false);
   const [showSavedQueries, setShowSavedQueries] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [executionLogs, setExecutionLogs] = useState<string[]>([]);
+  const [executionLogs, setExecutionLogs] = useState<ExecutionLogEntry[]>([]);
   const [showChartConfig, setShowChartConfig] = useState(false);
 
   // Chart config with colors
@@ -1064,135 +1063,47 @@ export default function QueryConsole() {
     // Apply the custom dark theme
     monaco.editor.setTheme('chatsql-dark');
 
-    // Configure SQL language
-    monaco.languages.registerCompletionItemProvider('sql', {
-      provideCompletionItems: (model: any, position: any) => {
-        const suggestions: any[] = [];
-
-        const schemaMeta = schemaMetadataRef.current;
-        const word = model.getWordUntilPosition(position);
-        const replaceRange = new monaco.Range(
-          position.lineNumber,
-          word.startColumn,
-          position.lineNumber,
-          word.endColumn
-        );
-
-        const lineUntilCursor = model.getValueInRange({
-          startLineNumber: position.lineNumber,
-          startColumn: 1,
-          endLineNumber: position.lineNumber,
-          endColumn: position.column,
-        });
-
-        // Dotted-path completion
-        // - schema.           => tables
-        // - schema.table.     => columns
-        // - schema.ta         => tables (prefix)
-        // - schema.table.co   => columns (prefix)
-        const schemaTableColPrefix = lineUntilCursor.match(/([A-Za-z_][\w]*)\.([A-Za-z_][\w]*)\.([A-Za-z_][\w]*)$/);
-        const schemaTableDot = lineUntilCursor.match(/([A-Za-z_][\w]*)\.([A-Za-z_][\w]*)\.$/);
-        const schemaTablePrefix = lineUntilCursor.match(/([A-Za-z_][\w]*)\.([A-Za-z_][\w]*)$/);
-        const schemaDot = lineUntilCursor.match(/([A-Za-z_][\w]*)\.$/);
-
-        if (schemaMeta?.tables) {
-          // Columns: schema.table. or schema.table.colprefix
-          if (schemaTableColPrefix || schemaTableDot) {
-            const schemaName = (schemaTableColPrefix?.[1] || schemaTableDot?.[1]) as string;
-            const tableName = (schemaTableColPrefix?.[2] || schemaTableDot?.[2]) as string;
-
-            const table = schemaMeta.tables.find(t => t.schema === schemaName && t.name === tableName);
-            if (table) {
-              table.columns.forEach((col) => {
-                suggestions.push({
-                  label: col.name,
-                  kind: monaco.languages.CompletionItemKind.Field,
-                  insertText: col.name,
-                  detail: `${col.type} - ${schemaName}.${tableName}`,
-                  range: replaceRange,
-                });
-              });
-              return { suggestions };
-            }
-          }
-
-          // Tables: schema. or schema.tabprefix
-          if (schemaDot || schemaTablePrefix) {
-            const schemaName = (schemaDot?.[1] || schemaTablePrefix?.[1]) as string;
-            schemaMeta.tables
-              .filter(t => t.schema === schemaName)
-              .forEach((t) => {
-                suggestions.push({
-                  label: t.name,
-                  kind: monaco.languages.CompletionItemKind.Class,
-                  insertText: t.name,
-                  detail: `Table in ${schemaName}`,
-                  range: replaceRange,
-                });
-              });
-
-            if (suggestions.length > 0) {
-              return { suggestions };
-            }
-          }
-
-          // General suggestions (tables/columns) scoped to selected schemas when available
-          const allowedSchemas = selectedSchemasRef.current || [];
-          schemaMeta.tables.forEach((table) => {
-            if (allowedSchemas.length > 0 && !allowedSchemas.includes(table.schema)) return;
-
-            suggestions.push({
-              label: `${table.schema}.${table.name}`,
-              kind: monaco.languages.CompletionItemKind.Class,
-              insertText: `${table.schema}.${table.name}`,
-              detail: 'Table',
-              range: replaceRange,
-            });
-
-            table.columns.forEach((col) => {
-              suggestions.push({
-                label: `${table.schema}.${table.name}.${col.name}`,
-                kind: monaco.languages.CompletionItemKind.Field,
-                insertText: col.name,
-                detail: `${col.type} - ${table.schema}.${table.name}`,
-                range: replaceRange,
-              });
-            });
-          });
-        }
-
-        // Add SQL keywords
-        const keywords = [
-          'SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN',
-          'ON', 'AND', 'OR', 'NOT', 'IN', 'LIKE', 'BETWEEN', 'IS NULL', 'IS NOT NULL',
-          'ORDER BY', 'GROUP BY', 'HAVING', 'LIMIT', 'OFFSET', 'AS', 'DISTINCT',
-          'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END',
-          'INSERT INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE FROM', 'CREATE TABLE',
-          'ALTER TABLE', 'DROP TABLE', 'UNION', 'UNION ALL', 'EXCEPT', 'INTERSECT'
-        ];
-
-        keywords.forEach(kw => {
-          suggestions.push({
-            label: kw,
-            kind: monaco.languages.CompletionItemKind.Keyword,
-            insertText: kw,
-            range: replaceRange,
-          });
-        });
-
-        return { suggestions };
-      },
-    });
+    // Configure context-aware SQL completion using dedicated provider
+    const completionDisposable = registerSQLCompletionProvider(
+      monaco,
+      () => schemaMetadataRef.current,
+      () => selectedSchemasRef.current || []
+    );
 
     // Add keyboard shortcut for run query
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
       handleRunQuery();
     });
+
+    // Cleanup on unmount
+    return () => {
+      completionDisposable.dispose();
+    };
   };
 
   // ============================================
-  // RUN QUERY
+  // RUN QUERY (supports all query types)
   // ============================================
+
+  /** Generate a unique log entry ID */
+  const generateLogId = () => `log-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+
+  /** Add a structured log entry */
+  const addLogEntry = (entry: Omit<ExecutionLogEntry, 'id'>) => {
+    setExecutionLogs(prev => [
+      ...prev.slice(-99), // keep last 100 entries
+      { ...entry, id: generateLogId() },
+    ]);
+  };
+
+  /** Update the last log entry (e.g., running → success/error) */
+  const updateLastLogEntry = (updates: Partial<ExecutionLogEntry>) => {
+    setExecutionLogs(prev => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      return [...prev.slice(0, -1), { ...last, ...updates }];
+    });
+  };
 
   const handleRunQuery = async () => {
     if (!connectionId || !activeTab) {
@@ -1203,13 +1114,12 @@ export default function QueryConsole() {
     const editor = editorRef.current;
     let queryToRun = activeTab.query;
 
-    // Check if there's a selection - run only selected text
+    // Check if there's a selection — run only selected text
     if (editor) {
       const selection = editor.getSelection();
       const selectedText = editor.getModel()?.getValueInRange(selection);
       if (selectedText && selectedText.trim()) {
         queryToRun = selectedText.trim();
-        addLog(`Running selected query: ${queryToRun.substring(0, 50)}...`);
       }
     }
 
@@ -1218,52 +1128,124 @@ export default function QueryConsole() {
       return;
     }
 
+    // Detect query type
+    const queryType = detectSQLQueryType(queryToRun);
+    const readOnly = isReadOnlyQuery(queryType);
+
+    // Warn viewer users trying to run mutations
+    if (!readOnly && isViewer) {
+      toast.error('Viewers do not have permission to run write queries');
+      addLogEntry({
+        timestamp: new Date(),
+        queryType,
+        queryText: queryToRun,
+        status: 'error',
+        error: 'Insufficient permissions: viewers cannot run write queries',
+      });
+      return;
+    }
+
     setTabRunning(activeTab.id, true);
     setError(null);
-    addLog('Executing query...');
+
+    // Add running log entry
+    addLogEntry({
+      timestamp: new Date(),
+      queryType,
+      queryText: queryToRun,
+      status: 'running',
+    });
+
+    const startTime = performance.now();
 
     try {
-      const response = await connectionService.executeQuery(connectionId, queryToRun, true);
+      const response = await connectionService.executeQuery(connectionId, queryToRun, readOnly);
+      const duration = Math.round(performance.now() - startTime);
+
       const responseData = (response as any).data || response;
       const rows = (responseData as any).rows || [];
       const rowCount = (responseData as any).rowCount || rows.length;
-      const executionTime = (responseData as any).executionTime || 0;
+      const executionTime = (responseData as any).executionTime || duration;
+      const affectedRows = (responseData as any).affectedRows;
+      const returningData = (responseData as any).returning || [];
 
       if (response.success) {
-        const results: QueryResult = {
-          data: rows,
-          columns: rows.length > 0 ? Object.keys(rows[0]) : [],
-          rowCount,
-          executionTime,
-        };
-        updateTabResults(activeTab.id, results);
-        addLog(`✓ Query returned ${rowCount} rows in ${executionTime}ms`);
+        if (queryType === 'SELECT') {
+          // SELECT — show rows in data table
+          const results: QueryResult = {
+            data: rows,
+            columns: rows.length > 0 ? Object.keys(rows[0]) : [],
+            rowCount,
+            executionTime,
+            queryType,
+          };
+          updateTabResults(activeTab.id, results);
 
-        if (rows.length > 0) {
-          autoDetectChartConfig(rows);
+          if (rows.length > 0) {
+            autoDetectChartConfig(rows);
+          }
+
+          toast.success(`Query returned ${rowCount} rows in ${executionTime}ms`);
+        } else {
+          // DML/DDL — show affected rows message, and RETURNING data if any
+          const displayRows = returningData.length > 0 ? returningData : rows;
+          const results: QueryResult = {
+            data: displayRows,
+            columns: displayRows.length > 0 ? Object.keys(displayRows[0]) : [],
+            rowCount: displayRows.length,
+            executionTime,
+            affectedRows: affectedRows ?? rowCount,
+            queryType,
+            returning: returningData,
+          };
+          updateTabResults(activeTab.id, results);
+
+          const affectedMsg = affectedRows != null
+            ? `${affectedRows} row${affectedRows !== 1 ? 's' : ''} affected`
+            : 'Query executed successfully';
+          toast.success(`${affectedMsg} in ${executionTime}ms`);
         }
 
-        toast.success(`Query returned ${rowCount} rows in ${executionTime}ms`);
+        // Update log entry to success
+        updateLastLogEntry({
+          status: 'success',
+          duration: executionTime,
+          rowCount: queryType === 'SELECT' ? rowCount : undefined,
+          affectedRows: queryType !== 'SELECT' ? (affectedRows ?? rowCount) : undefined,
+        });
       } else {
+        // Query returned success=false
         const errorMsg = response.error || 'Query failed';
         setError(errorMsg);
-        addLog(`✗ Error: ${errorMsg}`);
         toast.error(errorMsg);
+
+        updateLastLogEntry({
+          status: 'error',
+          duration: executionTime,
+          error: errorMsg,
+          errorDetails: (response as any).errorDetails || undefined,
+        });
       }
     } catch (err: any) {
-      const message = err.response?.data?.error || err.message || 'Failed to execute query';
+      const duration = Math.round(performance.now() - startTime);
+      const errorData = err.response?.data;
+      const message = errorData?.error || err.message || 'Failed to execute query';
+
       setError(message);
-      addLog(`✗ Error: ${message}`);
       toast.error(message);
+
+      updateLastLogEntry({
+        status: 'error',
+        duration,
+        error: message,
+        errorDetails: errorData?.errorDetails || undefined,
+      });
     } finally {
       setTabRunning(activeTab.id, false);
     }
   };
 
-  const addLog = (message: string) => {
-    const timestamp = new Date().toLocaleTimeString();
-    setExecutionLogs(prev => [...prev.slice(-50), `[${timestamp}] ${message}`]);
-  };
+  const clearLogs = () => setExecutionLogs([]);
 
   // ============================================
   // CHART AUTO-DETECTION
@@ -1863,10 +1845,39 @@ export default function QueryConsole() {
                             </div>
                           </div>
                         ) : activeTab?.results ? (
-                          <DataTable
-                            data={activeTab.results.data}
-                            columns={activeTab.results.columns}
-                          />
+                          <div className="h-full flex flex-col">
+                            {/* DML/DDL success banner */}
+                            {activeTab.results.queryType && activeTab.results.queryType !== 'SELECT' && (
+                              <div className="flex items-center gap-2 px-3 py-2 bg-green-950/30 border-b border-green-500/20">
+                                <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
+                                <span className="text-sm text-green-300">
+                                  {activeTab.results.queryType} executed successfully
+                                  {activeTab.results.affectedRows != null && (
+                                    <> — <strong>{activeTab.results.affectedRows}</strong> row{activeTab.results.affectedRows !== 1 ? 's' : ''} affected</>
+                                  )}
+                                </span>
+                                <span className="text-xs text-green-500/60 ml-auto">
+                                  {activeTab.results.executionTime}ms
+                                </span>
+                              </div>
+                            )}
+                            {/* Data table (for SELECT results or RETURNING data) */}
+                            {activeTab.results.data.length > 0 ? (
+                              <div className="flex-1 min-h-0">
+                                <DataTable
+                                  data={activeTab.results.data}
+                                  columns={activeTab.results.columns}
+                                />
+                              </div>
+                            ) : activeTab.results.queryType === 'SELECT' ? (
+                              <div className="flex-1 flex items-center justify-center text-slate-500">
+                                <div className="text-center">
+                                  <TableIcon className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                                  <p className="text-sm">Query returned 0 rows</p>
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
                         ) : (
                           <div className="flex items-center justify-center h-full text-slate-500">
                             <div className="text-center">
@@ -1903,25 +1914,7 @@ export default function QueryConsole() {
                       </TabsContent>
 
                       <TabsContent value="logs" className="h-full w-full m-0 absolute inset-0">
-                        <ScrollArea className="h-full p-3">
-                          <div className="font-mono text-xs space-y-0.5">
-                            {executionLogs.length === 0 ? (
-                              <p className="text-slate-500">No execution logs yet</p>
-                            ) : (
-                              executionLogs.map((log, i) => (
-                                <div
-                                  key={i}
-                                  className={`${log.includes('✓') ? 'text-green-400' :
-                                    log.includes('✗') ? 'text-red-400' :
-                                      'text-gray-400'
-                                    }`}
-                                >
-                                  {log}
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        </ScrollArea>
+                        <QueryExecutionLog logs={executionLogs} onClear={clearLogs} />
                       </TabsContent>
                     </div>
                   </Tabs>

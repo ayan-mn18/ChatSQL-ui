@@ -11,6 +11,9 @@ export interface QueryResult {
   rowCount: number;
   executionTime: number;
   error?: string;
+  affectedRows?: number;
+  queryType?: string;
+  returning?: any[];
 }
 
 export interface QueryTab {

@@ -83,15 +83,8 @@ import Editor from '@monaco-editor/react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usageService } from '@/services/usage.service';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-
-// ============================================
-// HELPER: Calculate column width based on column name
-// ============================================
-const calculateColumnWidth = (columnName: string): number => {
-  const baseWidth = columnName.length * 10; // ~10px per character
-  const minWidth = Math.max(120, baseWidth + 60); // Extra space for icons
-  return Math.min(minWidth, 300); // Cap at 300px
-};
+import { initializeColumnWidths, saveColumnWidths } from '@/lib/column-width';
+import ColumnResizeHandle from '@/components/ColumnResizeHandle';
 
 // ============================================
 // CSV HELPERS
@@ -248,6 +241,15 @@ export default function TableView() {
 
   // Column configuration (visibility + order)
   const [columnConfig, setColumnConfig] = useState<ColumnConfig[]>([]);
+
+  // Column widths (resizable, persisted in localStorage)
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const columnWidthsRef = useRef<Record<string, number>>({});
+
+  // Keep ref in sync
+  useEffect(() => {
+    columnWidthsRef.current = columnWidths;
+  }, [columnWidths]);
 
   // Query execution state
   const [isExecutingQuery, setIsExecutingQuery] = useState(false);
@@ -461,6 +463,37 @@ export default function TableView() {
   }, [connectionId, schemaName, tableName]);
 
   // Filter and order columns for display
+  // Initialize column widths from localStorage or smart defaults
+  useEffect(() => {
+    const cols = columnsMetadata?.columns?.map((c: any) => c.name) || [];
+    const rows = data?.rows || [];
+    if (cols.length > 0) {
+      setColumnWidths(prev => {
+        const initialized = initializeColumnWidths(cols, rows, connectionId, schemaName, tableName);
+        // Preserve any widths the user has already resized in this session
+        const merged = { ...initialized };
+        for (const col of cols) {
+          if (prev[col] != null) merged[col] = prev[col];
+        }
+        return merged;
+      });
+    }
+  }, [columnsMetadata, connectionId, schemaName, tableName]); // intentionally no data?.rows dep to avoid resetting on page change
+
+  const handleColumnResize = useCallback((column: string, width: number) => {
+    setColumnWidths(prev => ({ ...prev, [column]: width }));
+  }, []);
+
+  const handleColumnResizeEnd = useCallback(() => {
+    // Persist current widths to localStorage (use ref for latest value)
+    saveColumnWidths(columnWidthsRef.current, connectionId, schemaName, tableName);
+  }, [connectionId, schemaName, tableName]);
+
+  /** Get the current width for a column (with fallback) */
+  const getColumnWidth = useCallback((column: string): number => {
+    return columnWidths[column] || 160;
+  }, [columnWidths]);
+
   const displayColumns = useMemo(() => {
     return [...columnConfig]
       .filter(col => col.visible)
@@ -1240,7 +1273,7 @@ export default function TableView() {
               </div>
             </div>
           ) : (
-            <Table>
+            <Table style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
               <TableHeader className="sticky top-0 bg-[#273142] z-10">
                 <TableRow className="border-white/5 hover:bg-transparent">
                   {!queryResults && (
@@ -1256,21 +1289,21 @@ export default function TableView() {
                   {(queryResults?.columns || displayColumns).map((column) => {
                     const columnType = queryResults ? 'normal' : getColumnType(column);
                     const fkRelation = queryResults ? undefined : foreignKeyColumns.get(column);
-                    const columnWidth = calculateColumnWidth(column);
+                    const colWidth = getColumnWidth(column);
 
                     return (
                       <TableHead
                         key={column}
                         className={cn(
-                          'text-gray-400 font-medium transition-colors whitespace-nowrap',
+                          'text-gray-400 font-medium transition-colors whitespace-nowrap relative',
                           !queryResults && 'cursor-pointer hover:bg-white/5',
                           !queryResults && getColumnHeaderStyles(column)
                         )}
-                        style={{ minWidth: columnWidth }}
+                        style={{ width: colWidth, minWidth: 60, maxWidth: colWidth }}
                         onClick={() => !queryResults && toggleSort(column)}
                       >
-                        <div className="flex items-center gap-2">
-                          <span>{column}</span>
+                        <div className="flex items-center gap-2 pr-2">
+                          <span className="truncate">{column}</span>
                           {!queryResults && getSortIcon(column)}
                           {columnType === 'primary' && (
                             <Tooltip>
@@ -1298,6 +1331,12 @@ export default function TableView() {
                             </Tooltip>
                           )}
                         </div>
+                        <ColumnResizeHandle
+                          column={column}
+                          currentWidth={colWidth}
+                          onResize={handleColumnResize}
+                          onResizeEnd={handleColumnResizeEnd}
+                        />
                       </TableHead>
                     );
                   })}
@@ -1340,7 +1379,7 @@ export default function TableView() {
                           const value = row[column];
                           const isNull = value === null || value === undefined;
                           const columnType = queryResults ? 'normal' : getColumnType(column);
-                          const columnWidth = calculateColumnWidth(column);
+                          const colWidth = getColumnWidth(column);
 
                           // Check if this cell matches the search
                           const cellMatch = rowSearchMatches.find(m => m.columnName === column);
@@ -1359,7 +1398,7 @@ export default function TableView() {
                                 cellMatch && 'bg-yellow-500/20',
                                 isCurrentMatch && 'bg-yellow-500/30 ring-1 ring-yellow-500'
                               )}
-                              style={{ minWidth: columnWidth, maxWidth: 300 }}
+                              style={{ width: colWidth, minWidth: 60, maxWidth: colWidth }}
                               onClick={() => handleCellClick(rowIndex, column, value)}
                               onDoubleClick={() => handleCellDoubleClickWrapper(rowIndex, column, value)}
                               onContextMenu={(e) => {

@@ -78,6 +78,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import Editor from '@monaco-editor/react';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
+import { initializeColumnWidths, saveColumnWidths } from '@/lib/column-width';
+import ColumnResizeHandle from '@/components/ColumnResizeHandle';
 
 // Types
 export interface ERDRelation {
@@ -138,13 +140,10 @@ interface DataTableProps<T = any> {
 
   // Styling
   className?: string;
-}
 
-const calculateColumnWidth = (columnName: string): number => {
-  const baseWidth = columnName.length * 10;
-  const minWidth = Math.max(120, baseWidth + 60);
-  return Math.min(minWidth, 300);
-};
+  // Persistence context (for column width storage)
+  connectionId?: string;
+}
 
 export default function DataTable({
   data: initialData,
@@ -172,7 +171,8 @@ export default function DataTable({
   tableName,
   onRefresh,
   onFkClick,
-  className
+  className,
+  connectionId: dtConnectionId
 }: DataTableProps) {
   // ============================================
   // INTERNAL STATE (Client-side fallback)
@@ -210,6 +210,42 @@ export default function DataTable({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [insertValues, setInsertValues] = useState<Record<string, string>>({});
   const [highlightedRows, setHighlightedRows] = useState<Set<number>>(new Set());
+
+  // Column widths (resizable + persisted)
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const columnWidthsRef = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    columnWidthsRef.current = columnWidths;
+  }, [columnWidths]);
+
+  useEffect(() => {
+    if (columns.length > 0) {
+      setColumnWidths(prev => {
+        const initialized = initializeColumnWidths(
+          columns, initialData, dtConnectionId, schemaName, tableName
+        );
+        // Preserve any widths already resized in this session
+        const merged = { ...initialized };
+        for (const col of columns) {
+          if (prev[col] != null) merged[col] = prev[col];
+        }
+        return merged;
+      });
+    }
+  }, [columns, dtConnectionId, schemaName, tableName]);
+
+  const handleColumnResize = useCallback((column: string, width: number) => {
+    setColumnWidths(prev => ({ ...prev, [column]: width }));
+  }, []);
+
+  const handleColumnResizeEnd = useCallback(() => {
+    saveColumnWidths(columnWidthsRef.current, dtConnectionId, schemaName, tableName);
+  }, [dtConnectionId, schemaName, tableName]);
+
+  const getColumnWidth = useCallback((column: string): number => {
+    return columnWidths[column] || 160;
+  }, [columnWidths]);
 
   // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false);
@@ -727,7 +763,7 @@ export default function DataTable({
             </div>
           </div>
         ) : (
-          <table className="w-full caption-bottom text-sm text-left">
+          <table className="w-full caption-bottom text-sm text-left" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
             <TableHeader className="sticky top-0 bg-[#273142] z-10 shadow-sm">
               <TableRow className="border-white/5 hover:bg-transparent">
                 <TableHead className="w-12 text-center sticky left-0 bg-[#273142] z-20">
@@ -741,16 +777,16 @@ export default function DataTable({
                 {displayColumns.map((column) => {
                   const columnType = getColumnType(column);
                   const fkRelation = foreignKeys?.get(column);
-                  const columnWidth = calculateColumnWidth(column);
+                  const colWidth = getColumnWidth(column);
 
                   return (
                     <TableHead
                       key={column}
                       className={cn(
-                        'text-gray-400 font-medium cursor-pointer hover:bg-white/5 transition-colors whitespace-nowrap',
+                        'text-gray-400 font-medium cursor-pointer hover:bg-white/5 transition-colors whitespace-nowrap relative',
                         getColumnHeaderStyles(column)
                       )}
-                      style={{ minWidth: columnWidth }}
+                      style={{ width: colWidth, minWidth: 60, maxWidth: colWidth }}
                       onClick={() => handleSort(column)}
                     >
                       <div className="flex items-center gap-2">
@@ -774,6 +810,12 @@ export default function DataTable({
                           </Tooltip>
                         )}
                       </div>
+                      <ColumnResizeHandle
+                        column={column}
+                        currentWidth={colWidth}
+                        onResize={handleColumnResize}
+                        onResizeEnd={handleColumnResizeEnd}
+                      />
                     </TableHead>
                   );
                 })}
@@ -802,7 +844,7 @@ export default function DataTable({
                       const value = row[column];
                       const isNull = value === null || value === undefined;
                       const columnType = getColumnType(column);
-                      const columnWidth = calculateColumnWidth(column);
+                      const colWidth = getColumnWidth(column);
 
                       return (
                         <TableCell
@@ -812,7 +854,7 @@ export default function DataTable({
                             getColumnCellStyles(column),
                             isNull ? 'text-gray-500 italic' : 'text-gray-300'
                           )}
-                          style={{ minWidth: columnWidth, maxWidth: 300 }}
+                          style={{ width: colWidth, minWidth: 60, maxWidth: colWidth }}
                           onClick={() => handleCellClick(rowIndex, column, value)}
                           onDoubleClick={() => handleCellDoubleClick(rowIndex, column, value)}
                           onContextMenu={(e) => {
