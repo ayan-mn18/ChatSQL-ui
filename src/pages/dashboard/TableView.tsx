@@ -299,13 +299,7 @@ export default function TableView() {
     y: number;
   } | null>(null);
 
-  // FK Action Dialog (left-click)
-  const [showFkActionDialog, setShowFkActionDialog] = useState(false);
-  const [fkActionData, setFkActionData] = useState<{
-    relation: ERDRelation;
-    value: any;
-    column: string;
-  } | null>(null);
+
 
   // Click timer for distinguishing single vs double click
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -533,37 +527,36 @@ export default function TableView() {
   }, []);
 
   // Smart cell click handler - distinguishes single vs double click
-  const handleCellClick = useCallback((_rowIndex: number, column: string, value: any) => {
+  // Normal click = copy to clipboard, Cmd+Click on FK = navigate to referenced table
+  const handleCellClick = useCallback((e: React.MouseEvent, _rowIndex: number, column: string, value: any) => {
     // Clear any existing timer
     if (clickTimerRef.current) {
       clearTimeout(clickTimerRef.current);
       clickTimerRef.current = null;
     }
 
-    // Set a timer for single click action
-    clickTimerRef.current = setTimeout(() => {
-      // For query results, just copy the value
-      if (queryResults) {
-        copyToClipboard(value);
-        return;
-      }
-
+    // Cmd+Click (Mac) / Ctrl+Click (Windows) on FK columns → navigate to referenced table
+    if ((e.metaKey || e.ctrlKey) && !queryResults && value !== null && value !== undefined) {
       const columnType = getColumnType(column);
-
-      // For FK columns, show action dialog instead of just copying
-      if (columnType === 'foreign' && value !== null && value !== undefined) {
+      if (columnType === 'foreign') {
         const relation = foreignKeyColumns.get(column);
-        if (relation) {
-          setFkActionData({ relation, value, column });
-          setShowFkActionDialog(true);
+        if (relation && connectionId) {
+          addTab({
+            connectionId,
+            schemaName: relation.target_schema,
+            tableName: relation.target_table,
+          });
+          navigate(`/dashboard/connection/${connectionId}/table/${relation.target_schema}/${relation.target_table}?highlightColumn=${relation.target_column}&highlightValue=${encodeURIComponent(value)}`);
           return;
         }
       }
+    }
 
-      // For non-FK columns, copy to clipboard
+    // Set a timer for single click action (always copy to clipboard)
+    clickTimerRef.current = setTimeout(() => {
       copyToClipboard(value);
     }, CLICK_DELAY);
-  }, [queryResults, getColumnType, foreignKeyColumns, copyToClipboard]);
+  }, [queryResults, getColumnType, foreignKeyColumns, copyToClipboard, connectionId, addTab, navigate]);
 
   // Handle FK cell right-click
   const handleFkRightClick = useCallback((
@@ -599,30 +592,7 @@ export default function TableView() {
     setFkMenuData(null);
   }, [fkMenuData, connectionId, addTab, navigate]);
 
-  // Open FK value in new tab (from FK action dialog)
-  const handleOpenFkFromDialog = useCallback(() => {
-    if (!fkActionData || !connectionId) return;
 
-    const { relation, value } = fkActionData;
-    addTab({
-      connectionId,
-      schemaName: relation.target_schema,
-      tableName: relation.target_table,
-    });
-
-    // Navigate to the target table with highlight params
-    navigate(`/dashboard/connection/${connectionId}/table/${relation.target_schema}/${relation.target_table}?highlightColumn=${relation.target_column}&highlightValue=${encodeURIComponent(value)}`);
-    setShowFkActionDialog(false);
-    setFkActionData(null);
-  }, [fkActionData, connectionId, addTab, navigate]);
-
-  // Copy FK value from dialog
-  const handleCopyFkFromDialog = useCallback(() => {
-    if (!fkActionData) return;
-    copyToClipboard(fkActionData.value);
-    setShowFkActionDialog(false);
-    setFkActionData(null);
-  }, [fkActionData, copyToClipboard]);
 
   // Handle cell double-click for editing
   const handleCellDoubleClick = useCallback((rowIndex: number, column: string, value: any) => {
@@ -987,7 +957,7 @@ export default function TableView() {
       case 'primary':
         return 'bg-yellow-500/5';
       case 'foreign':
-        return 'bg-purple-500/5 cursor-pointer';
+        return 'bg-purple-500/5';
       default:
         return '';
     }
@@ -1399,7 +1369,7 @@ export default function TableView() {
                                 isCurrentMatch && 'bg-yellow-500/30 ring-1 ring-yellow-500'
                               )}
                               style={{ width: colWidth, minWidth: 60, maxWidth: colWidth }}
-                              onClick={() => handleCellClick(rowIndex, column, value)}
+                              onClick={(e) => handleCellClick(e, rowIndex, column, value)}
                               onDoubleClick={() => handleCellDoubleClickWrapper(rowIndex, column, value)}
                               onContextMenu={(e) => {
                                 if (!queryResults && columnType === 'foreign') {
@@ -1416,13 +1386,22 @@ export default function TableView() {
                                     }
                                   </span>
                                 </TooltipTrigger>
-                                {!isNull && String(value).length > 30 && (
-                                  <TooltipContent className="bg-[#1B2431] border-white/10 text-white max-w-md">
-                                    <p className="break-all font-mono text-xs">
-                                      {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
-                                    </p>
-                                  </TooltipContent>
-                                )}
+                                <TooltipContent className="bg-[#1B2431] border-white/10 text-white max-w-md">
+                                  {!queryResults && columnType === 'foreign' && !isNull ? (
+                                    <div className="text-xs">
+                                      <p className="break-all font-mono">{typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}</p>
+                                      <p className="text-purple-400 mt-1 flex items-center gap-1">
+                                        <span className="opacity-70">⌘+Click</span> to open in <span className="font-mono">{foreignKeyColumns.get(column)?.target_table}</span>
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    !isNull && String(value).length > 30 ? (
+                                      <p className="break-all font-mono text-xs">
+                                        {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                                      </p>
+                                    ) : null
+                                  )}
+                                </TooltipContent>
                               </Tooltip>
                             </TableCell>
                           );
@@ -1716,60 +1695,7 @@ export default function TableView() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* FK Action Dialog - Left Click on FK */}
-        <Dialog open={showFkActionDialog} onOpenChange={setShowFkActionDialog}>
-          <DialogContent className="bg-[#1B2431] border-white/10 text-white max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Link2 className="w-5 h-5 text-purple-400" />
-                Foreign Key Action
-              </DialogTitle>
-              <DialogDescription className="text-gray-400">
-                {fkActionData && (
-                  <>
-                    Column <span className="text-white font-mono">{fkActionData.column}</span> references{' '}
-                    <span className="text-purple-400 font-mono">
-                      {fkActionData.relation.target_schema}.{fkActionData.relation.target_table}.{fkActionData.relation.target_column}
-                    </span>
-                  </>
-                )}
-              </DialogDescription>
-            </DialogHeader>
 
-            <div className="py-4 space-y-3">
-              {/* Show the value */}
-              <div className="bg-[#273142] rounded-lg p-3 border border-white/10">
-                <p className="text-xs text-gray-400 mb-1">Value</p>
-                <p className="font-mono text-sm text-white break-all">
-                  {fkActionData?.value !== null && fkActionData?.value !== undefined
-                    ? String(fkActionData.value)
-                    : <span className="text-gray-500 italic">NULL</span>
-                  }
-                </p>
-              </div>
-
-              {/* Action buttons */}
-              <div className="grid grid-cols-2 gap-3">
-                <Button
-                  variant="outline"
-                  onClick={handleCopyFkFromDialog}
-                  className="border-white/10 hover:bg-white/5"
-                >
-                  <Copy className="w-4 h-4 mr-2" />
-                  Copy Value
-                </Button>
-                <Button
-                  onClick={handleOpenFkFromDialog}
-                  className="bg-purple-600 hover:bg-purple-700"
-                  disabled={fkActionData?.value === null || fkActionData?.value === undefined}
-                >
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Open in {fkActionData?.relation.target_table}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
 
         {/* Insert Dialog - Enhanced */}
         <Dialog open={showInsertDialog} onOpenChange={setShowInsertDialog}>
