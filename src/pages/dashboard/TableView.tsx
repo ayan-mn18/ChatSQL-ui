@@ -508,6 +508,12 @@ export default function TableView() {
 
     // Set a timer for single click action
     clickTimerRef.current = setTimeout(() => {
+      // For query results, just copy the value
+      if (queryResults) {
+        copyToClipboard(value);
+        return;
+      }
+
       const columnType = getColumnType(column);
 
       // For FK columns, show action dialog instead of just copying
@@ -523,7 +529,7 @@ export default function TableView() {
       // For non-FK columns, copy to clipboard
       copyToClipboard(value);
     }, CLICK_DELAY);
-  }, [getColumnType, foreignKeyColumns, copyToClipboard]);
+  }, [queryResults, getColumnType, foreignKeyColumns, copyToClipboard]);
 
   // Handle FK cell right-click
   const handleFkRightClick = useCallback((
@@ -586,9 +592,21 @@ export default function TableView() {
 
   // Handle cell double-click for editing
   const handleCellDoubleClick = useCallback((rowIndex: number, column: string, value: any) => {
-    const columnType = getColumnType(column);
     const strValue = value === null ? '' : (typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value));
 
+    // For query results, just show the value in a modal (read-only)
+    if (queryResults) {
+      setEditModalData({
+        rowIndex,
+        column,
+        value: strValue,
+        originalValue: value,
+      });
+      setShowEditModal(true);
+      return;
+    }
+
+    const columnType = getColumnType(column);
     // Check if it's PK or FK - show warning first
     if (columnType === 'primary') {
       setPendingEdit({ rowIndex, column, value });
@@ -610,7 +628,7 @@ export default function TableView() {
       originalValue: value,
     });
     setShowEditModal(true);
-  }, [getColumnType]);
+  }, [queryResults, getColumnType]);
 
   // Handle double click - cancel single click action and proceed with edit
   const handleCellDoubleClickWrapper = useCallback((rowIndex: number, column: string, value: any) => {
@@ -1322,15 +1340,15 @@ export default function TableView() {
                               key={column}
                               className={cn(
                                 'font-mono text-sm transition-colors',
-                                !queryResults && 'cursor-pointer hover:bg-white/10',
+                                'cursor-pointer hover:bg-white/10',
                                 !queryResults && getColumnCellStyles(column),
                                 isNull ? 'text-gray-500 italic' : 'text-gray-300',
                                 cellMatch && 'bg-yellow-500/20',
                                 isCurrentMatch && 'bg-yellow-500/30 ring-1 ring-yellow-500'
                               )}
                               style={{ minWidth: columnWidth, maxWidth: 300 }}
-                              onClick={() => !queryResults && handleCellClick(rowIndex, column, value)}
-                              onDoubleClick={() => !queryResults && handleCellDoubleClickWrapper(rowIndex, column, value)}
+                              onClick={() => handleCellClick(rowIndex, column, value)}
+                              onDoubleClick={() => handleCellDoubleClickWrapper(rowIndex, column, value)}
                               onContextMenu={(e) => {
                                 if (!queryResults && columnType === 'foreign') {
                                   handleFkRightClick(e, column, value);
