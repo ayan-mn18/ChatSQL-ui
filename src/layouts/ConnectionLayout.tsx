@@ -4,6 +4,7 @@ import { ConnectionMobileNav } from '@/components/dashboard/ConnectionMobileNav'
 import { TableTabsProvider } from '@/contexts/TableTabsContext';
 import { QueryTabsProvider } from '@/contexts/QueryTabsContext';
 import { ViewerExpiryBanner } from '@/components/dashboard/ViewerExpiryBanner';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -16,21 +17,27 @@ export default function ConnectionLayout() {
         <div className="flex min-h-screen bg-[#1B2431] text-white font-sans selection:bg-[#3b82f6]/30">
           {/* Desktop Sidebar */}
           <div className="hidden md:block fixed left-0 top-0 h-full z-40">
-            <ConnectionSidebar
-              isCollapsed={isSidebarCollapsed}
-              onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            />
+            <ErrorBoundary level="widget">
+              <ConnectionSidebar
+                isCollapsed={isSidebarCollapsed}
+                onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              />
+            </ErrorBoundary>
           </div>
 
           {/* Mobile Navigation */}
-          <ConnectionMobileNav />
+          <ErrorBoundary level="widget">
+            <ConnectionMobileNav />
+          </ErrorBoundary>
 
           <main className={cn(
             "flex-1 overflow-auto relative min-h-screen transition-all duration-300 ease-in-out",
             isSidebarCollapsed ? "md:ml-14" : "md:ml-60",
             "ml-0"
           )}>
-            <ViewerExpiryBanner />
+            <ErrorBoundary level="widget">
+              <ViewerExpiryBanner />
+            </ErrorBoundary>
             <div className="relative z-10 p-0 h-full">
               <Outlet />
             </div>

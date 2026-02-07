@@ -6,6 +6,7 @@ export { default as Navbar } from './Navbar';
 export { default as SampleQueries } from './SampleQueries';
 export { default as SettingsModal } from './DBSettingsModal';
 export { default as ContactForm } from './ContactForm';
+export { ErrorBoundary, NotFoundPage } from './ErrorBoundary';
 export { 
   default as JobProgressIndicator,
   GlobalJobProgress,

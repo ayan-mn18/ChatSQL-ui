@@ -8,6 +8,7 @@ import { JobProgressProvider } from './contexts/JobProgressContext';
 import { GlobalJobProgress } from './components/JobProgressIndicator';
 import { AuthRedirector } from './components/AuthRedirector';
 import { CommandKBarProvider } from './components/CommandKBar';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import App from './App.tsx';
 import './index.css';
 
@@ -33,7 +34,9 @@ createRoot(document.getElementById('root')!).render(
           <JobProgressProvider>
             <CommandKBarProvider>
               <AuthRedirector />
-              <App />
+              <ErrorBoundary level="page">
+                <App />
+              </ErrorBoundary>
               <GlobalJobProgress />
               <Toaster />
             </CommandKBarProvider>

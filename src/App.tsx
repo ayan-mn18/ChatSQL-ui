@@ -13,6 +13,7 @@ import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import ProfilePage from './pages/ProfilePage';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { ErrorBoundary, NotFoundPage } from './components/ErrorBoundary';
 import {
   ConnectionsPage,
   UsageDashboard,
@@ -62,26 +63,29 @@ function App() {
         <Route path="/auth/force-change-password" element={<ForceChangePasswordPage />} />
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<Navigate to="/dashboard/connections" replace />} />
-          <Route path="connections" element={<ConnectionsPage />} />
-          <Route path="usage" element={<UsageDashboard />} />
-          <Route path="users" element={<AdminOnlyUserManagement />} />
-          <Route path="access" element={<MyAccessPage />} />
-          <Route path="pricing" element={<PricingPage />} />
-          <Route path="billing" element={<BillingPage />} />
+          <Route path="connections" element={<ErrorBoundary level="section" resetKeys={['connections']}><ConnectionsPage /></ErrorBoundary>} />
+          <Route path="usage" element={<ErrorBoundary level="section" resetKeys={['usage']}><UsageDashboard /></ErrorBoundary>} />
+          <Route path="users" element={<ErrorBoundary level="section" resetKeys={['users']}><AdminOnlyUserManagement /></ErrorBoundary>} />
+          <Route path="access" element={<ErrorBoundary level="section" resetKeys={['access']}><MyAccessPage /></ErrorBoundary>} />
+          <Route path="pricing" element={<ErrorBoundary level="section" resetKeys={['pricing']}><PricingPage /></ErrorBoundary>} />
+          <Route path="billing" element={<ErrorBoundary level="section" resetKeys={['billing']}><BillingPage /></ErrorBoundary>} />
           <Route path="checkout/success" element={<CheckoutSuccess />} />
           <Route path="checkout/cancelled" element={<CheckoutCancelled />} />
-          <Route path="profile" element={<ProfilePage />} />
+          <Route path="profile" element={<ErrorBoundary level="section" resetKeys={['profile']}><ProfilePage /></ErrorBoundary>} />
         </Route>
 
         {/* Connection Routes */}
         <Route path="/dashboard/connection/:connectionId" element={<ConnectionLayout />}>
           <Route index element={<Navigate to="overview" replace />} />
-          <Route path="overview" element={<ConnectionOverview />} />
-          <Route path="table/:schemaName/:tableName" element={<TableView />} />
-          <Route path="sql" element={<SQLEditor />} />
-          <Route path="visualizer" element={<SchemaVisualizer />} />
+          <Route path="overview" element={<ErrorBoundary level="section" resetKeys={['overview']}><ConnectionOverview /></ErrorBoundary>} />
+          <Route path="table/:schemaName/:tableName" element={<ErrorBoundary level="page" resetKeys={['table']}><TableView /></ErrorBoundary>} />
+          <Route path="sql" element={<ErrorBoundary level="section" resetKeys={['sql']}><SQLEditor /></ErrorBoundary>} />
+          <Route path="visualizer" element={<ErrorBoundary level="section" resetKeys={['visualizer']}><SchemaVisualizer /></ErrorBoundary>} />
         </Route>
       </Route>
+
+      {/* 404 Catch-all */}
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }

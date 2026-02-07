@@ -82,6 +82,7 @@ import { cn } from '@/lib/utils';
 import Editor from '@monaco-editor/react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usageService } from '@/services/usage.service';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 // ============================================
 // HELPER: Calculate column width based on column name
@@ -910,16 +911,20 @@ export default function TableView() {
   // ============================================
 
   const renderCellValue = (value: any): string => {
-    if (value === null || value === undefined) return 'NULL';
-    if (typeof value === 'object') {
-      const json = JSON.stringify(value);
-      return json.length > 30 ? json.substring(0, 27) + '...' : json;
+    try {
+      if (value === null || value === undefined) return 'NULL';
+      if (typeof value === 'object') {
+        const json = JSON.stringify(value);
+        return json.length > 30 ? json.substring(0, 27) + '...' : json;
+      }
+      const strValue = String(value);
+      if (strValue.length > 40) {
+        return strValue.substring(0, 37) + '...';
+      }
+      return strValue;
+    } catch {
+      return '[Error]';
     }
-    const strValue = String(value);
-    if (strValue.length > 40) {
-      return strValue.substring(0, 37) + '...';
-    }
-    return strValue;
   };
 
   const getSortIcon = (column: string) => {
@@ -1135,26 +1140,30 @@ export default function TableView() {
           {/* Toolbar row: WHERE Clause Editor + Search + Filters + Columns */}
           <div className="flex flex-col gap-2 px-4 md:px-6 py-2 border-t border-white/5 bg-[#1B2431]/50">
             {/* WHERE Clause Editor - Primary query interface */}
-            <WhereClauseEditor
-              schemaName={schemaName || ''}
-              tableName={tableName || ''}
-              columns={(columnsMetadata?.columns as TableColumnDef[]) || []}
-              onExecuteQuery={handleExecuteQuery}
-              isExecuting={isExecutingQuery}
-            />
+            <ErrorBoundary level="widget">
+              <WhereClauseEditor
+                schemaName={schemaName || ''}
+                tableName={tableName || ''}
+                columns={(columnsMetadata?.columns as TableColumnDef[]) || []}
+                onExecuteQuery={handleExecuteQuery}
+                isExecuting={isExecutingQuery}
+              />
+            </ErrorBoundary>
 
             {/* Secondary toolbar: Search + Filters + Columns */}
             <div className="flex items-center justify-between">
               {/* Left: In-memory Search */}
-              <TableSearchBar
-                rows={queryResults?.rows || data?.rows || []}
-                columns={queryResults?.columns || displayColumns}
-                searchState={searchState}
-                onSearchStateChange={setSearchState}
-                connectionId={connectionId || ''}
-                schemaName={schemaName || ''}
-                tableName={tableName || ''}
-              />
+              <ErrorBoundary level="widget">
+                <TableSearchBar
+                  rows={queryResults?.rows || data?.rows || []}
+                  columns={queryResults?.columns || displayColumns}
+                  searchState={searchState}
+                  onSearchStateChange={setSearchState}
+                  connectionId={connectionId || ''}
+                  schemaName={schemaName || ''}
+                  tableName={tableName || ''}
+                />
+              </ErrorBoundary>
 
               {/* Right: Filter + Columns */}
               <div className="flex items-center gap-2">
@@ -1170,20 +1179,24 @@ export default function TableView() {
                   </Button>
                 )}
 
-                <AdvancedFilterBuilder
-                  columns={allColumns}
-                  activeFilters={currentOptions.filters || []}
-                  onApplyFilters={handleApplyFilters}
-                  onClearFilters={clearFilters}
-                />
+                <ErrorBoundary level="widget">
+                  <AdvancedFilterBuilder
+                    columns={allColumns}
+                    activeFilters={currentOptions.filters || []}
+                    onApplyFilters={handleApplyFilters}
+                    onClearFilters={clearFilters}
+                  />
+                </ErrorBoundary>
 
-                <ColumnManager
-                  columns={allColumns}
-                  columnConfig={columnConfig}
-                  onColumnConfigChange={handleColumnConfigChange}
-                  primaryKeyColumn={primaryKeyColumn}
-                  foreignKeyColumns={foreignKeyColumnsSet}
-                />
+                <ErrorBoundary level="widget">
+                  <ColumnManager
+                    columns={allColumns}
+                    columnConfig={columnConfig}
+                    onColumnConfigChange={handleColumnConfigChange}
+                    primaryKeyColumn={primaryKeyColumn}
+                    foreignKeyColumns={foreignKeyColumnsSet}
+                  />
+                </ErrorBoundary>
               </div>
             </div>
           </div>
