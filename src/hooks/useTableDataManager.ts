@@ -10,7 +10,7 @@
  * currentOptions) so TableView.tsx needs minimal changes.
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   useTableDataQuery,
   useColumnsQuery,
@@ -31,6 +31,8 @@ export interface UseTableDataManagerReturn {
   data: TableDataResponse | null;
   columns: TableColumnsResponse | null;
   loading: boolean;
+  /** True when navigating between different tables (stale data from old table visible) */
+  isTableSwitching: boolean;
   mutating: boolean;
   error: string | null;
 
@@ -110,6 +112,44 @@ export function useTableDataManager(
   const primaryKeyColumn = useMemo(() => {
     return columns?.primaryKey || data?.primaryKeyColumn || 'id';
   }, [columns, data]);
+
+  // ── Table-switch detection ────────────────────────────────────────
+  // Track which table the current cached data belongs to.
+  // When the route params change (user clicks a different table),
+  // the query key changes, TanStack serves stale placeholder data from
+  // the OLD table while fetching the new one. We detect this so the UI
+  // can show an overlay skeleton instead of stale cross-table data.
+  const prevTableRef = useRef({ connectionId, schemaName, tableName });
+  const [tableIdentityChanged, setTableIdentityChanged] = useState(false);
+
+  useEffect(() => {
+    const prev = prevTableRef.current;
+    const changed =
+      prev.connectionId !== connectionId ||
+      prev.schemaName !== schemaName ||
+      prev.tableName !== tableName;
+
+    if (changed) {
+      setTableIdentityChanged(true);
+      prevTableRef.current = { connectionId, schemaName, tableName };
+      // Reset options to defaults when switching tables
+      setOptions({
+        page: 1,
+        pageSize: initialOptions.pageSize || 50,
+        sortOrder: 'ASC',
+        filters: [],
+      });
+    }
+  }, [connectionId, schemaName, tableName]);
+
+  // Clear the flag once TanStack delivers fresh data for the new table
+  useEffect(() => {
+    if (tableIdentityChanged && !tableDataQuery.isPlaceholderData && !tableDataQuery.isLoading) {
+      setTableIdentityChanged(false);
+    }
+  }, [tableIdentityChanged, tableDataQuery.isPlaceholderData, tableDataQuery.isLoading]);
+
+  const isTableSwitching = tableIdentityChanged && (tableDataQuery.isFetching || tableDataQuery.isLoading);
 
   const loading = tableDataQuery.isLoading || tableDataQuery.isFetching;
   const mutating = insertMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
@@ -257,6 +297,7 @@ export function useTableDataManager(
     data,
     columns,
     loading,
+    isTableSwitching,
     mutating,
     error,
     fetchData,

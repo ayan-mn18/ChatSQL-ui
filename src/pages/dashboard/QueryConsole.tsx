@@ -803,12 +803,14 @@ export default function QueryConsole() {
     updateTabTitle,
     setTabRunning,
     getActiveTab,
+    getTabById,
     getTabsForConnection,
   } = useQueryTabs();
 
   // Monaco editor ref
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<Monaco | null>(null);
+  const [editorReady, setEditorReady] = useState(false);
   // Store editor models per tab (each model has its own undo/redo stack)
   const editorModelsRef = useRef<Map<string, any>>(new Map());
   const editorViewStatesRef = useRef<Map<string, any>>(new Map());
@@ -881,7 +883,7 @@ export default function QueryConsole() {
   // ============================================
 
   useEffect(() => {
-    if (!editorRef.current || !monacoRef.current || !activeTabId) return;
+    if (!editorRef.current || !monacoRef.current || !activeTabId || !editorReady) return;
 
     const monaco = monacoRef.current;
     const editor = editorRef.current;
@@ -897,9 +899,12 @@ export default function QueryConsole() {
     // Get or create model for this tab
     let model = editorModelsRef.current.get(activeTabId);
     if (!model) {
+      // Read the tab's query from the store directly (avoids stale closure)
+      const tab = getTabById(activeTabId);
+      const initialQuery = tab?.query || activeTab?.query || '';
       // Create a new model for this tab with a unique URI
       const uri = monaco.Uri.parse(`inmemory://tab-${activeTabId}.sql`);
-      model = monaco.editor.createModel(activeTab?.query || '', 'sql', uri);
+      model = monaco.editor.createModel(initialQuery, 'sql', uri);
       editorModelsRef.current.set(activeTabId, model);
 
       // Add content change listener to sync with tab state
@@ -924,7 +929,7 @@ export default function QueryConsole() {
 
     // Update previous tab reference
     previousTabIdRef.current = activeTabId;
-  }, [activeTabId]);
+  }, [activeTabId, editorReady]);
 
   // ============================================
   // INITIALIZE TABS FOR CONNECTION
@@ -979,6 +984,7 @@ export default function QueryConsole() {
   const handleEditorDidMount = (editor: any, monaco: Monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
+    setEditorReady(true);
 
     // Define custom theme with enhanced SQL syntax highlighting
     monaco.editor.defineTheme('chatsql-dark', {

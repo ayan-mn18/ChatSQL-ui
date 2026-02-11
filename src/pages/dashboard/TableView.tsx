@@ -203,6 +203,7 @@ export default function TableView() {
     data,
     columns: columnsMetadata,
     loading,
+    isTableSwitching,
     mutating,
     error,
     // fetchData and fetchColumns are handled internally by TanStack Query
@@ -1192,8 +1193,9 @@ export default function TableView() {
         )}
 
         {/* Table */}
-        <div className="flex-1 overflow-auto scrollbar-thin">
-          {loading && !data ? (
+        <div className="flex-1 overflow-auto scrollbar-thin relative">
+          {/* Full skeleton on cold first load */}
+          {loading && !data && !isTableSwitching ? (
             <div className="w-full h-full">
               {/* Header Skeleton */}
               <div className="sticky top-0 z-10 flex items-center gap-4 px-4 py-3 bg-[#273142] border-b border-white/5 min-w-max">
@@ -1213,6 +1215,31 @@ export default function TableView() {
                     ))}
                   </div>
                 ))}
+              </div>
+            </div>
+          ) : isTableSwitching ? (
+            /* Overlay skeleton when switching between tables —
+               covers stale data from the previous table */
+            <div className="absolute inset-0 z-20 bg-[#1B2431]/80 backdrop-blur-[2px]">
+              <div className="w-full h-full animate-pulse">
+                {/* Header Skeleton */}
+                <div className="sticky top-0 z-10 flex items-center gap-4 px-4 py-3 bg-[#273142] border-b border-white/5 min-w-max">
+                  <Skeleton className="h-5 w-5 rounded bg-white/10 shrink-0" />
+                  {[...Array(8)].map((_, i) => (
+                    <Skeleton key={i} className="h-6 w-48 bg-white/10 shrink-0" />
+                  ))}
+                </div>
+                {/* Rows Skeleton */}
+                <div className="divide-y divide-white/5 min-w-max">
+                  {[...Array(15)].map((_, i) => (
+                    <div key={i} className="flex items-center gap-4 px-4 py-3">
+                      <Skeleton className="h-4 w-5 rounded bg-white/5 shrink-0" />
+                      {[...Array(8)].map((_, j) => (
+                        <Skeleton key={j} className="h-5 w-48 bg-white/5 shrink-0" />
+                      ))}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           ) : (
