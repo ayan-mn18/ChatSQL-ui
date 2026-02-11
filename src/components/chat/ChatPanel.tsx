@@ -813,7 +813,7 @@ export function ChatPanel({
             <div className={`relative flex items-end w-full p-2 border rounded-xl shadow-lg transition-all duration-300 group ${chatMode === 'agent'
               ? 'bg-gradient-to-b from-slate-900 via-slate-900 to-purple-900/10 border-purple-500/30 shadow-[0_0_15px_rgba(168,85,247,0.05)] focus-within:shadow-[0_0_20px_rgba(168,85,247,0.15)] focus-within:border-purple-500/50'
               : 'bg-gradient-to-b from-slate-900 via-slate-900 to-slate-800/50 border-slate-700/60 focus-within:border-indigo-500/50 focus-within:shadow-[0_0_20px_rgba(99,102,241,0.1)]'}`}>
-              
+
               <div className="pb-1 pl-1">
                 <ChatModeDropdown />
               </div>
@@ -826,14 +826,14 @@ export function ChatPanel({
                 className="flex-1 bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-slate-200 text-sm placeholder:text-slate-500 min-h-[44px] max-h-[150px] resize-none py-3 px-3 shadow-none"
                 disabled={isStreaming || isAgentBusy}
               />
-              
+
               <div className="pb-1 pr-1">
                 <Button
                   onClick={handleSendMessage}
                   disabled={!inputValue.trim() || isStreaming || isAgentBusy}
                   size="icon"
-                  className={`h-8 w-8 rounded-lg shadow-md transition-all duration-300 ${chatMode === 'agent' 
-                    ? 'bg-gradient-to-tr from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500 shadow-purple-900/20' 
+                  className={`h-8 w-8 rounded-lg shadow-md transition-all duration-300 ${chatMode === 'agent'
+                    ? 'bg-gradient-to-tr from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500 shadow-purple-900/20'
                     : 'bg-gradient-to-tr from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 shadow-indigo-900/20'} text-white disabled:opacity-40 disabled:bg-none disabled:bg-slate-700`}
                 >
                   {isStreaming || isAgentBusy ? (
@@ -1031,8 +1031,8 @@ export function ChatPanel({
               onClick={handleSendMessage}
               disabled={!inputValue.trim() || isStreaming || isAgentBusy}
               size="icon"
-              className={`h-7 w-7 rounded-lg shadow-sm transition-all duration-300 ${chatMode === 'agent' 
-                ? 'bg-gradient-to-tr from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500' 
+              className={`h-7 w-7 rounded-lg shadow-sm transition-all duration-300 ${chatMode === 'agent'
+                ? 'bg-gradient-to-tr from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500'
                 : 'bg-gradient-to-tr from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500'} text-white disabled:opacity-40 disabled:bg-none disabled:bg-slate-700`}
             >
               {isStreaming || isAgentBusy ? (
