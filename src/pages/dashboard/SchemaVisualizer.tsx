@@ -41,6 +41,7 @@ import {
 import TableNode from '@/components/dashboard/TableNode';
 import dagre from 'dagre';
 import { connectionService } from '@/services/connection.service';
+import { useSyncSchemaMutation } from '@/hooks/useQueries';
 import { TableSchema, ERDRelation, DatabaseSchemaPublic } from '@/types';
 
 const nodeTypes = {
@@ -212,7 +213,6 @@ function SchemaVisualizerContent() {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Cache for all data
@@ -347,27 +347,27 @@ function SchemaVisualizerContent() {
   }, [connectionId]);
 
   // Sync schema from database
-  const syncSchema = useCallback(async () => {
+  const syncSchemaMutation = useSyncSchemaMutation();
+  const isSyncing = syncSchemaMutation.isPending;
+
+  const syncSchema = useCallback(() => {
     if (!connectionId || isSyncing) return;
 
-    setIsSyncing(true);
     setError(null);
 
-    try {
-      const response = await connectionService.syncSchema(connectionId);
-      console.log('[ERD] Schema sync triggered:', response);
-
-      // Wait a bit for the sync to complete, then refresh
-      setTimeout(() => {
-        fetchERDData();
-        setIsSyncing(false);
-      }, 3000);
-    } catch (err: any) {
-      console.error('[ERD] Schema sync failed:', err);
-      setError(err.message || 'Failed to sync schema');
-      setIsSyncing(false);
-    }
-  }, [connectionId, isSyncing, fetchERDData]);
+    syncSchemaMutation.mutate(connectionId, {
+      onSuccess: () => {
+        // Wait a bit for the sync to complete, then refresh
+        setTimeout(() => {
+          fetchERDData();
+        }, 3000);
+      },
+      onError: (err: any) => {
+        console.error('[ERD] Schema sync failed:', err);
+        setError(err.message || 'Failed to sync schema');
+      },
+    });
+  }, [connectionId, isSyncing, fetchERDData, syncSchemaMutation]);
 
   // Load data on mount
   useEffect(() => {

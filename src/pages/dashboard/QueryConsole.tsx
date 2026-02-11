@@ -101,6 +101,7 @@ ChartJS.register(
 // Services
 import { connectionService } from '@/services/connection.service';
 import { savedQueriesService, SavedQuery } from '@/services/saved-queries.service';
+import { useSavedQueriesQuery, useDeleteSavedQueryMutation, useCreateSavedQueryMutation } from '@/hooks/useQueries';
 import { useQueryTabs, QueryResult } from '@/contexts/QueryTabsContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { DatabaseSchemaPublic } from '@/types';
@@ -238,34 +239,26 @@ function SavedQueriesModal({
   onLoadQuery: (query: string, name: string) => void;
   isViewer: boolean;
 }) {
-  const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
-  const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedQuery, setSelectedQuery] = useState<SavedQuery | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'recent' | 'name' | 'used'>('recent');
 
+  // TanStack Query for saved queries
+  const { data: savedQueriesData, isLoading: loading, refetch: loadSavedQueries } = useSavedQueriesQuery(
+    isOpen ? connectionId : undefined,
+    searchTerm || undefined
+  );
+  const savedQueries: SavedQuery[] = savedQueriesData || [];
+  const deleteSavedQueryMutation = useDeleteSavedQueryMutation();
+
+  // Reset selection when modal opens
   useEffect(() => {
-    if (isOpen && connectionId) {
-      loadSavedQueries();
+    if (isOpen) {
       setSelectedQuery(null);
     }
-  }, [isOpen, connectionId]);
-
-  const loadSavedQueries = async () => {
-    setLoading(true);
-    try {
-      const response = await savedQueriesService.getAll(connectionId, searchTerm || undefined);
-      if (response.success) {
-        setSavedQueries(response.data || []);
-      }
-    } catch (error) {
-      toast.error('Failed to load saved queries');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [isOpen]);
 
   const handleSearch = () => {
     loadSavedQueries();
@@ -273,13 +266,11 @@ function SavedQueriesModal({
 
   const handleDelete = async (queryId: string) => {
     try {
-      await savedQueriesService.delete(connectionId, queryId);
-      setSavedQueries(prev => prev.filter(q => q.id !== queryId));
+      await deleteSavedQueryMutation.mutateAsync({ connectionId, queryId });
       if (selectedQuery?.id === queryId) setSelectedQuery(null);
       setDeleteConfirm(null);
-      toast.success('Query deleted');
     } catch (error) {
-      toast.error('Failed to delete query');
+      // Error toast handled by mutation
     }
   };
 
@@ -297,11 +288,11 @@ function SavedQueriesModal({
 
   const filteredQueries = savedQueries
     .filter(
-      q => q.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (q: SavedQuery) => q.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         q.queryText.toLowerCase().includes(searchTerm.toLowerCase()) ||
         q.description?.toLowerCase().includes(searchTerm.toLowerCase())
     )
-    .sort((a, b) => {
+    .sort((a: SavedQuery, b: SavedQuery) => {
       if (sortBy === 'name') return a.name.localeCompare(b.name);
       if (sortBy === 'used') return (b.useCount || 0) - (a.useCount || 0);
       return new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime();
@@ -598,7 +589,8 @@ function SaveQueryDialog({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [isShared, setIsShared] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const createSavedQueryMutation = useCreateSavedQueryMutation();
+  const saving = createSavedQueryMutation.isPending;
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -606,15 +598,16 @@ function SaveQueryDialog({
       return;
     }
 
-    setSaving(true);
     try {
-      await savedQueriesService.create(connectionId, {
-        name: name.trim(),
-        queryText,
-        description: description.trim() || undefined,
-        isShared,
+      await createSavedQueryMutation.mutateAsync({
+        connectionId,
+        data: {
+          name: name.trim(),
+          queryText,
+          description: description.trim() || undefined,
+          isShared,
+        },
       });
-      toast.success('Query saved!');
       onSaved();
       onClose();
       // Reset form
@@ -623,8 +616,6 @@ function SaveQueryDialog({
       setIsShared(false);
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Failed to save query');
-    } finally {
-      setSaving(false);
     }
   };
 

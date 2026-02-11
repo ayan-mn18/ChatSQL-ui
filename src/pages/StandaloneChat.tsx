@@ -1,31 +1,15 @@
-import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { ChatPanel } from '@/components/chat/ChatPanel';
-import { connectionService } from '@/services/connection.service';
+import { useConnectionQuery } from '@/hooks/useQueries';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 export default function StandaloneChatPage() {
   const { connectionId } = useParams<{ connectionId: string }>();
   const [searchParams] = useSearchParams();
   const selectedSchemas = searchParams.get('schemas')?.split(',') || [];
-  const [connectionName, setConnectionName] = useState<string>('');
 
-  useEffect(() => {
-    if (connectionId) {
-      loadConnectionInfo();
-    }
-  }, [connectionId]);
-
-  const loadConnectionInfo = async () => {
-    try {
-      const response = await connectionService.getConnection(connectionId!);
-      if (response.success && response.data) {
-        setConnectionName(response.data.name);
-      }
-    } catch (error) {
-      console.error('Failed to load connection info:', error);
-    }
-  };
+  const { data: connectionData } = useConnectionQuery(connectionId);
+  const connectionName = connectionData?.data?.name || connectionData?.name || '';
 
   if (!connectionId) {
     return (

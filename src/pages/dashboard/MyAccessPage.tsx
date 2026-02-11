@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { toast } from 'sonner';
 import { Clock, Shield, Database, Sparkles, BarChart3, PenLine, Download, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { viewerService, Viewer, ViewerPermission } from '@/services/viewer.service';
+import { useMyAccessQuery } from '@/hooks/useQueries';
 
 function formatRemaining(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -22,8 +23,7 @@ function formatRemaining(ms: number): string {
 }
 
 export default function MyAccessPage() {
-  const [loading, setLoading] = useState(true);
-  const [viewer, setViewer] = useState<Viewer | null>(null);
+  const { data: viewer = null, isLoading: loading, refetch: load } = useMyAccessQuery();
   const [isRequestOpen, setIsRequestOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -66,23 +66,6 @@ export default function MyAccessPage() {
     }
     return Array.from(map.entries()).map(([connectionId, v]) => ({ connectionId, ...v }));
   }, [viewer?.permissions]);
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const me = await viewerService.getMyAccess();
-      setViewer(me);
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Failed to load access');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const buildRequestedPermissions = (): ViewerPermission[] | undefined => {
     if (!viewer?.permissions?.length) return undefined;

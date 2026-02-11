@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { AddConnectionDialog } from '@/components/dashboard/AddConnectionDialog';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Database, Trash2, ArrowRight, Server, Pencil, Sparkles, Zap, Shield, Cable, RefreshCw, Loader2, AlertCircle } from 'lucide-react';
@@ -6,8 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { useConnections } from '@/hooks/useConnections';
-import { connectionService } from '@/services/connection.service';
+import { useConnectionsQuery, useDeleteConnectionMutation, useSyncSchemaMutation } from '@/hooks/useQueries';
 import { ConnectionPublic } from '@/types';
 import {
   AlertDialog,
@@ -24,52 +23,37 @@ import { ViewerExpiryBanner } from '@/components/dashboard/ViewerExpiryBanner';
 
 export default function ConnectionsPage() {
   const navigate = useNavigate();
-  const {
-    connections,
-    isLoading,
-    error,
-    fetchConnections,
-    deleteConnection: deleteConnectionApi,
-    clearError
-  } = useConnections();
+  const { data: connections = [], isLoading, error, refetch } = useConnectionsQuery();
+  const deleteConnectionMutation = useDeleteConnectionMutation();
+  const syncSchemaMutation = useSyncSchemaMutation();
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [connectionToDelete, setConnectionToDelete] = useState<ConnectionPublic | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [syncingId, setSyncingId] = useState<string | null>(null);
-
-  // Fetch connections on mount
-  useEffect(() => {
-    fetchConnections().catch(err => {
-      console.error('Failed to fetch connections:', err);
-    });
-  }, [fetchConnections]);
 
   // Handle sync schema
   const handleSyncSchema = async (id: string, name: string) => {
-    setSyncingId(id);
-    try {
-      const response = await connectionService.syncSchema(id);
-      if (response.success) {
-        toast.success(`Schema sync started for "${name}"`);
-      }
-    } catch (err: any) {
-      console.error('Failed to sync schema:', err);
-      toast.error(err.response?.data?.error || `Failed to sync schema for "${name}"`);
-    } finally {
-      setSyncingId(null);
-    }
+    syncSchemaMutation.mutate(id, {
+      onSuccess: (response) => {
+        if (response.success) {
+          toast.success(`Schema sync started for "${name}"`);
+        }
+      },
+      onError: (err: any) => {
+        console.error('Failed to sync schema:', err);
+        toast.error(err.response?.data?.error || `Failed to sync schema for "${name}"`);
+      },
+    });
   };
 
   // Handle refresh
   const handleRefresh = useCallback(async () => {
     try {
-      await fetchConnections();
+      await refetch();
       toast.success('Connections refreshed');
     } catch (err) {
       toast.error('Failed to refresh connections');
     }
-  }, [fetchConnections]);
+  }, [refetch]);
 
   // Handle delete confirmation
   const handleDeleteClick = (connection: ConnectionPublic) => {
@@ -81,18 +65,20 @@ export default function ConnectionsPage() {
   const handleDeleteConfirm = async () => {
     if (!connectionToDelete) return;
 
-    setIsDeleting(true);
-    try {
-      await deleteConnectionApi(connectionToDelete.id);
-      toast.success(`Connection "${connectionToDelete.name}" deleted`);
-      setDeleteDialogOpen(false);
-      setConnectionToDelete(null);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to delete connection');
-    } finally {
-      setIsDeleting(false);
-    }
+    deleteConnectionMutation.mutate(connectionToDelete.id, {
+      onSuccess: () => {
+        toast.success(`Connection "${connectionToDelete.name}" deleted`);
+        setDeleteDialogOpen(false);
+        setConnectionToDelete(null);
+      },
+      onError: (err: any) => {
+        toast.error(err.message || 'Failed to delete connection');
+      },
+    });
   };
+
+  const isDeleting = deleteConnectionMutation.isPending;
+  const syncingId = syncSchemaMutation.isPending ? (syncSchemaMutation.variables as string) : null;
 
   // Format last tested time
   const formatLastTested = (dateStr: string | null) => {
@@ -137,14 +123,14 @@ export default function ConnectionsPage() {
         <Card className="border-red-500/20 bg-red-500/10">
           <CardContent className="flex items-center gap-3 py-4">
             <AlertCircle className="w-5 h-5 text-red-400" />
-            <p className="text-red-400">{error}</p>
+            <p className="text-red-400">{(error as any)?.message || 'Failed to load connections'}</p>
             <Button
               variant="ghost"
               size="sm"
-              onClick={clearError}
+              onClick={() => refetch()}
               className="ml-auto text-red-400 hover:text-red-300"
             >
-              Dismiss
+              Retry
             </Button>
           </CardContent>
         </Card>

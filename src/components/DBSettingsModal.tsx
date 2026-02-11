@@ -3,6 +3,7 @@ import { X, Database, CheckCircle2, XCircle, Loader2, Bot, Settings as SettingsI
 import { toast } from 'react-hot-toast';
 import { Settings, TestConnectionRequest, TestConnectionResponse } from '../types';
 import { connectionService } from '../services/connection.service';
+import { useTestConnectionMutation } from '@/hooks/useQueries';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -43,6 +44,7 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
 
   // UI state
   const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const testConnectionMutation = useTestConnectionMutation();
   const [connectionStatus, setConnectionStatus] = useState<'none' | 'success' | 'error'>('none');
   const [errorMessage, setErrorMessage] = useState('');
   const [useDefaultDb, setUseDefaultDb] = useState(false);
@@ -117,7 +119,7 @@ export default function SettingsModal({ isOpen, onClose, onSave, initialSettings
         ssl,
       };
 
-      const result: TestConnectionResponse = await connectionService.testConnection(connectionData);
+      const result: TestConnectionResponse = await testConnectionMutation.mutateAsync(connectionData);
 
       if (result.success) {
         setConnectionStatus('success');

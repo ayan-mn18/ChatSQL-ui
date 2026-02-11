@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import {
@@ -51,6 +51,7 @@ import {
 } from 'chart.js';
 import { Line, Doughnut, Bar } from 'react-chartjs-2';
 import { connectionService } from '@/services/connection.service';
+import { useConnectionAnalyticsQuery, useSyncSchemaMutation, useEnableExtensionMutation } from '@/hooks/useQueries';
 
 ChartJS.register(
   CategoryScale,
@@ -91,10 +92,15 @@ const truncateQuery = (query: string, maxLength = 60) => {
 
 export default function ConnectionOverview() {
   const { connectionId } = useParams<{ connectionId: string }>();
-  const [loading, setLoading] = useState(true);
-  const [analytics, setAnalytics] = useState<any>(null);
+
+  // TanStack Query hooks
+  const { data: analyticsResponse, isLoading: loading, refetch: fetchAnalytics } = useConnectionAnalyticsQuery(connectionId);
+  const analytics = analyticsResponse?.success ? analyticsResponse : null;
+
+  const syncSchemaMutation = useSyncSchemaMutation();
+  const enableExtensionMutation = useEnableExtensionMutation();
+
   const [activeTab, setActiveTab] = useState<'chatsql' | 'database'>('chatsql');
-  const [enablingExtension, setEnablingExtension] = useState(false);
 
   // Query Performance table state
   const [queryPerfPage, setQueryPerfPage] = useState(0);
@@ -104,58 +110,35 @@ export default function ConnectionOverview() {
   const [queryFilter, setQueryFilter] = useState<'table' | 'all'>('table');
   const QUERIES_PER_PAGE = 5;
 
-  useEffect(() => {
-    if (connectionId) {
-      fetchAnalytics();
-    }
-  }, [connectionId]);
+  const syncingSchema = syncSchemaMutation.isPending;
+  const enablingExtension = enableExtensionMutation.isPending;
 
-  const fetchAnalytics = async () => {
-    try {
-      setLoading(true);
-      const response = await connectionService.getConnectionAnalytics(connectionId!);
-      if (response.success) {
-        setAnalytics(response);
-      }
-    } catch (error: any) {
-      console.error('Failed to fetch analytics:', error);
-      toast.error('Failed to load database analytics');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const [syncingSchema, setSyncingSchema] = useState(false);
-
-  const handleSyncSchema = async () => {
-    try {
-      setSyncingSchema(true);
-      const response = await connectionService.syncSchema(connectionId!);
-      if (response.success) {
+  const handleSyncSchema = () => {
+    if (!connectionId) return;
+    syncSchemaMutation.mutate(connectionId, {
+      onSuccess: () => {
         toast.success('Schema sync job started successfully');
-      }
-    } catch (error: any) {
-      console.error('Failed to sync schema:', error);
-      toast.error(error.response?.data?.error || 'Failed to start schema sync');
-    } finally {
-      setSyncingSchema(false);
-    }
+      },
+      onError: (error: any) => {
+        toast.error(error.response?.data?.error || 'Failed to start schema sync');
+      },
+    });
   };
 
-  const handleEnableExtension = async (extensionName: string) => {
-    try {
-      setEnablingExtension(true);
-      const response = await connectionService.enableExtension(connectionId!, extensionName);
-      if (response.success) {
-        toast.success(response.message || `Extension ${extensionName} enabled!`);
-        fetchAnalytics(); // Refresh data
+  const handleEnableExtension = (extensionName: string) => {
+    if (!connectionId) return;
+    enableExtensionMutation.mutate(
+      { connectionId, extensionName },
+      {
+        onSuccess: (response: any) => {
+          toast.success(response.message || `Extension ${extensionName} enabled!`);
+          fetchAnalytics(); // Refresh data
+        },
+        onError: (error: any) => {
+          toast.error(error.response?.data?.error || `Failed to enable ${extensionName}`);
+        },
       }
-    } catch (error: any) {
-      console.error('Failed to enable extension:', error);
-      toast.error(error.response?.data?.error || `Failed to enable ${extensionName}`);
-    } finally {
-      setEnablingExtension(false);
-    }
+    );
   };
 
   // Extract data for memoization (must be before early returns due to React hooks rules)

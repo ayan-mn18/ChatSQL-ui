@@ -22,8 +22,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { TableSchema } from '@/types';
-import useConnections from '@/hooks/useConnections';
-import useSchemas from '@/hooks/useSchemas';
+import { useConnectionsQuery, useSchemasQuery, useTablesQuery } from '@/hooks/useQueries';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserAvatar } from '@/components/UserAvatar';
 import {
@@ -34,6 +33,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useQueryClient } from '@tanstack/react-query';
+import { connectionService } from '@/services/connection.service';
+import { queryKeys } from '@/hooks/useQueries';
 
 interface ConnectionSidebarProps {
   className?: string;
@@ -47,22 +49,19 @@ export function ConnectionSidebar({ className, onClose, isCollapsed = false, onT
   const id = connectionId;
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { connections, fetchConnections } = useConnections();
-  const {
-    schemas,
-    tables,
-    isLoading,
-    isLoadingTables,
-    fetchSchemas,
-    fetchTables,
-    areTablesLoaded
-  } = useSchemas();
+  const queryClient = useQueryClient();
+
+  // TanStack Query hooks
+  const { data: connections = [] } = useConnectionsQuery();
+  const { data: schemas = [], isLoading } = useSchemasQuery(id);
 
   const [expandedSchemas, setExpandedSchemas] = useState<Record<string, boolean>>({});
   const [expandedTables, setExpandedTables] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [isHovered, setIsHovered] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  // Track which schemas have been toggled so we can enable their table queries
+  const [enabledSchemas, setEnabledSchemas] = useState<Set<string>>(new Set());
 
   // Sidebar is expanded when not collapsed, or when hovered/dropdown open
   const isExpanded = !isCollapsed || isHovered || isDropdownOpen;
@@ -78,44 +77,34 @@ export function ConnectionSidebar({ className, onClose, isCollapsed = false, onT
     }
   };
 
-  // Fetch connection if not loaded
-  useEffect(() => {
-    if (connections.length === 0) {
-      fetchConnections();
-    }
-  }, [connections.length, fetchConnections]);
-
-  // Fetch schemas when connection changes
-  useEffect(() => {
-    if (id && connection?.schema_synced) {
-      fetchSchemas(id);
-    }
-  }, [id, connection?.schema_synced, fetchSchemas]);
-
-  // Auto-expand public schema and fetch its tables
+  // Auto-expand public schema when schemas load
   const hasAutoExpandedRef = useRef(false);
 
   useEffect(() => {
     if (schemas.length > 0 && id && !hasAutoExpandedRef.current) {
-      const publicSchema = schemas.find(s => s.schema_name === 'public');
+      const publicSchema = schemas.find((s: any) => s.schema_name === 'public');
       if (publicSchema) {
         setExpandedSchemas(prev => ({ ...prev, public: true }));
-        if (!areTablesLoaded('public')) {
-          fetchTables(id, 'public');
-        }
+        setEnabledSchemas(prev => new Set(prev).add('public'));
         hasAutoExpandedRef.current = true;
       }
     }
-  }, [schemas, id, areTablesLoaded, fetchTables]);
+  }, [schemas, id]);
+
+  // Reset auto-expand when connectionId changes
+  useEffect(() => {
+    hasAutoExpandedRef.current = false;
+    setExpandedSchemas({});
+    setExpandedTables({});
+    setEnabledSchemas(new Set());
+  }, [id]);
 
   // Toggle schema expansion
-  const toggleSchema = async (schemaName: string) => {
+  const toggleSchema = (schemaName: string) => {
     const isExpanding = !expandedSchemas[schemaName];
     setExpandedSchemas(prev => ({ ...prev, [schemaName]: isExpanding }));
-
-    // Fetch tables if expanding and not yet loaded
-    if (isExpanding && id && !areTablesLoaded(schemaName)) {
-      await fetchTables(id, schemaName);
+    if (isExpanding) {
+      setEnabledSchemas(prev => new Set(prev).add(schemaName));
     }
   };
 
@@ -125,127 +114,17 @@ export function ConnectionSidebar({ className, onClose, isCollapsed = false, onT
   };
 
   // Filter schemas and tables based on search
-  const filteredData = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return { schemas, matchedTables: {} as Record<string, string[]> };
-    }
-
+  // Note: table filtering now happens in SchemaSection component since tables are fetched per-schema
+  const filteredSchemas = useMemo(() => {
+    if (!searchQuery.trim()) return schemas;
     const query = searchQuery.toLowerCase();
-    const matchedTables: Record<string, string[]> = {};
-
-    const filteredSchemas = schemas.filter(schema => {
-      // Check if schema name matches
-      if (schema.schema_name.toLowerCase().includes(query)) {
-        return true;
-      }
-
-      // Check if any table in this schema matches
-      const schemaTables = tables[schema.schema_name] || [];
-      const matchingTables = schemaTables.filter(t =>
-        t.table_name.toLowerCase().includes(query) ||
-        t.columns?.some(c => c.name.toLowerCase().includes(query))
-      );
-
-      if (matchingTables.length > 0) {
-        matchedTables[schema.schema_name] = matchingTables.map(t => t.table_name);
-        return true;
-      }
-
-      return false;
-    });
-
-    return { schemas: filteredSchemas, matchedTables };
-  }, [schemas, tables, searchQuery]);
+    return schemas.filter((schema: any) => schema.schema_name.toLowerCase().includes(query));
+  }, [schemas, searchQuery]);
 
   // Navigate to table view
   const navigateToTable = (schemaName: string, tableName: string) => {
     navigate(`/dashboard/connection/${id}/table/${schemaName}/${tableName}`);
     if (onClose) onClose();
-  };
-
-  // Render table with columns - Compact
-  const renderTable = (table: TableSchema, schemaName: string) => {
-    const isTableExpanded = expandedTables[`${schemaName}.${table.table_name}`];
-    const tableKey = `${schemaName}.${table.table_name}`;
-
-    return (
-      <div key={tableKey}>
-        <div className="flex items-center">
-          {/* Toggle columns button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleTable(tableKey);
-            }}
-            className="p-0.5 text-gray-500 hover:text-white rounded transition-colors"
-          >
-            {isTableExpanded ? (
-              <ChevronDown className="w-2.5 h-2.5" />
-            ) : (
-              <ChevronRight className="w-2.5 h-2.5" />
-            )}
-          </button>
-
-          {/* Table name */}
-          <button
-            onClick={() => navigateToTable(schemaName, table.table_name)}
-            className="flex items-center gap-1 flex-1 px-1 py-0.5 text-[11px] text-gray-400 hover:text-white hover:bg-white/5 rounded transition-colors"
-          >
-            <Table className="w-2.5 h-2.5 shrink-0 text-gray-500" />
-            <span className="truncate flex-1 text-left">{table.table_name}</span>
-            {table.table_type === 'VIEW' && (
-              <span className="text-[8px] bg-purple-500/20 text-purple-400 px-0.5 rounded">V</span>
-            )}
-          </button>
-        </div>
-
-        {/* Columns - Compact */}
-        {isTableExpanded && table.columns && (
-          <div className="ml-4 border-l border-white/5 pl-1.5 py-0.5">
-            {table.columns.map((col, idx) => (
-              <TooltipProvider key={idx}>
-                <Tooltip delayDuration={200}>
-                  <TooltipTrigger asChild>
-                    <div className="flex items-center gap-1 px-1 py-px text-[10px] text-gray-500 hover:text-gray-300 cursor-default">
-                      <span className="w-2.5 h-2.5 flex items-center justify-center shrink-0">
-                        {col.is_primary_key ? (
-                          <Key className="w-2 h-2 text-yellow-500" />
-                        ) : col.is_foreign_key ? (
-                          <Link2 className="w-2 h-2 text-blue-400" />
-                        ) : null}
-                      </span>
-                      <span className={cn(
-                        "truncate flex-1",
-                        col.is_primary_key && "text-yellow-500/80",
-                        col.is_foreign_key && "text-blue-400/80"
-                      )}>
-                        {col.name}
-                      </span>
-                      <span className="text-gray-600 font-mono text-[9px] shrink-0">
-                        {col.udt_name || col.data_type}
-                      </span>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" className="max-w-xs text-xs">
-                    <div className="space-y-0.5">
-                      <p className="font-medium">{col.name}</p>
-                      <p className="text-gray-400">Type: {col.data_type}</p>
-                      {col.is_nullable && <p className="text-gray-400">Nullable</p>}
-                      {col.default_value && <p className="text-gray-400">Default: {col.default_value}</p>}
-                      {col.foreign_key_ref && (
-                        <p className="text-blue-400">
-                          FK → {col.foreign_key_ref.table}.{col.foreign_key_ref.column}
-                        </p>
-                      )}
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ))}
-          </div>
-        )}
-      </div>
-    );
   };
 
   if (!connection) {
@@ -361,65 +240,25 @@ export function ConnectionSidebar({ className, onClose, isCollapsed = false, onT
             {/* Schemas Tree - Compact */}
             <ScrollArea className="flex-1">
               <div className="space-y-px pb-2 px-1">
-                {filteredData.schemas.length === 0 && !isLoading ? (
+                {filteredSchemas.length === 0 && !isLoading ? (
                   <div className="px-2 py-3 text-center text-gray-500 text-[10px]">
                     {connection.schema_synced ? 'No schemas' : 'Syncing...'}
                   </div>
                 ) : (
-                  filteredData.schemas.map(schema => {
-                    const isSchemaExpanded = expandedSchemas[schema.schema_name];
-                    const schemaTables = tables[schema.schema_name] || [];
-                    const isLoadingThisSchema = isLoadingTables[schema.schema_name];
-
-                    return (
-                      <div key={schema.id}>
-                        {/* Schema Header - Compact */}
-                        <button
-                          onClick={() => toggleSchema(schema.schema_name)}
-                          className={cn(
-                            "flex items-center gap-1 w-full px-1.5 py-1 text-[11px] rounded transition-colors group",
-                            isSchemaExpanded ? "text-white bg-white/5" : "text-gray-400 hover:text-white hover:bg-white/5"
-                          )}
-                        >
-                          {isLoadingThisSchema ? (
-                            <Loader2 className="w-3 h-3 text-gray-500 animate-spin shrink-0" />
-                          ) : (
-                            <ChevronRight className={cn(
-                              "w-3 h-3 text-gray-500 transition-transform shrink-0",
-                              isSchemaExpanded && "rotate-90"
-                            )} />
-                          )}
-                          <Database className={cn(
-                            "w-3 h-3 shrink-0",
-                            isSchemaExpanded ? "text-blue-400" : "text-gray-500"
-                          )} />
-                          <span className="truncate flex-1 text-left font-medium">{schema.schema_name}</span>
-                          <span className="text-[9px] text-gray-600 bg-white/5 px-1 rounded">
-                            {schema.table_count}
-                          </span>
-                        </button>
-
-                        {/* Tables - Compact */}
-                        {isSchemaExpanded && (
-                          <div className="ml-3 pl-2 border-l border-white/10 space-y-px">
-                            {schemaTables.length === 0 && !isLoadingThisSchema ? (
-                              <div className="px-2 py-1.5 text-[10px] text-gray-500 italic">
-                                Empty
-                              </div>
-                            ) : (
-                              schemaTables
-                                .filter(t => {
-                                  if (!searchQuery.trim()) return true;
-                                  const matched = filteredData.matchedTables[schema.schema_name];
-                                  return matched?.includes(t.table_name);
-                                })
-                                .map(table => renderTable(table, schema.schema_name))
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
+                  filteredSchemas.map((schema: any) => (
+                    <SchemaSectionItem
+                      key={schema.id}
+                      schema={schema}
+                      connectionId={id!}
+                      isSchemaExpanded={!!expandedSchemas[schema.schema_name]}
+                      onToggleSchema={toggleSchema}
+                      expandedTables={expandedTables}
+                      onToggleTable={toggleTable}
+                      searchQuery={searchQuery}
+                      onNavigateToTable={navigateToTable}
+                      enabled={enabledSchemas.has(schema.schema_name)}
+                    />
+                  ))
                 )}
               </div>
             </ScrollArea>
@@ -488,6 +327,187 @@ export function ConnectionSidebar({ className, onClose, isCollapsed = false, onT
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+    </div>
+  );
+}
+
+// ============================================
+// SchemaSectionItem — renders a single schema with its tables (fetched via TanStack Query)
+// ============================================
+
+interface SchemaSectionItemProps {
+  schema: any;
+  connectionId: string;
+  isSchemaExpanded: boolean;
+  onToggleSchema: (name: string) => void;
+  expandedTables: Record<string, boolean>;
+  onToggleTable: (name: string) => void;
+  searchQuery: string;
+  onNavigateToTable: (schemaName: string, tableName: string) => void;
+  enabled: boolean;
+}
+
+function SchemaSectionItem({
+  schema,
+  connectionId,
+  isSchemaExpanded,
+  onToggleSchema,
+  expandedTables,
+  onToggleTable,
+  searchQuery,
+  onNavigateToTable,
+  enabled,
+}: SchemaSectionItemProps) {
+  // Only fetch tables when the schema has been expanded (enabled = true)
+  const { data: schemaTables = [], isLoading: isLoadingThisSchema } = useTablesQuery(
+    connectionId,
+    enabled ? schema.schema_name : undefined
+  );
+
+  // Filter tables by search
+  const filteredTables = useMemo(() => {
+    if (!searchQuery.trim()) return schemaTables;
+    const query = searchQuery.toLowerCase();
+    return schemaTables.filter((t: any) =>
+      t.table_name.toLowerCase().includes(query) ||
+      t.columns?.some((c: any) => c.name.toLowerCase().includes(query))
+    );
+  }, [schemaTables, searchQuery]);
+
+  return (
+    <div>
+      {/* Schema Header */}
+      <button
+        onClick={() => onToggleSchema(schema.schema_name)}
+        className={cn(
+          "flex items-center gap-1 w-full px-1.5 py-1 text-[11px] rounded transition-colors group",
+          isSchemaExpanded ? "text-white bg-white/5" : "text-gray-400 hover:text-white hover:bg-white/5"
+        )}
+      >
+        {isLoadingThisSchema ? (
+          <Loader2 className="w-3 h-3 text-gray-500 animate-spin shrink-0" />
+        ) : (
+          <ChevronRight className={cn(
+            "w-3 h-3 text-gray-500 transition-transform shrink-0",
+            isSchemaExpanded && "rotate-90"
+          )} />
+        )}
+        <Database className={cn(
+          "w-3 h-3 shrink-0",
+          isSchemaExpanded ? "text-blue-400" : "text-gray-500"
+        )} />
+        <span className="truncate flex-1 text-left font-medium">{schema.schema_name}</span>
+        <span className="text-[9px] text-gray-600 bg-white/5 px-1 rounded">
+          {schema.table_count}
+        </span>
+      </button>
+
+      {/* Tables */}
+      {isSchemaExpanded && (
+        <div className="ml-3 pl-2 border-l border-white/10 space-y-px">
+          {filteredTables.length === 0 && !isLoadingThisSchema ? (
+            <div className="px-2 py-1.5 text-[10px] text-gray-500 italic">
+              Empty
+            </div>
+          ) : (
+            filteredTables.map((table: TableSchema) => (
+              <SidebarTableItem
+                key={`${schema.schema_name}.${table.table_name}`}
+                table={table}
+                schemaName={schema.schema_name}
+                expandedTables={expandedTables}
+                onToggleTable={onToggleTable}
+                onNavigateToTable={onNavigateToTable}
+              />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================
+// SidebarTableItem — renders a single table row with expand-to-columns
+// ============================================
+
+interface SidebarTableItemProps {
+  table: TableSchema;
+  schemaName: string;
+  expandedTables: Record<string, boolean>;
+  onToggleTable: (name: string) => void;
+  onNavigateToTable: (schemaName: string, tableName: string) => void;
+}
+
+function SidebarTableItem({ table, schemaName, expandedTables, onToggleTable, onNavigateToTable }: SidebarTableItemProps) {
+  const tableKey = `${schemaName}.${table.table_name}`;
+  const isTableExpanded = expandedTables[tableKey];
+
+  return (
+    <div>
+      <div className="flex items-center">
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleTable(tableKey); }}
+          className="p-0.5 text-gray-500 hover:text-white rounded transition-colors"
+        >
+          {isTableExpanded ? <ChevronDown className="w-2.5 h-2.5" /> : <ChevronRight className="w-2.5 h-2.5" />}
+        </button>
+        <button
+          onClick={() => onNavigateToTable(schemaName, table.table_name)}
+          className="flex items-center gap-1 flex-1 px-1 py-0.5 text-[11px] text-gray-400 hover:text-white hover:bg-white/5 rounded transition-colors"
+        >
+          <Table className="w-2.5 h-2.5 shrink-0 text-gray-500" />
+          <span className="truncate flex-1 text-left">{table.table_name}</span>
+          {table.table_type === 'VIEW' && (
+            <span className="text-[8px] bg-purple-500/20 text-purple-400 px-0.5 rounded">V</span>
+          )}
+        </button>
+      </div>
+
+      {isTableExpanded && table.columns && (
+        <div className="ml-4 border-l border-white/5 pl-1.5 py-0.5">
+          {table.columns.map((col, idx) => (
+            <TooltipProvider key={idx}>
+              <Tooltip delayDuration={200}>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1 px-1 py-px text-[10px] text-gray-500 hover:text-gray-300 cursor-default">
+                    <span className="w-2.5 h-2.5 flex items-center justify-center shrink-0">
+                      {col.is_primary_key ? (
+                        <Key className="w-2 h-2 text-yellow-500" />
+                      ) : col.is_foreign_key ? (
+                        <Link2 className="w-2 h-2 text-blue-400" />
+                      ) : null}
+                    </span>
+                    <span className={cn(
+                      "truncate flex-1",
+                      col.is_primary_key && "text-yellow-500/80",
+                      col.is_foreign_key && "text-blue-400/80"
+                    )}>
+                      {col.name}
+                    </span>
+                    <span className="text-gray-600 font-mono text-[9px] shrink-0">
+                      {col.udt_name || col.data_type}
+                    </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-xs text-xs">
+                  <div className="space-y-0.5">
+                    <p className="font-medium">{col.name}</p>
+                    <p className="text-gray-400">Type: {col.data_type}</p>
+                    {col.is_nullable && <p className="text-gray-400">Nullable</p>}
+                    {col.default_value && <p className="text-gray-400">Default: {col.default_value}</p>}
+                    {col.foreign_key_ref && (
+                      <p className="text-blue-400">
+                        FK → {col.foreign_key_ref.table}.{col.foreign_key_ref.column}
+                      </p>
+                    )}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

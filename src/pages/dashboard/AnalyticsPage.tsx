@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -27,8 +26,7 @@ import {
   RefreshCw,
   Loader2,
 } from 'lucide-react';
-import { connectionService } from '@/services/connection.service';
-import toast from 'react-hot-toast';
+import { useWorkspaceAnalyticsQuery } from '@/hooks/useQueries';
 
 ChartJS.register(
   CategoryScale,
@@ -44,27 +42,7 @@ ChartJS.register(
 );
 
 export default function AnalyticsPage() {
-  const [loading, setLoading] = useState(true);
-  const [analytics, setAnalytics] = useState<any>(null);
-
-  useEffect(() => {
-    fetchAnalytics();
-  }, []);
-
-  const fetchAnalytics = async () => {
-    try {
-      setLoading(true);
-      const response = await connectionService.getWorkspaceAnalytics();
-      if (response.success) {
-        setAnalytics(response);
-      }
-    } catch (error: any) {
-      console.error('Failed to fetch workspace analytics:', error);
-      toast.error('Failed to load analytics');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: analytics, isLoading: loading } = useWorkspaceAnalyticsQuery();
 
   if (loading) {
     return (

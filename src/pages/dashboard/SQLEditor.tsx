@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Play, Sparkles, Save, Download, BarChart3, Table as TableIcon, ChevronRight, ChevronLeft, AlertCircle, ArrowUpDown, Filter, MoreHorizontal, ChevronDown, Lock, Zap } from 'lucide-react';
@@ -11,7 +11,7 @@ import Editor from 'react-simple-code-editor';
 import Prism from '@/lib/prism-setup';
 import 'prismjs/components/prism-sql';
 import 'prismjs/themes/prism-tomorrow.css';
-import { usageService } from '@/services/usage.service';
+import { useReadOnlyStatusQuery } from '@/hooks/useQueries';
 
 import {
   Chart as ChartJS,
@@ -87,22 +87,12 @@ LIMIT 100;`);
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [, setActiveTab] = useState('table');
   const [error, setError] = useState<string | null>(null);
-  const [isReadOnly, setIsReadOnly] = useState(false);
+
+  // Read-only status via TanStack Query
+  const { data: readOnlyData } = useReadOnlyStatusQuery();
+  const isReadOnly = readOnlyData?.data?.isReadOnly || false;
 
   const parser = new Parser();
-
-  // Check read-only status on mount
-  useEffect(() => {
-    const checkReadOnlyStatus = async () => {
-      try {
-        const result = await usageService.getReadOnlyStatus();
-        setIsReadOnly(result.data?.isReadOnly || false);
-      } catch (error) {
-        console.error('Failed to check read-only status:', error);
-      }
-    };
-    checkReadOnlyStatus();
-  }, []);
 
   // Helper to check if query is SELECT only
   const isSelectOnlyQuery = (sql: string): boolean => {

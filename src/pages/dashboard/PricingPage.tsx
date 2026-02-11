@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -21,7 +21,7 @@ import {
   CreditCard,
   CircleDollarSign
 } from 'lucide-react';
-import { usageService } from '@/services/usage.service';
+import { useCreateCheckoutMutation } from '@/hooks/useQueries';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
@@ -258,6 +258,7 @@ export default function PricingPage() {
   const { user } = useAuth();
   const [isYearly, setIsYearly] = useState(true);
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const checkoutMutation = useCreateCheckoutMutation();
 
   const plans: Plan[] = [
     {
@@ -375,7 +376,7 @@ export default function PricingPage() {
         throw new Error('Invalid plan selected');
       }
 
-      const result = await usageService.createCheckout(checkoutPlanType);
+      const result = await checkoutMutation.mutateAsync(checkoutPlanType);
 
       if (result.success && result.data?.checkoutUrl) {
         window.location.href = result.data.checkoutUrl;

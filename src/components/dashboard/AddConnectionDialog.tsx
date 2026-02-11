@@ -19,7 +19,7 @@ import {
   Snowflake,
   Check
 } from 'lucide-react';
-import { useConnections } from '@/hooks/useConnections';
+import { useTestConnectionMutation, useCreateConnectionMutation, useUpdateConnectionMutation } from '@/hooks/useQueries';
 import { cn } from '@/lib/utils';
 import { TestConnectionRequest, CreateConnectionRequest, UpdateConnectionRequest, ConnectionPublic } from '@/types';
 
@@ -121,10 +121,11 @@ export function AddConnectionDialog({
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(1);
   const [selectedProvider, setSelectedProvider] = useState<typeof DB_PROVIDERS[0] | null>(null);
-  const [testing, setTesting] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const { testConnection, createConnection, updateConnection } = useConnections();
+
+  const testConnectionMutation = useTestConnectionMutation();
+  const createConnectionMutation = useCreateConnectionMutation();
+  const updateConnectionMutation = useUpdateConnectionMutation();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -188,7 +189,6 @@ export function AddConnectionDialog({
       return;
     }
 
-    setTesting(true);
     setTestStatus('idle');
 
     try {
@@ -202,7 +202,7 @@ export function AddConnectionDialog({
         ssl: formData.ssl,
       };
 
-      const result = await testConnection(connectionData);
+      const result = await testConnectionMutation.mutateAsync(connectionData);
 
       if (result.success) {
         setTestStatus('success');
@@ -219,12 +219,10 @@ export function AddConnectionDialog({
       }
     } catch (e: any) {
       setTestStatus('error');
-      const errorMessage = e.message || 'Failed to test connection';
+      const errorMessage = e.response?.data?.error || e.message || 'Failed to test connection';
       toast.error(errorMessage, {
         duration: 4000,
       });
-    } finally {
-      setTesting(false);
     }
   };
 
@@ -239,8 +237,6 @@ export function AddConnectionDialog({
       toast.error('Please enter a connection name');
       return;
     }
-
-    setSaving(true);
 
     try {
       if (connectionToEdit) {
@@ -259,7 +255,7 @@ export function AddConnectionDialog({
           updateData.password = formData.password.trim();
         }
 
-        await updateConnection(connectionToEdit.id, updateData);
+        await updateConnectionMutation.mutateAsync({ id: connectionToEdit.id, data: updateData });
         toast.success('Connection updated successfully');
       } else {
         // Create new connection
@@ -273,7 +269,7 @@ export function AddConnectionDialog({
           ssl: formData.ssl,
         };
 
-        await createConnection(createData);
+        await createConnectionMutation.mutateAsync(createData);
         toast.success('Connection saved! Schema sync started in background.');
       }
 
@@ -281,10 +277,8 @@ export function AddConnectionDialog({
       onConnectionAdded();
       resetForm();
     } catch (e: any) {
-      const errorMessage = e.message || 'Failed to save connection';
+      const errorMessage = e.response?.data?.error || e.message || 'Failed to save connection';
       toast.error(errorMessage);
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -292,7 +286,6 @@ export function AddConnectionDialog({
     setStep(1);
     setSelectedProvider(null);
     setTestStatus('idle');
-    setSaving(false);
     setFormData({
       name: '',
       type: 'postgres' as 'postgres' | 'mysql' | 'mongodb',
@@ -304,6 +297,10 @@ export function AddConnectionDialog({
       ssl: true
     });
   };
+
+  // Derived loading states from mutations
+  const testing = testConnectionMutation.isPending;
+  const saving = createConnectionMutation.isPending || updateConnectionMutation.isPending;
 
   const handleOpenChange = (newOpen: boolean) => {
     setOpen(newOpen);

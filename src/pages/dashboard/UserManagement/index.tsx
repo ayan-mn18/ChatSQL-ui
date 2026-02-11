@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import {
@@ -8,6 +8,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useViewersQuery, useConnectionsQuery } from '@/hooks/useQueries';
 import {
   ViewerList,
   CreateViewerWizard,
@@ -19,10 +20,22 @@ import {
 import type { Viewer, Connection, PermissionState, CreateViewerData } from './types';
 
 export function UserManagementPage() {
-  // Data state
-  const [viewers, setViewers] = useState<Viewer[]>([]);
+  // TanStack Query for viewers
+  const { data: viewersData, isLoading: viewersLoading, refetch: refetchViewers } = useViewersQuery();
+  const rawViewers = viewersData?.data || [];
+  const viewers: Viewer[] = rawViewers.map((v: any) => ({
+    ...v,
+    name: v.username || v.email.split('@')[0],
+    status: v.mustChangePassword ? 'pending' : (v.isActive ? 'active' : 'inactive'),
+    created_at: v.createdAt,
+  }));
+
+  // TanStack Query for connections
+  const { data: connectionsRaw, isLoading: connectionsLoading } = useConnectionsQuery();
+
+  // Fetch schema details for each connection (complex nested fetch, keep manual for now)
   const [connections, setConnections] = useState<Connection[]>([]);
-  const [loading, setLoading] = useState(true);
+  const loading = viewersLoading || connectionsLoading;
 
   // Modal states
   const [showCreateWizard, setShowCreateWizard] = useState(false);
@@ -36,39 +49,16 @@ export function UserManagementPage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Fetch viewers
-  const fetchViewers = useCallback(async () => {
-    try {
-      const response = await api.get('/viewers');
-      // Transform API response to match our UI types
-      const rawViewers = response.data.data || [];
-      const transformedViewers = rawViewers.map((v: any) => ({
-        ...v,
-        name: v.username || v.email.split('@')[0],
-        status: v.mustChangePassword ? 'pending' : (v.isActive ? 'active' : 'inactive'),
-        created_at: v.createdAt,
-      }));
-      setViewers(transformedViewers);
-    } catch (error) {
-      console.error('Error fetching viewers:', error);
-      toast.error('Failed to load viewers');
-    }
-  }, []);
-
-  // Fetch connections with schemas and tables
-  const fetchConnections = useCallback(async () => {
-    try {
-      const response = await api.get('/connections');
-      const connectionsData = response.data.connections || response.data.data || [];
-
-      // Fetch schema details for each connection
+  // Fetch connection details with schemas/tables when connections list changes
+  useEffect(() => {
+    if (!connectionsRaw?.length) return;
+    const fetchConnectionDetails = async () => {
+      const connectionsData = connectionsRaw;
       const connectionsWithSchemas = await Promise.all(
         connectionsData.map(async (conn: any) => {
           try {
             const schemaResponse = await api.get(`/connections/${conn.id}/schemas`);
             const schemasData = schemaResponse.data.data || schemaResponse.data.schemas || [];
-
-            // Fetch tables for each schema
             const schemasWithTables = await Promise.all(
               schemasData.map(async (schema: any) => {
                 try {
@@ -88,7 +78,6 @@ export function UserManagementPage() {
                 }
               })
             );
-
             return {
               id: conn.id,
               name: conn.name,
@@ -109,22 +98,10 @@ export function UserManagementPage() {
           }
         })
       );
-
       setConnections(connectionsWithSchemas);
-    } catch (error) {
-      console.error('Error fetching connections:', error);
-    }
-  }, []);
-
-  // Initial load
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      await Promise.all([fetchViewers(), fetchConnections()]);
-      setLoading(false);
     };
-    loadData();
-  }, [fetchViewers, fetchConnections]);
+    fetchConnectionDetails();
+  }, [connectionsRaw]);
 
   // Create viewer
   const handleCreateViewer = async (data: CreateViewerData) => {
@@ -220,7 +197,7 @@ export function UserManagementPage() {
 
       toast.success(`Viewer ${data.name} created successfully`);
       setShowCreateWizard(false);
-      fetchViewers();
+      refetchViewers();
     } catch (error: any) {
       const errorMsg = error.response?.data?.error || error.response?.data?.message || 'Failed to create viewer';
 
@@ -246,7 +223,7 @@ export function UserManagementPage() {
       await api.put(`/viewers/${viewerId}`, data);
       toast.success('Viewer updated successfully');
       setEditingViewer(null);
-      fetchViewers();
+      refetchViewers();
     } catch (error: any) {
       const message = error.response?.data?.message || 'Failed to update viewer';
       toast.error(message);
@@ -287,7 +264,7 @@ export function UserManagementPage() {
 
       toast.success('Permissions updated successfully');
       setManagingPermissionsFor(null);
-      fetchViewers();
+      refetchViewers();
     } catch (error: any) {
       const message = error.response?.data?.message || 'Failed to update permissions';
       toast.error(message);
@@ -303,7 +280,7 @@ export function UserManagementPage() {
       await api.delete(`/viewers/${viewerId}`);
       toast.success('Viewer removed successfully');
       setDeletingViewer(null);
-      fetchViewers();
+      refetchViewers();
     } catch (error: any) {
       const message = error.response?.data?.message || 'Failed to remove viewer';
       toast.error(message);
@@ -323,7 +300,7 @@ export function UserManagementPage() {
       }
       toast.success(`Viewer ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`);
       setTogglingStatusFor(null);
-      fetchViewers();
+      refetchViewers();
     } catch (error: any) {
       const message = error.response?.data?.message || 'Failed to update status';
       toast.error(message);

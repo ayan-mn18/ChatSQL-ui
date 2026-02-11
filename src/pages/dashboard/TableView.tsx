@@ -71,7 +71,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useTableData } from '@/hooks/useTableData';
+import { useTableDataManager } from '@/hooks/useTableDataManager';
+import { useErdRelationsQuery, useReadOnlyStatusQuery } from '@/hooks/useQueries';
 import { useTableTabs } from '@/contexts/TableTabsContext';
 import { TableTabsBar } from '@/components/dashboard/TableTabsBarEnhanced';
 import { AdvancedFilterBuilder, TableSearchBar, ColumnManager, WhereClauseEditor, highlightSearchMatch, type TableSearchState, type ColumnConfig } from '@/components/table';
@@ -81,7 +82,6 @@ import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import Editor from '@monaco-editor/react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { usageService } from '@/services/usage.service';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { initializeColumnWidths, saveColumnWidths } from '@/lib/column-width';
 import ColumnResizeHandle from '@/components/ColumnResizeHandle';
@@ -205,8 +205,7 @@ export default function TableView() {
     loading,
     mutating,
     error,
-    fetchData,
-    fetchColumns,
+    // fetchData and fetchColumns are handled internally by TanStack Query
     refetch,
     goToPage,
     setPageSize,
@@ -217,7 +216,7 @@ export default function TableView() {
     updateRow,
     deleteRow,
     currentOptions,
-  } = useTableData(connectionId || '', schemaName || '', tableName || '', {
+  } = useTableDataManager(connectionId || '', schemaName || '', tableName || '', {
     page: initialPage,
     pageSize: initialPageSize,
   });
@@ -227,9 +226,12 @@ export default function TableView() {
   const [showInsertDialog, setShowInsertDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [insertValues, setInsertValues] = useState<Record<string, string>>({});
-  const [relations, setRelations] = useState<ERDRelation[]>([]);
   const [highlightedRows, setHighlightedRows] = useState<Set<number>>(new Set());
-  const [isReadOnly, setIsReadOnly] = useState(false);
+
+  // TanStack Query hooks for relations and read-only status
+  const { data: relations = [] } = useErdRelationsQuery(connectionId);
+  const { data: readOnlyData } = useReadOnlyStatusQuery();
+  const isReadOnly = readOnlyData?.data?.isReadOnly || false;
 
   // Search state
   const [searchState, setSearchState] = useState<TableSearchState>({
@@ -312,39 +314,10 @@ export default function TableView() {
     }
   }, [connectionId, schemaName, tableName, addTab]);
 
-  // Check read-only status on mount
-  useEffect(() => {
-    const checkReadOnlyStatus = async () => {
-      try {
-        const result = await usageService.getReadOnlyStatus();
-        setIsReadOnly(result.data?.isReadOnly || false);
-      } catch (error) {
-        console.error('Failed to check read-only status:', error);
-      }
-    };
-    checkReadOnlyStatus();
-  }, []);
+  // Data and columns are fetched automatically by useTableDataManager (TanStack Query)
+  // No manual useEffect needed for initial fetch
 
-  // Fetch data on mount
-  useEffect(() => {
-    if (connectionId && schemaName && tableName) {
-      fetchData();
-      fetchColumns();
-    }
-  }, [connectionId, schemaName, tableName]);
-
-  // Fetch relations for FK highlighting
-  useEffect(() => {
-    if (connectionId) {
-      connectionService.getRelations(connectionId).then(res => {
-        if (res.success && res.data) {
-          setRelations(res.data);
-        }
-      }).catch(() => {
-        // Silently fail - FK highlighting is optional
-      });
-    }
-  }, [connectionId]);
+  // Relations for FK highlighting are fetched via useErdRelationsQuery above
 
   // Close FK menu on click outside
   useEffect(() => {
@@ -400,7 +373,7 @@ export default function TableView() {
     if (!relations || !schemaName || !tableName) return new Map<string, ERDRelation>();
 
     const fkMap = new Map<string, ERDRelation>();
-    relations.forEach(rel => {
+    relations.forEach((rel: ERDRelation) => {
       if (rel.source_schema === schemaName && rel.source_table === tableName) {
         fkMap.set(rel.source_column, rel);
       }

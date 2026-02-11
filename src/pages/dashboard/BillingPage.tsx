@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,7 @@ import {
   Infinity,
 } from 'lucide-react';
 import { usageService, type SubscriptionInfo, type PaymentRecord } from '@/services/usage.service';
+import { useSubscriptionQuery, usePaymentsQuery, useCancelSubscriptionMutation } from '@/hooks/useQueries';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -326,62 +327,28 @@ function PaymentHistoryTable({
 }
 
 export default function BillingPage() {
-  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
-  const [planType, setPlanType] = useState<string>('free');
-  const [isReadOnly, setIsReadOnly] = useState(false);
-  const [payments, setPayments] = useState<PaymentRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isPaymentsLoading, setIsPaymentsLoading] = useState(true);
-  const [isCancelling, setIsCancelling] = useState(false);
+  // TanStack Query hooks
+  const { data: subscriptionData, isLoading, refetch: refetchSubscription } = useSubscriptionQuery();
+  const { data: paymentsData, isLoading: isPaymentsLoading } = usePaymentsQuery();
+  const cancelMutation = useCancelSubscriptionMutation();
 
-  useEffect(() => {
-    fetchSubscription();
-    fetchPayments();
-  }, []);
-
-  const fetchSubscription = async () => {
-    try {
-      const result = await usageService.getSubscription();
-      if (result.success && result.data) {
-        setSubscription(result.data.subscription);
-        setPlanType(result.data.planType || 'free');
-        setIsReadOnly(result.data.isReadOnly);
-      }
-    } catch (error) {
-      console.error('Failed to fetch subscription:', error);
-      toast.error('Failed to load subscription details');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const fetchPayments = async () => {
-    try {
-      const result = await usageService.getPaymentHistory();
-      if (result.success) {
-        setPayments(result.data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch payments:', error);
-    } finally {
-      setIsPaymentsLoading(false);
-    }
-  };
+  const subscription: SubscriptionInfo | null = subscriptionData?.data?.subscription || null;
+  const planType: string = subscriptionData?.data?.planType || 'free';
+  const isReadOnly: boolean = subscriptionData?.data?.isReadOnly || false;
+  const payments: PaymentRecord[] = paymentsData?.data || [];
+  const isCancelling = cancelMutation.isPending;
 
   const handleCancelSubscription = async () => {
-    setIsCancelling(true);
     try {
-      const result = await usageService.cancelSubscription();
+      const result = await cancelMutation.mutateAsync();
       if (result.success) {
         toast.success('Subscription will be cancelled at the end of your billing period');
-        fetchSubscription(); // Refresh
+        refetchSubscription();
       } else {
         toast.error(result.message || 'Failed to cancel subscription');
       }
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to cancel subscription');
-    } finally {
-      setIsCancelling(false);
     }
   };
 

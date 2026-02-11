@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Chart as ChartJS,
@@ -42,6 +42,7 @@ import {
   PieChart
 } from 'lucide-react';
 import { usageService, type UsageDashboardData, type PlanConfiguration } from '@/services/usage.service';
+import { useUsageDashboardQuery, useAvailablePlansQuery } from '@/hooks/useQueries';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 
@@ -221,36 +222,15 @@ function UsageDashboardSkeleton() {
 
 export default function UsageDashboard() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<UsageDashboardData | null>(null);
-  const [plans, setPlans] = useState<PlanConfiguration[]>([]);
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  // TanStack Query hooks
+  const { data: dashboardRes, isLoading: dashboardLoading } = useUsageDashboardQuery();
+  const { data: plansRes, isLoading: plansLoading } = useAvailablePlansQuery();
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const [dashboardRes, plansRes] = await Promise.all([
-        usageService.getDashboard(),
-        usageService.getAvailablePlans(),
-      ]);
-
-      if (dashboardRes.success) {
-        setData(dashboardRes.data);
-      }
-      if (plansRes.success) {
-        setPlans(plansRes.data);
-      }
-    } catch (error: any) {
-      console.error('Failed to fetch usage data:', error);
-      toast.error('Failed to load usage data');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const loading = dashboardLoading || plansLoading;
+  const data: UsageDashboardData | null = dashboardRes?.data || null;
+  const plans: PlanConfiguration[] = plansRes?.data || [];
 
   // Chart data
   const tokenTrendData = useMemo(() => {

@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { NavLink, useNavigate, Link } from 'react-router-dom';
 import { Database, Users, Zap, LogOut, User as UserIcon, ChevronUp, Sparkles, CreditCard, Crown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
-import { viewerService } from '@/services/viewer.service';
+import { useCurrentUserRoleQuery } from '@/hooks/useQueries';
 import { UserAvatar } from '@/components/UserAvatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,29 +32,11 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const [canViewAnalytics, setCanViewAnalytics] = useState<boolean>(true);
-
   const isViewer = user?.role === 'viewer';
 
-  useEffect(() => {
-    let cancelled = false;
-    const loadViewerRole = async () => {
-      if (!isViewer) {
-        setCanViewAnalytics(true);
-        return;
-      }
-      try {
-        const role = await viewerService.getCurrentUserRole();
-        if (!cancelled) setCanViewAnalytics(!!role.permissions?.canViewAnalytics);
-      } catch {
-        if (!cancelled) setCanViewAnalytics(false);
-      }
-    };
-    void loadViewerRole();
-    return () => {
-      cancelled = true;
-    };
-  }, [isViewer]);
+  // Fetch viewer role via TanStack Query (only enabled for viewer users)
+  const { data: roleData } = useCurrentUserRoleQuery();
+  const canViewAnalytics = isViewer ? !!roleData?.permissions?.canViewAnalytics : true;
 
   const filteredNavItems = isViewer
     ? navItems
