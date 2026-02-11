@@ -257,6 +257,7 @@ export interface TableColumnDef {
   max_length?: number;
   numeric_precision?: number;
   column_comment?: string;
+  enum_values?: string[];
 }
 
 export interface IndexDef {

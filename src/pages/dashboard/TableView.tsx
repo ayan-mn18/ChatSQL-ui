@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 
 import {
+  Check,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
@@ -30,6 +31,7 @@ import {
   ClipboardPaste,
   Rows3,
   Lock,
+  X,
   Zap,
 } from 'lucide-react';
 import {
@@ -270,12 +272,25 @@ export default function TableView() {
     originalValue: any;
   } | null>(null);
 
+  // Inline cell editing state (for short varchar and enum columns)
+  const [inlineEdit, setInlineEdit] = useState<{
+    rowIndex: number;
+    column: string;
+    value: string;
+    originalValue: any;
+    type: 'text' | 'enum';
+    enumValues?: string[];
+  } | null>(null);
+  const inlineInputRef = useRef<HTMLInputElement>(null);
+  const inlineSelectRef = useRef<HTMLButtonElement>(null);
+
   // Calculate modal size based on content
   const isJsonEdit = useMemo(() => {
     if (!editModalData) return false;
     const columnMeta = columnsMetadata?.columns?.find((c: any) => c.name === editModalData.column);
     const value = editModalData.value || '';
-    return columnMeta?.type?.includes('json') ||
+    const colType = columnMeta?.data_type || columnMeta?.type || '';
+    return colType.includes('json') ||
       (value.trim().startsWith('{') || value.trim().startsWith('['));
   }, [editModalData, columnsMetadata]);
 
@@ -485,6 +500,53 @@ export default function TableView() {
     return 'normal';
   }, [primaryKeyColumn, foreignKeyColumns]);
 
+  // Get rich column metadata (backend returns TableColumnDef shape in the JSONB)
+  const getColumnDef = useCallback((column: string): TableColumnDef | undefined => {
+    return (columnsMetadata?.columns as unknown as TableColumnDef[])?.find(c => c.name === column);
+  }, [columnsMetadata]);
+
+  /**
+   * Determine the editing mode for a column:
+   * - 'inline': short text (varchar ≤ 255, text-like types ≤ 255, or small types)
+   * - 'enum': enum column with predefined values → dropdown
+   * - 'modal': JSON, large text, or anything else → full dialog
+   */
+  const getEditMode = useCallback((column: string): 'inline' | 'enum' | 'modal' => {
+    const def = getColumnDef(column);
+    if (!def) return 'modal';
+
+    // Enum columns with values available
+    if (def.enum_values && def.enum_values.length > 0) return 'enum';
+
+    // Short varchar / character varying (max_length ≤ 255)
+    const dt = def.data_type.toLowerCase();
+    const udt = def.udt_name.toLowerCase();
+
+    // JSON types always use modal
+    if (udt === 'json' || udt === 'jsonb' || dt.includes('json')) return 'modal';
+
+    // Array types use modal
+    if (udt.startsWith('_') || dt.includes('ARRAY')) return 'modal';
+
+    // varchar / character varying with explicit short max_length
+    if ((udt === 'varchar' || dt.startsWith('character varying')) && def.max_length && def.max_length <= 255) {
+      return 'inline';
+    }
+
+    // Small fixed-size types: boolean, integer, smallint, bigint, numeric, real, double, date, time, uuid
+    const inlineTypes = ['bool', 'int2', 'int4', 'int8', 'float4', 'float8', 'numeric', 'date', 'time', 'timetz', 'uuid', 'char', 'bpchar'];
+    if (inlineTypes.includes(udt)) return 'inline';
+
+    // text type without max_length → modal (could be huge)
+    if (udt === 'text' || udt === 'varchar') return 'modal';
+
+    // timestamp types → inline (short enough)
+    if (udt.startsWith('timestamp')) return 'inline';
+
+    // Everything else → modal to be safe
+    return 'modal';
+  }, [getColumnDef]);
+
   // Copy cell value to clipboard (direct copy - used internally)
   const copyToClipboard = useCallback((value: any) => {
     if (value === null || value === undefined) {
@@ -585,7 +647,7 @@ export default function TableView() {
     }
 
     const columnType = getColumnType(column);
-    // Check if it's PK or FK - show warning first
+    // Check if it's PK or FK - show warning first (always use modal for PK/FK)
     if (columnType === 'primary') {
       setPendingEdit({ rowIndex, column, value });
       setShowPkWarning(true);
@@ -598,7 +660,34 @@ export default function TableView() {
       return;
     }
 
-    // Open modal for editing
+    // Determine edit mode based on column definition
+    const editMode = getEditMode(column);
+
+    if (editMode === 'enum') {
+      const def = getColumnDef(column);
+      setInlineEdit({
+        rowIndex,
+        column,
+        value: strValue,
+        originalValue: value,
+        type: 'enum',
+        enumValues: def?.enum_values || [],
+      });
+      return;
+    }
+
+    if (editMode === 'inline') {
+      setInlineEdit({
+        rowIndex,
+        column,
+        value: strValue,
+        originalValue: value,
+        type: 'text',
+      });
+      return;
+    }
+
+    // Fallback: modal editing (JSON, large text, etc.)
     setEditModalData({
       rowIndex,
       column,
@@ -606,7 +695,7 @@ export default function TableView() {
       originalValue: value,
     });
     setShowEditModal(true);
-  }, [queryResults, getColumnType]);
+  }, [queryResults, getColumnType, getEditMode, getColumnDef]);
 
   // Handle double click - cancel single click action and proceed with edit
   const handleCellDoubleClickWrapper = useCallback((rowIndex: number, column: string, value: any) => {
@@ -639,6 +728,94 @@ export default function TableView() {
     setPendingEdit(null);
   }, [pendingEdit]);
 
+  // ── Inline / enum cell save ───────────────────────────────────────
+  const handleInlineSave = useCallback(async (valueOverride?: string) => {
+    if (!inlineEdit || !data) return;
+
+    const newValue = valueOverride ?? inlineEdit.value;
+    const row = data.rows[inlineEdit.rowIndex];
+
+    // Skip if no change
+    const originalStr = inlineEdit.originalValue === null ? '' :
+      (typeof inlineEdit.originalValue === 'object' ? JSON.stringify(inlineEdit.originalValue) : String(inlineEdit.originalValue));
+    if (originalStr === newValue) {
+      setInlineEdit(null);
+      return;
+    }
+
+    // Get primary key value
+    const pkValue = row[primaryKeyColumn];
+    if (!pkValue) {
+      toast.error('Cannot update: No primary key found');
+      setInlineEdit(null);
+      return;
+    }
+
+    // Determine column type from rich metadata
+    const def = getColumnDef(inlineEdit.column);
+    const columnType = def?.data_type || 'text';
+
+    const parsedValue = newValue === '' ? null : newValue;
+
+    const updates: ColumnUpdate[] = [{
+      column: inlineEdit.column,
+      value: parsedValue,
+      columnType,
+    }];
+
+    setInlineEdit(null);
+    await updateRow(pkValue, updates);
+  }, [inlineEdit, data, primaryKeyColumn, getColumnDef, updateRow]);
+
+  const handleInlineCancel = useCallback(() => {
+    setInlineEdit(null);
+  }, []);
+
+  // Handle inline keyboard shortcuts
+  const handleInlineKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleInlineSave();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleInlineCancel();
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      // Save current cell and move to the next editable cell in the row
+      handleInlineSave();
+    }
+  }, [handleInlineSave, handleInlineCancel]);
+
+  // Click-outside to save inline edit
+  useEffect(() => {
+    if (!inlineEdit) return;
+
+    const handleClickOutside = (e: globalThis.MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Don't dismiss if clicking inside the inline edit input or a select popover
+      if (target.closest('[data-inline-edit]') || target.closest('[data-radix-popper-content-wrapper]')) return;
+      handleInlineSave();
+    };
+
+    // Use a small timeout so the click that opened the edit doesn't immediately close it
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 0);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [inlineEdit, handleInlineSave]);
+
+  // Auto-focus inline input when it opens
+  useEffect(() => {
+    if (inlineEdit?.type === 'text' && inlineInputRef.current) {
+      inlineInputRef.current.focus();
+      inlineInputRef.current.select();
+    }
+  }, [inlineEdit]);
+
   // Save edit from modal
   const handleSaveEdit = async () => {
     if (!editModalData || !data) return;
@@ -667,7 +844,7 @@ export default function TableView() {
 
     // Determine column type
     const columnMeta = columnsMetadata?.columns?.find((c: any) => c.name === editModalData.column);
-    const columnType = columnMeta?.type || 'text';
+    const columnType = columnMeta?.data_type || columnMeta?.type || 'text';
 
     // Parse value based on type
     let parsedValue: any = newValue === '' ? null : newValue;
@@ -1357,6 +1534,98 @@ export default function TableView() {
                             searchState.matches[searchState.currentMatchIndex]?.rowIndex === rowIndex &&
                             searchState.matches[searchState.currentMatchIndex]?.columnName === column;
 
+                          // Check if this cell is being inline-edited
+                          const isInlineEditing = inlineEdit?.rowIndex === rowIndex && inlineEdit?.column === column;
+
+                          // ── Inline text editing ──
+                          if (isInlineEditing && inlineEdit?.type === 'text') {
+                            return (
+                              <TableCell
+                                key={column}
+                                className={cn(
+                                  'p-0 font-mono text-sm',
+                                  !queryResults && getColumnCellStyles(column),
+                                )}
+                                style={{ width: colWidth, minWidth: 60, maxWidth: colWidth }}
+                              >
+                                <div className="relative flex items-center" data-inline-edit>
+                                  <input
+                                    ref={inlineInputRef}
+                                    type="text"
+                                    value={inlineEdit.value}
+                                    onChange={(e) => setInlineEdit(prev => prev ? { ...prev, value: e.target.value } : null)}
+                                    onKeyDown={handleInlineKeyDown}
+                                    className="w-full h-full px-2 py-1.5 bg-[#1a2535] text-white font-mono text-sm border border-blue-500/60 rounded-sm outline-none ring-1 ring-blue-500/30 focus:ring-blue-500/50 focus:border-blue-500"
+                                    style={{ minWidth: 0 }}
+                                  />
+                                  <div className="absolute right-0.5 top-1/2 -translate-y-1/2 flex gap-0.5">
+                                    <button
+                                      onClick={() => handleInlineSave()}
+                                      className="p-0.5 rounded bg-green-600/80 hover:bg-green-600 text-white transition-colors"
+                                      title="Save (Enter)"
+                                    >
+                                      <Check className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      onClick={handleInlineCancel}
+                                      className="p-0.5 rounded bg-red-600/60 hover:bg-red-600 text-white transition-colors"
+                                      title="Cancel (Esc)"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </TableCell>
+                            );
+                          }
+
+                          // ── Inline enum dropdown ──
+                          if (isInlineEditing && inlineEdit?.type === 'enum') {
+                            return (
+                              <TableCell
+                                key={column}
+                                className={cn(
+                                  'p-0 font-mono text-sm',
+                                  !queryResults && getColumnCellStyles(column),
+                                )}
+                                style={{ width: colWidth, minWidth: 60, maxWidth: colWidth }}
+                              >
+                                <div data-inline-edit>
+                                  <Select
+                                    value={inlineEdit.value}
+                                    onValueChange={(val) => {
+                                      // Save immediately on selection
+                                      handleInlineSave(val);
+                                    }}
+                                    open={true}
+                                    onOpenChange={(open) => {
+                                      if (!open) handleInlineCancel();
+                                    }}
+                                  >
+                                    <SelectTrigger
+                                      ref={inlineSelectRef}
+                                      className="h-8 bg-[#1a2535] border-blue-500/60 text-white font-mono text-sm ring-1 ring-blue-500/30 rounded-sm"
+                                    >
+                                      <SelectValue placeholder="Select value..." />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-[#1B2431] border-white/10 text-white max-h-60">
+                                      {inlineEdit.enumValues?.map((enumVal) => (
+                                        <SelectItem
+                                          key={enumVal}
+                                          value={enumVal}
+                                          className="font-mono text-sm hover:bg-white/10 focus:bg-white/10"
+                                        >
+                                          {enumVal}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </TableCell>
+                            );
+                          }
+
+                          // ── Normal cell display ──
                           return (
                             <TableCell
                               key={column}
