@@ -14,10 +14,23 @@ import {
   PanelRightClose,
   ExternalLink,
   X,
+  Bot,
+  HelpCircle,
+  Play,
+  XCircle,
+  CheckCircle2,
+  AlertTriangle,
+  StopCircle,
+  RotateCcw,
+  ChevronRight,
 } from 'lucide-react';
 import { chatService, ChatMessage, StreamChunk } from '@/services/chat.service';
+import { useAgentChat, AgentMessage } from '@/hooks/useAgentChat';
+import { connectionService } from '@/services/connection.service';
 import { SQLCodeBlock } from '@/components/ui/sql-code-block';
 import toast from 'react-hot-toast';
+
+export type ChatMode = 'ask' | 'agent';
 
 interface ChatPanelProps {
   connectionId: string;
@@ -26,6 +39,16 @@ interface ChatPanelProps {
   isOpen?: boolean;
   onToggle?: () => void;
   onInsertSQL?: (sql: string) => void;
+  /** Callback to execute a query and return results (for agent mode) */
+  onExecuteQuery?: (sql: string) => Promise<{
+    success: boolean;
+    rows?: any[];
+    rowCount?: number;
+    affectedRows?: number;
+    executionTime?: number;
+    error?: string;
+    errorDetails?: { message: string; detail?: string; hint?: string; position?: number };
+  }>;
   /** If true, renders as a full-page standalone chat */
   standalone?: boolean;
   /** If true, hides the external link button */
@@ -39,9 +62,11 @@ export function ChatPanel({
   isOpen = true,
   onToggle,
   onInsertSQL,
+  onExecuteQuery,
   standalone = false,
   hideExternalLink = false,
 }: ChatPanelProps) {
+  // Ask mode state
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
@@ -50,6 +75,12 @@ export function ChatPanel({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamingContentRef = useRef<string>('');
+
+  // Mode toggle
+  const [chatMode, setChatMode] = useState<ChatMode>('ask');
+
+  // Agent mode hook
+  const agent = useAgentChat();
 
   // Helper function to render formatted text with bold, headings, bullets, etc.
   const renderFormattedText = (text: string) => {
@@ -135,14 +166,14 @@ export function ChatPanel({
     }
   }, [connectionId, isOpen]);
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom for agent messages too
   useEffect(() => {
     if (messagesEndRef.current) {
       requestAnimationFrame(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
       });
     }
-  }, [messages, streamingContent]);
+  }, [messages, streamingContent, agent.agentMessages]);
 
   const loadChatSession = async () => {
     try {
@@ -157,7 +188,22 @@ export function ChatPanel({
   };
 
   const handleSendMessage = async () => {
-    if (!inputValue.trim() || isStreaming) return;
+    if (!inputValue.trim()) return;
+
+    if (chatMode === 'agent') {
+      // Agent mode: start the agent session
+      if (agent.agentStatus !== 'idle' && agent.agentStatus !== 'completed' && agent.agentStatus !== 'error' && agent.agentStatus !== 'stopped') {
+        toast.error('Agent is still running');
+        return;
+      }
+      const userMessage = inputValue.trim();
+      setInputValue('');
+      agent.startAgent(connectionId, userMessage, sessionId || undefined, selectedSchemas);
+      return;
+    }
+
+    // Ask mode (original behavior)
+    if (isStreaming) return;
 
     const userMessage = inputValue.trim();
     setInputValue('');
@@ -224,6 +270,8 @@ export function ChatPanel({
   };
 
   const handleClearChat = async () => {
+    // Reset agent state too
+    agent.resetAgent();
     try {
       const response = await chatService.clearSession(connectionId);
       if (response.success && response.data) {
@@ -252,7 +300,57 @@ export function ChatPanel({
       toast.success('SQL copied to clipboard');
     }
   };
+  // ============================================
+  // AGENT MODE HANDLERS
+  // ============================================
 
+  const handleAgentApprove = async (sql: string) => {
+    // Insert SQL into editor
+    if (onInsertSQL) {
+      onInsertSQL(sql);
+    }
+
+    // Approve the step (backend will send agent_executing event)
+    await agent.approveQuery(connectionId);
+
+    // Execute the query and send results back to agent
+    try {
+      let result;
+      if (onExecuteQuery) {
+        result = await onExecuteQuery(sql);
+      } else {
+        // Fallback: use connectionService directly
+        const response = await connectionService.executeQuery(connectionId, sql, true);
+        const responseData = (response as any).data || response;
+        result = {
+          success: responseData.success !== false,
+          rows: responseData.rows || [],
+          rowCount: responseData.rowCount || 0,
+          affectedRows: responseData.affectedRows,
+          executionTime: responseData.executionTime,
+          error: responseData.error,
+          errorDetails: responseData.errorDetails,
+        };
+      }
+
+      // Send results back to the agent
+      await agent.sendExecutionResult(connectionId, result);
+    } catch (err: any) {
+      // Send error back to agent
+      await agent.sendExecutionResult(connectionId, {
+        success: false,
+        error: err.message || 'Execution failed',
+      });
+    }
+  };
+
+  const handleAgentReject = async () => {
+    await agent.rejectQuery(connectionId, 'User rejected the query');
+  };
+
+  const handleAgentStop = async () => {
+    await agent.stopAgent(connectionId);
+  };
   const handleClose = () => {
     if (standalone) {
       window.close();
@@ -318,6 +416,232 @@ export function ChatPanel({
     });
   };
 
+  // ============================================
+  // AGENT MESSAGE RENDERER
+  // ============================================
+
+  const renderAgentMessage = (msg: AgentMessage) => {
+    switch (msg.type) {
+      case 'user':
+        return (
+          <div key={msg.id} className="flex justify-end">
+            <div className="max-w-[85%] bg-indigo-600 text-white rounded-2xl rounded-br-sm px-3.5 py-2.5">
+              <div className="text-sm leading-relaxed">{msg.content}</div>
+            </div>
+          </div>
+        );
+
+      case 'thinking':
+        return (
+          <div key={msg.id} className="flex justify-start">
+            <div className="max-w-[90%] py-2">
+              <div className="flex items-center gap-2 text-sm text-slate-400">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
+                <span>{msg.content}</span>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'plan':
+        return (
+          <div key={msg.id} className="flex justify-start">
+            <div className="max-w-[90%] py-2 space-y-2">
+              <div className="text-sm text-slate-300">{msg.content}</div>
+              {msg.plan && (
+                <div className="space-y-1.5 mt-2">
+                  {msg.plan.map((step, idx) => (
+                    <div
+                      key={step.id}
+                      className="flex items-start gap-2 px-3 py-2 rounded-lg bg-slate-800/60 border border-slate-700/50"
+                    >
+                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-500/20 text-purple-400 text-xs font-medium flex items-center justify-center mt-0.5">
+                        {idx + 1}
+                      </span>
+                      <span className="text-sm text-slate-300">{step.description}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case 'proposal':
+        return (
+          <div key={msg.id} className="flex justify-start">
+            <div className="max-w-[90%] py-2 space-y-2 w-full">
+              {msg.isRetry && (
+                <div className="flex items-center gap-1.5 text-xs text-amber-400">
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Retry #{msg.retryCount} — {msg.content}</span>
+                </div>
+              )}
+              {!msg.isRetry && msg.stepDescription && (
+                <div className="text-sm text-slate-400 flex items-center gap-1.5">
+                  <ChevronRight className="w-3.5 h-3.5" />
+                  Step {(msg.stepIndex ?? 0) + 1}: {msg.stepDescription}
+                </div>
+              )}
+              {msg.sql && (
+                <SQLCodeBlock
+                  code={msg.sql}
+                  showLineNumbers={msg.sql.split('\n').length > 1}
+                  showCopyButton
+                  maxHeight="200px"
+                />
+              )}
+              {agent.isWaitingForApproval && agent.currentProposal?.sql === msg.sql && (
+                <div className="flex gap-2 mt-2">
+                  <Button
+                    size="sm"
+                    onClick={() => handleAgentApprove(msg.sql!)}
+                    className="bg-green-600 hover:bg-green-500 text-white text-xs h-8 px-3"
+                  >
+                    <Play className="w-3.5 h-3.5 mr-1" />
+                    Run
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleAgentReject}
+                    className="border-slate-600 text-slate-300 hover:bg-slate-800 text-xs h-8 px-3"
+                  >
+                    <XCircle className="w-3.5 h-3.5 mr-1" />
+                    Skip
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case 'executing':
+        return (
+          <div key={msg.id} className="flex justify-start">
+            <div className="max-w-[90%] py-2">
+              <div className="flex items-center gap-2 text-sm text-blue-400">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Executing query...</span>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'result':
+        return (
+          <div key={msg.id} className="flex justify-start">
+            <div className="max-w-[90%] py-2">
+              {msg.success ? (
+                <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20">
+                  <CheckCircle2 className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-green-300">
+                    {msg.rowCount !== undefined && <span>{msg.rowCount} rows returned</span>}
+                    {msg.affectedRows !== undefined && <span>{msg.affectedRows} rows affected</span>}
+                    {msg.executionTime && <span className="text-green-400/60 ml-1">({msg.executionTime}ms)</span>}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                  <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-red-300">
+                    {msg.error || 'Query failed'}
+                    {msg.errorDetails?.detail && (
+                      <div className="text-xs text-red-400/70 mt-1">{msg.errorDetails.detail}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case 'analysis':
+        return (
+          <div key={msg.id} className="flex justify-start">
+            <div className="max-w-[90%] text-slate-300 py-2">
+              <div className="text-sm leading-relaxed">{msg.content}</div>
+            </div>
+          </div>
+        );
+
+      case 'complete':
+        return (
+          <div key={msg.id} className="flex justify-start">
+            <div className="max-w-[90%] py-2">
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                <CheckCircle2 className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <div className="text-sm text-purple-300 font-medium">Agent completed</div>
+                  <div className="text-xs text-purple-400/70 mt-0.5">
+                    {msg.summary || `${msg.stepsCompleted}/${msg.totalSteps} steps completed`}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'error':
+        return (
+          <div key={msg.id} className="flex justify-start">
+            <div className="max-w-[90%] py-2">
+              <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-red-300">{msg.error}</div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'stopped':
+        return (
+          <div key={msg.id} className="flex justify-start">
+            <div className="max-w-[90%] py-2">
+              <div className="flex items-center gap-2 text-sm text-slate-400">
+                <StopCircle className="w-3.5 h-3.5" />
+                <span>{msg.content || 'Agent stopped'}</span>
+              </div>
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // ============================================
+  // MODE TOGGLE COMPONENT
+  // ============================================
+
+  const ModeToggle = ({ compact = false }: { compact?: boolean }) => (
+    <div className={`flex items-center ${compact ? 'gap-0.5' : 'gap-1'} bg-slate-800/80 rounded-lg p-0.5 border border-slate-700/50`}>
+      <button
+        onClick={() => setChatMode('ask')}
+        className={`flex items-center gap-1 ${compact ? 'px-2 py-1 text-[11px]' : 'px-2.5 py-1 text-xs'} rounded-md font-medium transition-all ${chatMode === 'ask'
+            ? 'bg-slate-700 text-white shadow-sm'
+            : 'text-slate-400 hover:text-slate-300'
+          }`}
+      >
+        <HelpCircle className={compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} />
+        Ask
+      </button>
+      <button
+        onClick={() => setChatMode('agent')}
+        className={`flex items-center gap-1 ${compact ? 'px-2 py-1 text-[11px]' : 'px-2.5 py-1 text-xs'} rounded-md font-medium transition-all ${chatMode === 'agent'
+            ? 'bg-purple-600/80 text-white shadow-sm'
+            : 'text-slate-400 hover:text-slate-300'
+          }`}
+      >
+        <Bot className={compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} />
+        Agent
+      </button>
+    </div>
+  );
+
+  const isAgentBusy = chatMode === 'agent' && !['idle', 'completed', 'error', 'stopped'].includes(agent.agentStatus);
+
   // Standalone full-page layout
   if (standalone) {
     return (
@@ -336,6 +660,7 @@ export function ChatPanel({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <ModeToggle />
             <Button
               variant="ghost"
               size="sm"
@@ -360,7 +685,7 @@ export function ChatPanel({
         <div className="flex-1 min-h-0 overflow-hidden">
           <div className="h-full overflow-y-auto px-6 py-6">
             <div className="max-w-3xl mx-auto space-y-4">
-              {messages.length === 0 && !isStreaming && (
+              {messages.length === 0 && !isStreaming && chatMode === 'ask' && agent.agentMessages.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-16 px-4">
                   <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/20 flex items-center justify-center mb-4">
                     <MessageSquare className="w-8 h-8 text-indigo-400" />
@@ -444,6 +769,24 @@ export function ChatPanel({
                 </div>
               )}
 
+              {/* Agent mode messages */}
+              {chatMode === 'agent' && agent.agentMessages.map(renderAgentMessage)}
+
+              {/* Agent stop button */}
+              {isAgentBusy && (
+                <div className="flex justify-center pt-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleAgentStop}
+                    className="border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs h-7"
+                  >
+                    <StopCircle className="w-3.5 h-3.5 mr-1" />
+                    Stop Agent
+                  </Button>
+                </div>
+              )}
+
               <div ref={messagesEndRef} />
             </div>
           </div>
@@ -456,17 +799,19 @@ export function ChatPanel({
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask anything or request a SQL query..."
+              placeholder={chatMode === 'agent' ? "Describe what you want to do with your database..." : "Ask anything or request a SQL query..."}
               className="flex-1 bg-slate-800 border-slate-700 focus:border-indigo-500/50 text-slate-200 text-sm placeholder:text-slate-500 min-h-[52px] max-h-[150px] resize-none rounded-xl"
-              disabled={isStreaming}
+              disabled={isStreaming || isAgentBusy}
             />
             <Button
               onClick={handleSendMessage}
-              disabled={!inputValue.trim() || isStreaming}
-              className="h-[52px] px-6 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl disabled:opacity-40"
+              disabled={!inputValue.trim() || isStreaming || isAgentBusy}
+              className={`h-[52px] px-6 ${chatMode === 'agent' ? 'bg-purple-600 hover:bg-purple-500' : 'bg-indigo-600 hover:bg-indigo-500'} text-white rounded-xl disabled:opacity-40`}
             >
-              {isStreaming ? (
+              {isStreaming || isAgentBusy ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
+              ) : chatMode === 'agent' ? (
+                <Bot className="w-5 h-5" />
               ) : (
                 <Sparkles className="w-5 h-5" />
               )}
@@ -481,11 +826,8 @@ export function ChatPanel({
   return (
     <div className="flex flex-col h-full bg-slate-900 border-l border-slate-800 min-w-[200px]">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 h-12 border-b border-slate-800 shrink-0">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="w-4 h-4 text-slate-400" />
-          <span className="font-medium text-slate-200 text-sm">Chat</span>
-        </div>
+      <div className="flex items-center justify-between px-3 h-12 border-b border-slate-800 shrink-0">
+        <ModeToggle compact />
         <div className="flex items-center">
           {!hideExternalLink && (
             <Tooltip>
@@ -526,7 +868,7 @@ export function ChatPanel({
       <div className="flex-1 min-h-0 overflow-hidden">
         <div className="h-full overflow-y-auto px-3 py-4">
           <div className="space-y-4">
-            {messages.length === 0 && !isStreaming && (
+            {messages.length === 0 && !isStreaming && chatMode === 'ask' && agent.agentMessages.length === 0 && (
               <div className="flex flex-col items-center justify-center py-8 px-3">
                 <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center mb-3">
                   <Sparkles className="w-5 h-5 text-slate-400" />
@@ -609,6 +951,24 @@ export function ChatPanel({
               </div>
             )}
 
+            {/* Agent mode messages */}
+            {chatMode === 'agent' && agent.agentMessages.map(renderAgentMessage)}
+
+            {/* Agent stop button */}
+            {isAgentBusy && (
+              <div className="flex justify-center pt-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleAgentStop}
+                  className="border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs h-7"
+                >
+                  <StopCircle className="w-3.5 h-3.5 mr-1" />
+                  Stop Agent
+                </Button>
+              </div>
+            )}
+
             <div ref={messagesEndRef} />
           </div>
         </div>
@@ -621,17 +981,19 @@ export function ChatPanel({
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask anything or request a SQL query..."
+            placeholder={chatMode === 'agent' ? "Describe what you want to do..." : "Ask anything or request a SQL query..."}
             className="flex-1 bg-slate-800 border-slate-700 focus:border-slate-600 text-slate-200 text-sm placeholder:text-slate-500 min-h-[44px] max-h-[120px] resize-none rounded-lg"
-            disabled={isStreaming}
+            disabled={isStreaming || isAgentBusy}
           />
           <Button
             onClick={handleSendMessage}
-            disabled={!inputValue.trim() || isStreaming}
-            className="h-[44px] px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg disabled:opacity-40"
+            disabled={!inputValue.trim() || isStreaming || isAgentBusy}
+            className={`h-[44px] px-4 ${chatMode === 'agent' ? 'bg-purple-600 hover:bg-purple-500' : 'bg-indigo-600 hover:bg-indigo-500'} text-white rounded-lg disabled:opacity-40`}
           >
-            {isStreaming ? (
+            {isStreaming || isAgentBusy ? (
               <Loader2 className="w-4 h-4 animate-spin" />
+            ) : chatMode === 'agent' ? (
+              <Bot className="w-4 h-4" />
             ) : (
               'Send'
             )}

@@ -1929,6 +1929,46 @@ export default function QueryConsole() {
                   connectionId={connectionId}
                   selectedSchemas={selectedSchemas}
                   onInsertSQL={handleInsertSQL}
+                  onExecuteQuery={async (sql: string) => {
+                    // Detect if query is read-only
+                    const queryType = detectSQLQueryType(sql);
+                    const readOnly = isReadOnlyQuery(queryType);
+
+                    try {
+                      const response = await connectionService.executeQuery(connectionId, sql, readOnly);
+                      const responseData = (response as any).data || response;
+                      const rows = responseData.rows || [];
+                      const rowCount = responseData.rowCount || rows.length;
+
+                      // Also update the QueryConsole results panel
+                      if (response.success && activeTab) {
+                        const results = {
+                          data: rows,
+                          columns: rows.length > 0 ? Object.keys(rows[0]) : [],
+                          rowCount,
+                          executionTime: responseData.executionTime || 0,
+                          queryType,
+                          affectedRows: responseData.affectedRows,
+                        };
+                        updateTabResults(activeTab.id, results);
+                      }
+
+                      return {
+                        success: responseData.success !== false,
+                        rows,
+                        rowCount,
+                        affectedRows: responseData.affectedRows,
+                        executionTime: responseData.executionTime,
+                        error: responseData.error,
+                        errorDetails: responseData.errorDetails,
+                      };
+                    } catch (err: any) {
+                      return {
+                        success: false,
+                        error: err.message || 'Execution failed',
+                      };
+                    }
+                  }}
                   isOpen={showChatSidebar}
                   onToggle={() => setShowChatSidebar(false)}
                 />
