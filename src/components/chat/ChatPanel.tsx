@@ -7,6 +7,12 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   Sparkles,
   Trash2,
   MessageSquare,
@@ -15,7 +21,6 @@ import {
   ExternalLink,
   X,
   Bot,
-  HelpCircle,
   Play,
   XCircle,
   CheckCircle2,
@@ -23,6 +28,8 @@ import {
   StopCircle,
   RotateCcw,
   ChevronRight,
+  ChevronDown,
+  ArrowUp,
 } from 'lucide-react';
 import { chatService, ChatMessage, StreamChunk } from '@/services/chat.service';
 import { useAgentChat, AgentMessage } from '@/hooks/useAgentChat';
@@ -615,29 +622,38 @@ export function ChatPanel({
   // MODE TOGGLE COMPONENT
   // ============================================
 
-  const ModeToggle = ({ compact = false }: { compact?: boolean }) => (
-    <div className={`flex items-center ${compact ? 'gap-0.5' : 'gap-1'} bg-slate-800/80 rounded-lg p-0.5 border border-slate-700/50`}>
-      <button
-        onClick={() => setChatMode('ask')}
-        className={`flex items-center gap-1 ${compact ? 'px-2 py-1 text-[11px]' : 'px-2.5 py-1 text-xs'} rounded-md font-medium transition-all ${chatMode === 'ask'
-            ? 'bg-slate-700 text-white shadow-sm'
-            : 'text-slate-400 hover:text-slate-300'
-          }`}
-      >
-        <HelpCircle className={compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} />
-        Ask
-      </button>
-      <button
-        onClick={() => setChatMode('agent')}
-        className={`flex items-center gap-1 ${compact ? 'px-2 py-1 text-[11px]' : 'px-2.5 py-1 text-xs'} rounded-md font-medium transition-all ${chatMode === 'agent'
-            ? 'bg-purple-600/80 text-white shadow-sm'
-            : 'text-slate-400 hover:text-slate-300'
-          }`}
-      >
-        <Bot className={compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} />
-        Agent
-      </button>
-    </div>
+  const ChatModeDropdown = ({ className, compact = false }: { className?: string, compact?: boolean }) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={`gap-2 h-auto py-1 px-2.5 rounded-full border transition-all duration-300 ${chatMode === 'agent'
+            ? 'border-purple-500/30 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 hover:text-purple-200 shadow-[0_0_10px_rgba(168,85,247,0.1)]'
+            : 'border-indigo-500/20 bg-indigo-500/5 text-indigo-300 hover:bg-indigo-500/10 hover:text-indigo-200'} ${className}`}
+        >
+          {chatMode === 'agent' ? <Bot className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+          {!compact && <span className="text-xs font-medium">{chatMode === 'agent' ? 'Agent' : 'Ask'}</span>}
+          <ChevronDown className="h-3 w-3 opacity-50" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="bg-slate-900/95 backdrop-blur-xl border-slate-700 shadow-xl">
+        <DropdownMenuItem onClick={() => setChatMode('ask')} className="text-slate-300 focus:bg-indigo-500/10 focus:text-indigo-300 cursor-pointer mb-1">
+          <Sparkles className="mr-2 h-4 w-4 text-indigo-400" />
+          <div className="flex flex-col">
+            <span className="font-medium">Ask Question</span>
+            <span className="text-[10px] text-slate-500">Get answers and SQL queries</span>
+          </div>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setChatMode('agent')} className="text-slate-300 focus:bg-purple-500/10 focus:text-purple-300 cursor-pointer">
+          <Bot className="mr-2 h-4 w-4 text-purple-400" />
+          <div className="flex flex-col">
+            <span className="font-medium">Agent Mode</span>
+            <span className="text-[10px] text-slate-500">Autonomous plan & execution</span>
+          </div>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 
   const isAgentBusy = chatMode === 'agent' && !['idle', 'completed', 'error', 'stopped'].includes(agent.agentStatus);
@@ -660,7 +676,6 @@ export function ChatPanel({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <ModeToggle />
             <Button
               variant="ghost"
               size="sm"
@@ -794,28 +809,46 @@ export function ChatPanel({
 
         {/* Input */}
         <div className="px-6 py-4 border-t border-slate-800 shrink-0 bg-slate-900/95 backdrop-blur">
-          <div className="max-w-3xl mx-auto flex gap-3 items-end">
-            <Textarea
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={chatMode === 'agent' ? "Describe what you want to do with your database..." : "Ask anything or request a SQL query..."}
-              className="flex-1 bg-slate-800 border-slate-700 focus:border-indigo-500/50 text-slate-200 text-sm placeholder:text-slate-500 min-h-[52px] max-h-[150px] resize-none rounded-xl"
-              disabled={isStreaming || isAgentBusy}
-            />
-            <Button
-              onClick={handleSendMessage}
-              disabled={!inputValue.trim() || isStreaming || isAgentBusy}
-              className={`h-[52px] px-6 ${chatMode === 'agent' ? 'bg-purple-600 hover:bg-purple-500' : 'bg-indigo-600 hover:bg-indigo-500'} text-white rounded-xl disabled:opacity-40`}
-            >
-              {isStreaming || isAgentBusy ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : chatMode === 'agent' ? (
-                <Bot className="w-5 h-5" />
-              ) : (
-                <Sparkles className="w-5 h-5" />
-              )}
-            </Button>
+          <div className="max-w-3xl mx-auto">
+            <div className={`relative flex items-end w-full p-2 border rounded-xl shadow-lg transition-all duration-300 group ${chatMode === 'agent'
+              ? 'bg-gradient-to-b from-slate-900 via-slate-900 to-purple-900/10 border-purple-500/30 shadow-[0_0_15px_rgba(168,85,247,0.05)] focus-within:shadow-[0_0_20px_rgba(168,85,247,0.15)] focus-within:border-purple-500/50'
+              : 'bg-gradient-to-b from-slate-900 via-slate-900 to-slate-800/50 border-slate-700/60 focus-within:border-indigo-500/50 focus-within:shadow-[0_0_20px_rgba(99,102,241,0.1)]'}`}>
+              
+              <div className="pb-1 pl-1">
+                <ChatModeDropdown />
+              </div>
+
+              <Textarea
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={chatMode === 'agent' ? "Describe task..." : "Ask AI..."}
+                className="flex-1 bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-slate-200 text-sm placeholder:text-slate-500 min-h-[44px] max-h-[150px] resize-none py-3 px-3 shadow-none"
+                disabled={isStreaming || isAgentBusy}
+              />
+              
+              <div className="pb-1 pr-1">
+                <Button
+                  onClick={handleSendMessage}
+                  disabled={!inputValue.trim() || isStreaming || isAgentBusy}
+                  size="icon"
+                  className={`h-8 w-8 rounded-lg shadow-md transition-all duration-300 ${chatMode === 'agent' 
+                    ? 'bg-gradient-to-tr from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500 shadow-purple-900/20' 
+                    : 'bg-gradient-to-tr from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 shadow-indigo-900/20'} text-white disabled:opacity-40 disabled:bg-none disabled:bg-slate-700`}
+                >
+                  {isStreaming || isAgentBusy ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <ArrowUp className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+            {chatMode === 'agent' && (
+              <div className="mt-2 text-xs text-center text-slate-500 animate-in fade-in slide-in-from-bottom-1 duration-500">
+                Agent mode can execute queries and modify your database.
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -827,7 +860,7 @@ export function ChatPanel({
     <div className="flex flex-col h-full bg-slate-900 border-l border-slate-800 min-w-[200px]">
       {/* Header */}
       <div className="flex items-center justify-between px-3 h-12 border-b border-slate-800 shrink-0">
-        <ModeToggle compact />
+        <span className="font-medium text-slate-300 text-xs">AI Assistant</span>
         <div className="flex items-center">
           {!hideExternalLink && (
             <Tooltip>
@@ -976,28 +1009,39 @@ export function ChatPanel({
 
       {/* Input */}
       <div className="p-3 border-t border-slate-800 shrink-0">
-        <div className="flex gap-2 items-end">
+        <div className={`relative flex items-end w-full p-1.5 border rounded-xl shadow-sm transition-all duration-300 group ${chatMode === 'agent'
+          ? 'bg-slate-900/40 border-purple-500/20 shadow-[0_0_10px_rgba(168,85,247,0.05)] focus-within:shadow-[0_0_15px_rgba(168,85,247,0.1)] focus-within:border-purple-500/40'
+          : 'bg-slate-800/40 border-slate-700/60 focus-within:border-indigo-500/40 focus-within:shadow-[0_0_15px_rgba(99,102,241,0.05)]'}`}>
+
+          <div className="pb-0.5 pl-0.5">
+            <ChatModeDropdown compact />
+          </div>
+
           <Textarea
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={chatMode === 'agent' ? "Describe what you want to do..." : "Ask anything or request a SQL query..."}
-            className="flex-1 bg-slate-800 border-slate-700 focus:border-slate-600 text-slate-200 text-sm placeholder:text-slate-500 min-h-[44px] max-h-[120px] resize-none rounded-lg"
+            placeholder={chatMode === 'agent' ? "Describe task..." : "Ask AI..."}
+            className="flex-1 bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-slate-200 text-sm placeholder:text-slate-500 min-h-[40px] max-h-[120px] resize-none py-2.5 px-2 shadow-none"
             disabled={isStreaming || isAgentBusy}
           />
-          <Button
-            onClick={handleSendMessage}
-            disabled={!inputValue.trim() || isStreaming || isAgentBusy}
-            className={`h-[44px] px-4 ${chatMode === 'agent' ? 'bg-purple-600 hover:bg-purple-500' : 'bg-indigo-600 hover:bg-indigo-500'} text-white rounded-lg disabled:opacity-40`}
-          >
-            {isStreaming || isAgentBusy ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : chatMode === 'agent' ? (
-              <Bot className="w-4 h-4" />
-            ) : (
-              'Send'
-            )}
-          </Button>
+
+          <div className="pb-0.5 pr-0.5">
+            <Button
+              onClick={handleSendMessage}
+              disabled={!inputValue.trim() || isStreaming || isAgentBusy}
+              size="icon"
+              className={`h-7 w-7 rounded-lg shadow-sm transition-all duration-300 ${chatMode === 'agent' 
+                ? 'bg-gradient-to-tr from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500' 
+                : 'bg-gradient-to-tr from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500'} text-white disabled:opacity-40 disabled:bg-none disabled:bg-slate-700`}
+            >
+              {isStreaming || isAgentBusy ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <ArrowUp className="w-3.5 h-3.5" />
+              )}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
