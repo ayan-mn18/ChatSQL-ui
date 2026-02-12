@@ -1496,7 +1496,7 @@ export default function QueryConsole() {
 
   if (!connectionId) {
     return (
-      <div className="h-screen flex items-center justify-center bg-slate-950">
+      <div className="h-[calc(100vh-3.5rem)] flex items-center justify-center bg-slate-950">
         <div className="text-center text-slate-500">
           <Database className="w-12 h-12 mx-auto mb-3 opacity-30" />
           <h2 className="text-lg font-medium text-slate-300 mb-1">No Connection Selected</h2>
@@ -1512,7 +1512,7 @@ export default function QueryConsole() {
 
   return (
     <TooltipProvider>
-      <div className="h-screen flex flex-col bg-slate-950">
+      <div className="h-[calc(100vh-3.5rem)] flex flex-col bg-slate-950">
         {/* Toolbar */}
         <div className="h-12 border-b border-slate-800 flex items-center justify-between px-3 bg-slate-900 shrink-0">
           {/* Left: Run & Actions */}

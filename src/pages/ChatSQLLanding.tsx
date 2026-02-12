@@ -1,11 +1,23 @@
 import {
   Database, Zap, Shield, Cpu, Layers, Search, GitBranch, Sparkles,
   ArrowRight, Play, BarChart3, MessageSquare, Eye, CheckCircle2,
-  Globe, Command, Terminal, Activity
+  Globe, Command, Terminal, Activity,
+  LogOut, User as UserIcon, CreditCard, LayoutDashboard,
 } from 'lucide-react';
 import { motion, useScroll, useTransform, useSpring, AnimatePresence } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useRef, useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { UserAvatar } from '@/components/UserAvatar';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 // Import logos
 import amazonLogo from '../public/amazon.png';
@@ -30,51 +42,115 @@ const Background = () => {
 };
 
 const Navbar = () => {
-  const [isScrolled, setIsScrolled] = useState(false);
-  const { scrollY } = useScroll();
+  const { isAuthenticated, user, logout, isLoading } = useAuth();
+  const navigate = useNavigate();
 
-  useEffect(() => {
-    return scrollY.on("change", (latest) => {
-      setIsScrolled(latest > 20);
-    });
-  }, [scrollY]);
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/auth/signin');
+    } catch (error) {
+      console.error('Logout failed', error);
+    }
+  };
 
   return (
-    <motion.nav
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled ? 'bg-[#030712]/80 backdrop-blur-xl border-b border-white/5 py-4' : 'py-6 bg-transparent'}`}
-    >
-      <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2 group">
-          <div className="relative w-8 h-8 flex items-center justify-center bg-gradient-to-tr from-indigo-500 to-violet-500 rounded-lg shadow-lg shadow-indigo-500/20 group-hover:shadow-indigo-500/40 transition-all duration-300">
-            <Database className="w-4 h-4 text-white" />
-            <div className="absolute inset-0 bg-white/20 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity" />
-          </div>
-          <span className="text-lg font-bold text-white tracking-tight">ChatSQL</span>
-        </Link>
+    <header className="sticky top-0 z-50 w-full bg-transparent">
+      <div className="w-full px-4 sm:px-6">
+        <div className="flex h-14 items-center justify-between">
+          {/* Logo */}
+          <Link to={isAuthenticated ? '/dashboard' : '/'} className="flex items-center gap-2.5 group">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:shadow-indigo-500/40 transition-all duration-300">
+              <Sparkles className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-[15px] font-bold text-white tracking-tight">ChatSQL</span>
+          </Link>
 
-        <div className="hidden md:flex items-center gap-8">
-          {['Product', 'Solutions', 'Pricing', 'Docs'].map((item) => (
-            <a
-              key={item}
-              href={`#${item.toLowerCase()}`}
-              className="text-sm font-medium text-slate-400 hover:text-white transition-colors"
-            >
-              {item}
+          {/* Center: Landing nav links */}
+          <nav className="hidden md:flex items-center gap-1">
+            <a href="#features" className="px-3 py-1.5 text-sm font-medium text-slate-400 hover:text-white transition-colors rounded-md hover:bg-white/5">
+              Features
             </a>
-          ))}
-        </div>
+            <a href="#pricing" className="px-3 py-1.5 text-sm font-medium text-slate-400 hover:text-white transition-colors rounded-md hover:bg-white/5">
+              Pricing
+            </a>
+            <Link to="/contact" className="px-3 py-1.5 text-sm font-medium text-slate-400 hover:text-white transition-colors rounded-md hover:bg-white/5">
+              Contact
+            </Link>
+          </nav>
 
-        <div className="flex items-center gap-4">
-          <Link to="/auth/signin" className="text-sm font-medium text-slate-300 hover:text-white transition-colors hidden sm:block">
-            Log in
-          </Link>
-          <Link to="/dashboard" className="group relative px-5 py-2 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-semibold hover:shadow-lg hover:shadow-indigo-500/25 transition-all">
-            Start Building
-            <span className="absolute inset-0 rounded-lg ring-1 ring-inset ring-white/10" />
-          </Link>
+          {/* Right: Profile or Login */}
+          <div className="flex items-center gap-2">
+            {isAuthenticated && !isLoading ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-2 rounded-full p-1 hover:bg-slate-800/60 transition-all outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50">
+                    <UserAvatar
+                      user={user}
+                      className="w-8 h-8 border-2 border-slate-700"
+                      fallbackClassName="bg-slate-700 text-slate-300 text-sm"
+                    />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64 bg-slate-900/95 backdrop-blur-xl border-slate-700 shadow-2xl rounded-xl p-1">
+                  {/* User Info */}
+                  <div className="px-3 py-2.5 mb-1">
+                    <div className="flex items-center gap-3">
+                      <UserAvatar
+                        user={user}
+                        className="w-10 h-10 border-2 border-slate-700"
+                        fallbackClassName="bg-slate-700 text-slate-200 text-base"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-white truncate">{user?.username || 'User'}</p>
+                        <p className="text-xs text-slate-500 truncate">{user?.email}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <DropdownMenuSeparator className="bg-slate-800 mx-1" />
+                  <DropdownMenuItem onClick={() => navigate('/dashboard')} className="cursor-pointer text-slate-300 focus:bg-indigo-500/10 focus:text-indigo-300 rounded-lg mx-1 my-0.5">
+                    <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/dashboard/connections')} className="cursor-pointer text-slate-300 focus:bg-indigo-500/10 focus:text-indigo-300 rounded-lg mx-1 my-0.5">
+                    <Database className="mr-2 h-4 w-4" /> Connections
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/dashboard/profile')} className="cursor-pointer text-slate-300 focus:bg-indigo-500/10 focus:text-indigo-300 rounded-lg mx-1 my-0.5">
+                    <UserIcon className="mr-2 h-4 w-4" /> Profile Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/dashboard/usage')} className="cursor-pointer text-slate-300 focus:bg-indigo-500/10 focus:text-indigo-300 rounded-lg mx-1 my-0.5">
+                    <Zap className="mr-2 h-4 w-4" /> Usage & Billing
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/dashboard/pricing')} className="cursor-pointer text-slate-300 focus:bg-indigo-500/10 focus:text-indigo-300 rounded-lg mx-1 my-0.5">
+                    <CreditCard className="mr-2 h-4 w-4" /> Plans & Pricing
+                  </DropdownMenuItem>
+                  {user?.role === 'super_admin' && (
+                    <>
+                      <DropdownMenuSeparator className="bg-slate-800 mx-1" />
+                      <DropdownMenuItem onClick={() => navigate('/dashboard/users')} className="cursor-pointer text-slate-300 focus:bg-indigo-500/10 focus:text-indigo-300 rounded-lg mx-1 my-0.5">
+                        <Shield className="mr-2 h-4 w-4" /> User Management
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  <DropdownMenuSeparator className="bg-slate-800 mx-1" />
+                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-400 hover:text-red-300 focus:bg-red-500/10 focus:text-red-300 rounded-lg mx-1 my-1">
+                    <LogOut className="mr-2 h-4 w-4" /> Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : !isLoading ? (
+              <Button
+                size="sm"
+                onClick={() => navigate('/auth/signin')}
+                className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 h-9 text-sm font-medium transition-all"
+              >
+                Log in
+                <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
+              </Button>
+            ) : null}
+          </div>
         </div>
       </div>
-    </motion.nav>
+    </header>
   );
 };
 

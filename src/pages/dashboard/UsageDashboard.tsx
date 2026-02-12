@@ -225,10 +225,11 @@ export default function UsageDashboard() {
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
 
   // TanStack Query hooks
-  const { data: dashboardRes, isLoading: dashboardLoading } = useUsageDashboardQuery();
-  const { data: plansRes, isLoading: plansLoading } = useAvailablePlansQuery();
+  const { data: dashboardRes, isLoading: dashboardLoading, refetch: refetchDashboard } = useUsageDashboardQuery();
+  const { data: plansRes, isLoading: plansLoading, refetch: refetchPlans } = useAvailablePlansQuery();
 
   const loading = dashboardLoading || plansLoading;
+  const fetchData = () => { refetchDashboard(); refetchPlans(); };
   const data: UsageDashboardData | null = dashboardRes?.data || null;
   const plans: PlanConfiguration[] = plansRes?.data || [];
 

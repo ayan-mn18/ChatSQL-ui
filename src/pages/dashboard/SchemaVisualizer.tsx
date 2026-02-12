@@ -468,7 +468,7 @@ function SchemaVisualizerContent() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-[#0f172a]">
+    <div className="h-[calc(100vh-3.5rem)] flex flex-col bg-[#0f172a]">
       {/* Header */}
       <div className="h-16 border-b border-white/5 flex items-center justify-between px-4 md:px-6 bg-[#1B2431] shrink-0">
         <div className="flex items-center gap-4">

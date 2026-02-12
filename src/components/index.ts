@@ -3,6 +3,7 @@ export { default as DataTable } from './DataTable';
 export { default as DataVisualization } from './DataVisualization';
 export { default as LoadingMessage } from './LoadingMessage';
 export { default as Navbar } from './Navbar';
+export { AppNavbar } from './AppNavbar';
 export { default as SampleQueries } from './SampleQueries';
 export { default as SettingsModal } from './DBSettingsModal';
 export { default as ContactForm } from './ContactForm';

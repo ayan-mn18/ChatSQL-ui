@@ -1157,7 +1157,7 @@ export default function TableView() {
 
   return (
     <TooltipProvider>
-      <div className="h-screen flex flex-col bg-[#1B2431] overflow-hidden">
+      <div className="h-[calc(100vh-3.5rem)] flex flex-col bg-[#1B2431] overflow-hidden">
         {/* Read-only Mode Banner */}
         {isReadOnly && (
           <div className="shrink-0 bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-red-500/20 border-b border-amber-500/30 px-4 py-3 flex items-center justify-between gap-4">

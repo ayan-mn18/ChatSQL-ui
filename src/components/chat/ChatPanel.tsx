@@ -661,7 +661,7 @@ export function ChatPanel({
   // Standalone full-page layout
   if (standalone) {
     return (
-      <div className="flex flex-col h-screen bg-slate-900 text-white">
+      <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-slate-900 text-white">
         {/* Header */}
         <div className="flex items-center justify-between px-6 h-14 border-b border-slate-800 shrink-0 bg-slate-900/95 backdrop-blur">
           <div className="flex items-center gap-3">

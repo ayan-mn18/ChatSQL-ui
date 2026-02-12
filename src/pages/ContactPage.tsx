@@ -26,6 +26,7 @@ import {
 import { usageService } from '@/services/usage.service';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
+import { AppNavbar } from '@/components/AppNavbar';
 
 // ============================================
 // CONTACT PAGE
@@ -159,6 +160,7 @@ export default function ContactPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <AppNavbar variant="minimal" />
       <div className="container mx-auto px-4 py-12 max-w-4xl">
         {/* Back Button */}
         <Button

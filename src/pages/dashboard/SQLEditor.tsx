@@ -303,7 +303,7 @@ LIMIT 100;`);
   const lineNumbers = query.split('\n').map((_, i) => i + 1);
 
   return (
-    <div className="h-screen flex flex-col bg-[#1B2431]">
+    <div className="h-[calc(100vh-3.5rem)] flex flex-col bg-[#1B2431]">
       {/* Read-only Mode Banner */}
       {isReadOnly && (
         <ReadOnlyBanner onUpgrade={() => navigate('/dashboard/pricing')} />

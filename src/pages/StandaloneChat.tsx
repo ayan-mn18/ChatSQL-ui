@@ -13,7 +13,7 @@ export default function StandaloneChatPage() {
 
   if (!connectionId) {
     return (
-      <div className="flex items-center justify-center h-screen bg-slate-900 text-white">
+      <div className="flex items-center justify-center h-[calc(100vh-3.5rem)] bg-slate-900 text-white">
         <p>Connection ID is required</p>
       </div>
     );
