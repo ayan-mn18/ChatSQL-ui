@@ -1,7 +1,9 @@
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserAvatar } from '@/components/UserAvatar';
 import { Button } from '@/components/ui/button';
+import { useSyncSchemaMutation } from '@/hooks/useQueries';
+import toast from 'react-hot-toast';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +26,7 @@ import {
   HelpCircle,
   Plus,
   ArrowRight,
+  RefreshCw,
 } from 'lucide-react';
 import { useKBar } from 'kbar';
 import { cn } from '@/lib/utils';
@@ -40,6 +43,11 @@ export function AppNavbar({ variant = 'default', hidden = false }: AppNavbarProp
   const navigate = useNavigate();
   const location = useLocation();
   const { query: kbar } = useKBar();
+  const params = useParams<{ connectionId?: string }>();
+
+  const isConnection = location.pathname.includes('/connection/');
+  const connectionId = isConnection ? params.connectionId : undefined;
+  const syncSchemaMutation = useSyncSchemaMutation();
 
   if (hidden) return null;
 
@@ -56,7 +64,18 @@ export function AppNavbar({ variant = 'default', hidden = false }: AppNavbarProp
     kbar.toggle();
   };
 
-  const isConnection = location.pathname.includes('/connection/');
+  const handleSchemaSync = () => {
+    if (!connectionId || syncSchemaMutation.isPending) return;
+    syncSchemaMutation.mutate(connectionId, {
+      onSuccess: () => {
+        toast.success('Schema sync started successfully');
+      },
+      onError: (err: any) => {
+        toast.error(err?.response?.data?.error || 'Schema sync failed');
+      },
+    });
+  };
+
   const isViewer = user?.role === 'viewer';
 
   return (
@@ -155,6 +174,20 @@ export function AppNavbar({ variant = 'default', hidden = false }: AppNavbarProp
 
             {isAuthenticated && !isLoading ? (
               <>
+                {/* Schema Sync — only on connection pages */}
+                {isConnection && connectionId && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSchemaSync}
+                    disabled={syncSchemaMutation.isPending}
+                    className="h-9 gap-2 px-3 text-slate-400 hover:text-white hover:bg-slate-800 hidden md:flex items-center"
+                  >
+                    <RefreshCw className={cn('w-4 h-4', syncSchemaMutation.isPending && 'animate-spin')} />
+                    <span className="text-sm font-medium hidden lg:inline">Sync Schema</span>
+                  </Button>
+                )}
+
                 {/* Quick Add */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

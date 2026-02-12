@@ -6,11 +6,24 @@ import { QueryTabsProvider } from '@/contexts/QueryTabsContext';
 import { ViewerExpiryBanner } from '@/components/dashboard/ViewerExpiryBanner';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AppNavbar } from '@/components/AppNavbar';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 
 export default function ConnectionLayout() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
+
+  // Inject feedback widget script on connection pages
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'http://localhost:7070/api/widget/embed.js?token=42d347a018afd7990940da6d8ce0654ff5cc861311402ff743554b0d7508704a';
+    script.async = true;
+    document.body.appendChild(script);
+    return () => {
+      document.body.removeChild(script);
+      const widget = document.getElementById('feedback-widget-root');
+      if (widget) widget.remove();
+    };
+  }, []);
 
   return (
     <TableTabsProvider>
