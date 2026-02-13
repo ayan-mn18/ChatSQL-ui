@@ -21,7 +21,7 @@ import {
   CreditCard,
   CircleDollarSign
 } from 'lucide-react';
-import { useCreateCheckoutMutation } from '@/hooks/useQueries';
+import { useCreateCheckoutMutation, useSubscriptionQuery } from '@/hooks/useQueries';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
@@ -259,6 +259,17 @@ export default function PricingPage() {
   const [isYearly, setIsYearly] = useState(true);
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const checkoutMutation = useCreateCheckoutMutation();
+  const { data: subscriptionData, isLoading: subscriptionLoading } = useSubscriptionQuery();
+
+  const normalizePlanType = (planType?: string): string | undefined => {
+    if (!planType) return undefined;
+    if (planType.startsWith('pro_')) return 'pro';
+    if (['free', 'pro', 'lifetime', 'enterprise'].includes(planType)) return planType;
+    return undefined;
+  };
+
+  const currentPlan = normalizePlanType(subscriptionData?.data?.planType)
+    ?? (subscriptionLoading ? undefined : 'free');
 
   const plans: Plan[] = [
     {
@@ -449,7 +460,7 @@ export default function PricingPage() {
             <PlanCard
               key={plan.id}
               plan={plan}
-              currentPlan={user?.plan || 'free'}
+              currentPlan={currentPlan}
               isYearly={isYearly}
               onSelect={handleSelectPlan}
               isLoading={loadingPlan === plan.id}
