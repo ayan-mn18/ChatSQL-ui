@@ -88,3 +88,48 @@
 .scrollbar-hidden::-webkit-scrollbar {
   display: none;
 }
+
+/* ============================================
+   LANDING PAGE ANIMATIONS & EFFECTS
+   ============================================ */
+
+/* Noise / grain texture overlay */
+.grain-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Infinite marquee scroll */
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+
+/* Typing cursor blink */
+@keyframes blink-caret {
+  0%, 100% { border-color: transparent; }
+  50% { border-color: rgba(129, 140, 248, 0.8); }
+}
+
+.animate-caret {
+  border-right: 2px solid rgba(129, 140, 248, 0.8);
+  animation: blink-caret 1s step-end infinite;
+}
+
+/* Glow pulse for feature cards */
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+.glow-pulse {
+  animation: glow-pulse 3s ease-in-out infinite;
+}

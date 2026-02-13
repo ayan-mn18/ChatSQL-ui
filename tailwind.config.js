@@ -40,6 +40,8 @@ export default {
       },
       fontFamily: {
         sans: ['"IBM Plex Mono"', 'monospace'],
+        display: ['"Space Grotesk"', 'sans-serif'],
+        mono: ['"IBM Plex Mono"', 'monospace'],
       },
       animation: {
         'float': 'float 6s ease-in-out infinite',
