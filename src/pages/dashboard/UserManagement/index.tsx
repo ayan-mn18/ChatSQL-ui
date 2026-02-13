@@ -22,7 +22,9 @@ import type { Viewer, Connection, PermissionState, CreateViewerData } from './ty
 export function UserManagementPage() {
   // TanStack Query for viewers
   const { data: viewersData, isLoading: viewersLoading, refetch: refetchViewers } = useViewersQuery();
-  const rawViewers = viewersData?.data || [];
+  const rawViewers = Array.isArray(viewersData)
+    ? viewersData
+    : (viewersData as any)?.data || [];
   const viewers: Viewer[] = rawViewers.map((v: any) => ({
     ...v,
     name: v.username || v.email.split('@')[0],
