@@ -22,7 +22,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { TableSchema } from '@/types';
-import { useConnectionsQuery, useSchemasQuery, useTablesQuery } from '@/hooks/useQueries';
+import { useConnectionsQuery, useTableTreeQuery, useTablesQuery } from '@/hooks/useQueries';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserAvatar } from '@/components/UserAvatar';
 import {
@@ -51,17 +51,18 @@ export function ConnectionSidebar({ className, onClose, isCollapsed = false, onT
   const { user, logout } = useAuth();
   const queryClient = useQueryClient();
 
-  // TanStack Query hooks
+  // TanStack Query hooks — single request fetches all schemas + table names
   const { data: connections = [] } = useConnectionsQuery();
-  const { data: schemas = [], isLoading } = useSchemasQuery(id);
+  const { data: tableTree = [], isLoading } = useTableTreeQuery(id);
+
+  // Derive schemas list from the tree data (for backward compat with the rest of the component)
+  const schemas = tableTree;
 
   const [expandedSchemas, setExpandedSchemas] = useState<Record<string, boolean>>({});
   const [expandedTables, setExpandedTables] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [isHovered, setIsHovered] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  // Track which schemas have been toggled so we can enable their table queries
-  const [enabledSchemas, setEnabledSchemas] = useState<Set<string>>(new Set());
 
   // Sidebar is expanded when not collapsed, or when hovered/dropdown open
   const isExpanded = !isCollapsed || isHovered || isDropdownOpen;
@@ -85,7 +86,6 @@ export function ConnectionSidebar({ className, onClose, isCollapsed = false, onT
       const publicSchema = schemas.find((s: any) => s.schema_name === 'public');
       if (publicSchema) {
         setExpandedSchemas(prev => ({ ...prev, public: true }));
-        setEnabledSchemas(prev => new Set(prev).add('public'));
         hasAutoExpandedRef.current = true;
       }
     }
@@ -96,16 +96,11 @@ export function ConnectionSidebar({ className, onClose, isCollapsed = false, onT
     hasAutoExpandedRef.current = false;
     setExpandedSchemas({});
     setExpandedTables({});
-    setEnabledSchemas(new Set());
   }, [id]);
 
   // Toggle schema expansion
   const toggleSchema = (schemaName: string) => {
-    const isExpanding = !expandedSchemas[schemaName];
-    setExpandedSchemas(prev => ({ ...prev, [schemaName]: isExpanding }));
-    if (isExpanding) {
-      setEnabledSchemas(prev => new Set(prev).add(schemaName));
-    }
+    setExpandedSchemas(prev => ({ ...prev, [schemaName]: !prev[schemaName] }));
   };
 
   // Toggle table expansion to show columns
@@ -247,7 +242,7 @@ export function ConnectionSidebar({ className, onClose, isCollapsed = false, onT
                 ) : (
                   filteredSchemas.map((schema: any) => (
                     <SchemaSectionItem
-                      key={schema.id}
+                      key={schema.schema_name}
                       schema={schema}
                       connectionId={id!}
                       isSchemaExpanded={!!expandedSchemas[schema.schema_name]}
@@ -256,7 +251,6 @@ export function ConnectionSidebar({ className, onClose, isCollapsed = false, onT
                       onToggleTable={toggleTable}
                       searchQuery={searchQuery}
                       onNavigateToTable={navigateToTable}
-                      enabled={enabledSchemas.has(schema.schema_name)}
                     />
                   ))
                 )}
@@ -332,7 +326,8 @@ export function ConnectionSidebar({ className, onClose, isCollapsed = false, onT
 }
 
 // ============================================
-// SchemaSectionItem — renders a single schema with its tables (fetched via TanStack Query)
+// SchemaSectionItem — renders a single schema with its tables from the tree data
+// Tables come from the parent's useTableTreeQuery (no per-schema API call)
 // ============================================
 
 interface SchemaSectionItemProps {
@@ -344,7 +339,6 @@ interface SchemaSectionItemProps {
   onToggleTable: (name: string) => void;
   searchQuery: string;
   onNavigateToTable: (schemaName: string, tableName: string) => void;
-  enabled: boolean;
 }
 
 function SchemaSectionItem({
@@ -356,12 +350,18 @@ function SchemaSectionItem({
   onToggleTable,
   searchQuery,
   onNavigateToTable,
-  enabled,
 }: SchemaSectionItemProps) {
-  // Only fetch tables when the schema has been expanded (enabled = true)
-  const { data: schemaTables = [], isLoading: isLoadingThisSchema } = useTablesQuery(
+  // Tables are already in the tree data (lightweight: name + type only)
+  const schemaTables: Array<{ table_name: string; table_type: string }> = schema.tables || [];
+
+  // When a table is expanded to show columns, fetch full table data on demand
+  // This keeps the sidebar fast while still allowing column inspection
+  const hasExpandedTable = Object.keys(expandedTables).some(
+    k => k.startsWith(`${schema.schema_name}.`) && expandedTables[k]
+  );
+  const { data: fullTables = [] } = useTablesQuery(
     connectionId,
-    enabled ? schema.schema_name : undefined
+    hasExpandedTable ? schema.schema_name : undefined
   );
 
   // Filter tables by search
@@ -369,10 +369,18 @@ function SchemaSectionItem({
     if (!searchQuery.trim()) return schemaTables;
     const query = searchQuery.toLowerCase();
     return schemaTables.filter((t: any) =>
-      t.table_name.toLowerCase().includes(query) ||
-      t.columns?.some((c: any) => c.name.toLowerCase().includes(query))
+      t.table_name.toLowerCase().includes(query)
     );
   }, [schemaTables, searchQuery]);
+
+  // Build a map of full table data (with columns) for expanded tables
+  const fullTableMap = useMemo(() => {
+    const map = new Map<string, TableSchema>();
+    for (const ft of fullTables) {
+      map.set(ft.table_name, ft);
+    }
+    return map;
+  }, [fullTables]);
 
   return (
     <div>
@@ -384,14 +392,10 @@ function SchemaSectionItem({
           isSchemaExpanded ? "text-white bg-white/5" : "text-gray-400 hover:text-white hover:bg-white/5"
         )}
       >
-        {isLoadingThisSchema ? (
-          <Loader2 className="w-3 h-3 text-gray-500 animate-spin shrink-0" />
-        ) : (
-          <ChevronRight className={cn(
-            "w-3 h-3 text-gray-500 transition-transform shrink-0",
-            isSchemaExpanded && "rotate-90"
-          )} />
-        )}
+        <ChevronRight className={cn(
+          "w-3 h-3 text-gray-500 transition-transform shrink-0",
+          isSchemaExpanded && "rotate-90"
+        )} />
         <Database className={cn(
           "w-3 h-3 shrink-0",
           isSchemaExpanded ? "text-blue-400" : "text-gray-500"
@@ -405,21 +409,26 @@ function SchemaSectionItem({
       {/* Tables */}
       {isSchemaExpanded && (
         <div className="ml-3 pl-2 border-l border-white/10 space-y-px">
-          {filteredTables.length === 0 && !isLoadingThisSchema ? (
+          {filteredTables.length === 0 ? (
             <div className="px-2 py-1.5 text-[10px] text-gray-500 italic">
               Empty
             </div>
           ) : (
-            filteredTables.map((table: TableSchema) => (
-              <SidebarTableItem
-                key={`${schema.schema_name}.${table.table_name}`}
-                table={table}
-                schemaName={schema.schema_name}
-                expandedTables={expandedTables}
-                onToggleTable={onToggleTable}
-                onNavigateToTable={onNavigateToTable}
-              />
-            ))
+            filteredTables.map((table: any) => {
+              // Use full table data (with columns) if available, otherwise lightweight
+              const fullTable = fullTableMap.get(table.table_name);
+              const tableForRender = fullTable || table;
+              return (
+                <SidebarTableItem
+                  key={`${schema.schema_name}.${table.table_name}`}
+                  table={tableForRender}
+                  schemaName={schema.schema_name}
+                  expandedTables={expandedTables}
+                  onToggleTable={onToggleTable}
+                  onNavigateToTable={onNavigateToTable}
+                />
+              );
+            })
           )}
         </div>
       )}

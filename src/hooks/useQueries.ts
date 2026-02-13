@@ -50,6 +50,9 @@ export const queryKeys = {
   // ERD Relations
   erdRelations: (connectionId: string) => ['erdRelations', connectionId] as const,
 
+  // Table Tree (lightweight sidebar data — all schemas + table names in one key)
+  tableTree: (connectionId: string) => ['tableTree', connectionId] as const,
+
   // Analytics
   connectionAnalytics: (connectionId: string) => ['connectionAnalytics', connectionId] as const,
   workspaceAnalytics: ['workspaceAnalytics'] as const,
@@ -78,11 +81,12 @@ export const queryKeys = {
 // ============================================
 const STALE_TIMES = {
   CONNECTIONS: 5 * 60 * 1000,      // 5 min
-  SCHEMAS: 30 * 60 * 1000,         // 30 min (stable)
-  TABLES: 30 * 60 * 1000,          // 30 min (stable)
-  COLUMNS: 30 * 60 * 1000,         // 30 min (stable)
+  SCHEMAS: 2 * 60 * 1000,          // 2 min (Redis handles heavy caching)
+  TABLES: 2 * 60 * 1000,           // 2 min (Redis handles heavy caching)
+  TABLE_TREE: 2 * 60 * 1000,       // 2 min (lightweight sidebar tree)
+  COLUMNS: 2 * 60 * 1000,          // 2 min (Redis handles heavy caching)
   TABLE_DATA: 60 * 1000,           // 1 min (can change frequently)
-  ERD_RELATIONS: 30 * 60 * 1000,   // 30 min (stable)
+  ERD_RELATIONS: 2 * 60 * 1000,    // 2 min (Redis handles heavy caching)
   ANALYTICS: 2 * 60 * 1000,        // 2 min
   SAVED_QUERIES: 5 * 60 * 1000,    // 5 min
   USAGE: 2 * 60 * 1000,            // 2 min
@@ -174,10 +178,17 @@ export function useDeleteConnectionMutation() {
   });
 }
 
-/** Sync schema for a connection */
+/** Sync schema for a connection — invalidates caches when the mutation call returns */
 export function useSyncSchemaMutation() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => connectionService.syncSchema(id),
+    // The actual sync runs as a BullMQ job (async). SSE completion event
+    // handles the real cache bust. This onSettled is a safety net so the
+    // connections list updates immediately (schema_synced flag etc.).
+    onSettled: (_data, _error, connectionId) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.connections });
+    },
   });
 }
 
@@ -218,6 +229,20 @@ export function useTablesQuery(connectionId: string | undefined, schemaName: str
     },
     enabled: !!connectionId && !!schemaName,
     staleTime: STALE_TIMES.TABLES,
+  });
+}
+
+/** Fetch lightweight table tree (all schemas → table names) for sidebar */
+export function useTableTreeQuery(connectionId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.tableTree(connectionId || ''),
+    queryFn: async () => {
+      if (!connectionId) throw new Error('Connection ID required');
+      const response = await connectionService.getTableTree(connectionId);
+      return response.data || [];
+    },
+    enabled: !!connectionId,
+    staleTime: STALE_TIMES.TABLE_TREE,
   });
 }
 
@@ -655,6 +680,7 @@ export function useCacheInvalidation() {
     invalidateAllSchemaData: (connectionId: string) => {
       queryClient.invalidateQueries({ queryKey: ['schemas', connectionId] });
       queryClient.invalidateQueries({ queryKey: ['tables', connectionId] });
+      queryClient.invalidateQueries({ queryKey: ['tableTree', connectionId] });
       queryClient.invalidateQueries({ queryKey: ['columns', connectionId] });
       queryClient.invalidateQueries({ queryKey: ['erdRelations', connectionId] });
     },

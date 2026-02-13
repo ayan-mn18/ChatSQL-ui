@@ -109,6 +109,24 @@ export const connectionService = {
   },
 
   /**
+   * Get lightweight tree of all schemas with table names for the sidebar.
+   * Single request replaces N+1 calls (1 getSchemas + N getTablesBySchema).
+   * @param id - Connection UUID
+   * @returns Array of schemas each with a lightweight tables array (name + type only)
+   */
+  getTableTree: async (id: string): Promise<ApiResponse<Array<{
+    schema_name: string;
+    is_selected: boolean;
+    table_count: number;
+    description: string | null;
+    last_synced_at: string;
+    tables: Array<{ table_name: string; table_type: string }>;
+  }>>> => {
+    const response = await api.get<ApiResponse<any>>(`/connections/${id}/table-tree`);
+    return response.data;
+  },
+
+  /**
    * Get full schema metadata including all tables and columns for autocomplete
    * @param id - Connection UUID
    * @returns Full schema metadata for SQL editor autocomplete

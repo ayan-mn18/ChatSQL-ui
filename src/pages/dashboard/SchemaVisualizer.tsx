@@ -357,17 +357,18 @@ function SchemaVisualizerContent() {
 
     syncSchemaMutation.mutate(connectionId, {
       onSuccess: () => {
-        // Wait a bit for the sync to complete, then refresh
-        setTimeout(() => {
-          fetchERDData();
-        }, 3000);
+        // The actual schema sync runs asynchronously as a BullMQ job.
+        // When it completes, JobProgressContext receives the SSE event and
+        // invalidates all schema/erdRelations TanStack Query caches.
+        // fetchERDData will re-run automatically because its underlying
+        // queries get invalidated. No setTimeout needed.
       },
       onError: (err: any) => {
         console.error('[ERD] Schema sync failed:', err);
         setError(err.message || 'Failed to sync schema');
       },
     });
-  }, [connectionId, isSyncing, fetchERDData, syncSchemaMutation]);
+  }, [connectionId, isSyncing, syncSchemaMutation]);
 
   // Load data on mount
   useEffect(() => {
