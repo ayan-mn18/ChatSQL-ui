@@ -4,6 +4,7 @@ import { UserAvatar } from '@/components/UserAvatar';
 import { Button } from '@/components/ui/button';
 import { useSyncSchemaMutation } from '@/hooks/useQueries';
 import toast from 'react-hot-toast';
+import { ChatSQLLogo } from '@/components/ChatSQLLogo';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,7 +14,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  Sparkles,
   Search,
   Command,
   LogOut,
@@ -96,9 +96,7 @@ export function AppNavbar({ variant = 'default', hidden = false }: AppNavbarProp
           <div className="flex items-center gap-6">
             {/* Logo */}
             <Link to={isAuthenticated ? '/dashboard' : '/'} className="flex items-center gap-2.5 group shrink-0">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:shadow-indigo-500/40 transition-all duration-300">
-                <Sparkles className="w-4 h-4 text-white" />
-              </div>
+              <ChatSQLLogo size="sm" glow />
               <span className="text-[15px] font-bold text-white tracking-tight hidden sm:block">
                 ChatSQL
               </span>

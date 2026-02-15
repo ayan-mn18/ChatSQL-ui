@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Database, Settings as SettingsIcon } from 'lucide-react';
+import { ChatSQLLogo } from '@/components/ChatSQLLogo';
 
 interface NavbarProps {
   showSettings?: boolean;
@@ -14,15 +15,13 @@ interface NavbarProps {
 export default function Navbar({ showSettings, onSettingsClick, settingsStatus, darkMode = false }: NavbarProps) {
   return (
     <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${darkMode
-        ? 'bg-transparent backdrop-blur-sm border-b border-white/5'
-        : 'bg-white/80 backdrop-blur-md border-b border-gray-200'
+      ? 'bg-transparent backdrop-blur-sm border-b border-white/5'
+      : 'bg-white/80 backdrop-blur-md border-b border-gray-200'
       }`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-20">
           <Link to="/" className="flex items-center gap-3 group">
-            <div className={`p-2 rounded-xl transition-colors ${darkMode ? 'bg-blue-500/10 group-hover:bg-blue-500/20' : 'bg-blue-50'}`}>
-              <Database className={`w-6 h-6 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`} />
-            </div>
+            <ChatSQLLogo size="md" glow />
             <span className={`text-xl font-bold tracking-tight ${darkMode ? 'text-white' : 'text-gray-900'}`}>
               ChatSQL
             </span>
@@ -62,8 +61,8 @@ export default function Navbar({ showSettings, onSettingsClick, settingsStatus, 
               <Link
                 to="/chat"
                 className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${darkMode
-                    ? 'bg-white text-black hover:bg-gray-200 hover:shadow-[0_0_20px_rgba(255,255,255,0.3)]'
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                  ? 'bg-white text-black hover:bg-gray-200 hover:shadow-[0_0_20px_rgba(255,255,255,0.3)]'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
                   }`}
               >
                 Launch App

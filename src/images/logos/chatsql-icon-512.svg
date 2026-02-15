@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="white" stop-opacity="0.12"/>
+      <stop offset="50%" stop-color="white" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="128" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="128" fill="url(#shine)"/>
+
+  <!-- Chat bubble -->
+  <rect x="112" y="112" width="288" height="208" rx="64" fill="white"/>
+  <polygon points="160,320 224,320 144,400" fill="white"/>
+
+  <!-- Data lines -->
+  <rect x="160" y="176" width="192" height="24" rx="12" fill="#6366f1"/>
+  <rect x="160" y="232" width="128" height="24" rx="12" fill="#6366f1" opacity="0.5"/>
+
+  <!-- Sparkle -->
+  <g transform="translate(416, 96)">
+    <path d="M0-48 L12.8-12.8 L48 0 L12.8 12.8 L0 48 L-12.8 12.8 L-48 0 L-12.8-12.8Z" fill="white" opacity="0.9"/>
+  </g>
+  <g transform="translate(432, 160)">
+    <path d="M0-24 L6.4-6.4 L24 0 L6.4 6.4 L0 24 L-6.4 6.4 L-24 0 L-6.4-6.4Z" fill="white" opacity="0.6"/>
+  </g>
+</svg>

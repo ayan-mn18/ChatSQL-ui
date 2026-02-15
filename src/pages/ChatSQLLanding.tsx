@@ -10,6 +10,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useRef, useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserAvatar } from '@/components/UserAvatar';
+import { ChatSQLLogo } from '@/components/ChatSQLLogo';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -72,17 +73,15 @@ const Navbar = () => {
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.5 }}
       className={`fixed top-0 z-50 w-full transition-all duration-500 ${scrolled
-          ? 'bg-[#030712]/80 backdrop-blur-2xl border-b border-white/5 shadow-lg shadow-black/20'
-          : 'bg-transparent'
+        ? 'bg-[#030712]/80 backdrop-blur-2xl border-b border-white/5 shadow-lg shadow-black/20'
+        : 'bg-transparent'
         }`}
     >
       <div className="max-w-7xl mx-auto px-6">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
           <Link to={isAuthenticated ? '/dashboard' : '/'} className="flex items-center gap-3 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/25 group-hover:shadow-indigo-500/40 group-hover:scale-105 transition-all duration-300">
-              <Sparkles className="w-4 h-4 text-white" />
-            </div>
+            <ChatSQLLogo size={36} glow />
             <span className="text-base font-bold text-white tracking-tight font-display">ChatSQL</span>
           </Link>
 
@@ -260,10 +259,10 @@ const PricingCard = ({ tier, price, period, features, recommended = false, isLif
     transition={{ duration: 0.5, delay, ease: [0.21, 0.47, 0.32, 0.98] }}
     whileHover={{ y: -6, transition: { duration: 0.3 } }}
     className={`group relative rounded-2xl border backdrop-blur-sm flex flex-col h-full overflow-hidden ${recommended
-        ? 'border-indigo-500/30 bg-indigo-500/[0.04]'
-        : isLifetime
-          ? 'border-purple-500/20 bg-purple-500/[0.02]'
-          : 'border-white/[0.06] bg-white/[0.02]'
+      ? 'border-indigo-500/30 bg-indigo-500/[0.04]'
+      : isLifetime
+        ? 'border-purple-500/20 bg-purple-500/[0.02]'
+        : 'border-white/[0.06] bg-white/[0.02]'
       }`}
   >
     {/* Subtle gradient shine on hover */}
@@ -311,10 +310,10 @@ const PricingCard = ({ tier, price, period, features, recommended = false, isLif
       <a
         href={price === 'Custom' ? '/contact?plan=enterprise' : '/auth/signup'}
         className={`w-full py-3.5 rounded-xl text-sm font-semibold transition-all text-center block ${recommended
-            ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30'
-            : isLifetime
-              ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white shadow-lg shadow-purple-500/20'
-              : 'bg-white/[0.06] hover:bg-white/[0.12] text-white border border-white/[0.06]'
+          ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30'
+          : isLifetime
+            ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white shadow-lg shadow-purple-500/20'
+            : 'bg-white/[0.06] hover:bg-white/[0.12] text-white border border-white/[0.06]'
           }`}
       >
         {price === 'Custom' ? 'Contact Sales' : price === '$0' ? 'Get Started Free' : 'Get Started'}
@@ -817,8 +816,8 @@ export default function ChatSQLLanding() {
               <button
                 onClick={() => setBillingCycle('monthly')}
                 className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${billingCycle === 'monthly'
-                    ? 'bg-white/10 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-white'
+                  ? 'bg-white/10 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
                   }`}
               >
                 Monthly
@@ -826,8 +825,8 @@ export default function ChatSQLLanding() {
               <button
                 onClick={() => setBillingCycle('yearly')}
                 className={`px-5 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${billingCycle === 'yearly'
-                    ? 'bg-white/10 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-white'
+                  ? 'bg-white/10 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
                   }`}
               >
                 Yearly
@@ -957,9 +956,7 @@ export default function ChatSQLLanding() {
             {/* Brand column - wider */}
             <div className="col-span-2">
               <div className="flex items-center gap-2.5 mb-5">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
-                  <Sparkles className="w-4 h-4 text-white" />
-                </div>
+                <ChatSQLLogo size="sm" />
                 <span className="text-lg font-bold text-white font-display">ChatSQL</span>
               </div>
               <p className="text-slate-500 text-sm leading-relaxed max-w-xs mb-6">

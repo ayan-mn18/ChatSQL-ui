@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="64" height="64" rx="16" fill="url(#bg)"/>
+
+  <!-- Chat bubble -->
+  <rect x="14" y="14" width="36" height="26" rx="8" fill="white"/>
+  <polygon points="20,40 28,40 18,50" fill="white"/>
+
+  <!-- Data lines -->
+  <rect x="20" y="22" width="24" height="3" rx="1.5" fill="#6366f1"/>
+  <rect x="20" y="29" width="16" height="3" rx="1.5" fill="#6366f1" opacity="0.5"/>
+
+  <!-- Sparkle -->
+  <g transform="translate(52, 12)">
+    <path d="M0-6 L1.6-1.6 L6 0 L1.6 1.6 L0 6 L-1.6 1.6 L-6 0 L-1.6-1.6Z" fill="white" opacity="0.9"/>
+  </g>
+  <g transform="translate(54, 22)">
+    <path d="M0-3 L0.8-0.8 L3 0 L0.8 0.8 L0 3 L-0.8 0.8 L-3 0 L-0.8-0.8Z" fill="white" opacity="0.6"/>
+  </g>
+</svg>

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { ChatSQLLogo } from '@/components/ChatSQLLogo';
 import {
   Database,
   Cpu,
@@ -245,12 +246,7 @@ export default function FuturisticLanding() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
             <Link to="/" className="flex items-center gap-3 group">
-              <div className="relative">
-                <div className="absolute inset-0 bg-emerald-500/30 rounded-xl blur-lg group-hover:blur-xl transition-all" />
-                <div className="relative p-2.5 bg-slate-900 rounded-xl border border-emerald-500/30">
-                  <Database className="w-6 h-6 text-emerald-400" />
-                </div>
-              </div>
+              <ChatSQLLogo size="md" glow />
               <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
                 ChatSQL
               </span>
@@ -589,9 +585,7 @@ export default function FuturisticLanding() {
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-slate-900 rounded-lg border border-emerald-500/20">
-                <Database className="w-5 h-5 text-emerald-400" />
-              </div>
+              <ChatSQLLogo size="sm" />
               <span className="font-semibold text-white">ChatSQL</span>
               <span className="text-gray-600">•</span>
               <span className="text-gray-500 text-sm">Open Source DB Visualizer</span>

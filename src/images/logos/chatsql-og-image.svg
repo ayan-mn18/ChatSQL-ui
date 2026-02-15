@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" fill="none">
+  <!-- Open Graph / Social Media share image (1200x630) -->
+  <defs>
+    <linearGradient id="pageBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#020617"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="iconBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="titleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#cbd5e1"/>
+    </linearGradient>
+    <!-- Ambient glow -->
+    <radialGradient id="glow1" cx="35%" cy="45%" r="40%">
+      <stop offset="0%" stop-color="#6366f1" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#6366f1" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="70%" cy="60%" r="35%">
+      <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#7c3aed" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#pageBg)"/>
+  <rect width="1200" height="630" fill="url(#glow1)"/>
+  <rect width="1200" height="630" fill="url(#glow2)"/>
+
+  <!-- Border -->
+  <rect x="1" y="1" width="1198" height="628" rx="0" fill="none" stroke="white" stroke-opacity="0.06" stroke-width="2"/>
+
+  <!-- Logo icon -->
+  <g transform="translate(460, 140)">
+    <rect width="80" height="80" rx="20" fill="url(#iconBg)"/>
+    <!-- Chat bubble -->
+    <rect x="17.5" y="17.5" width="45" height="32.5" rx="10" fill="white"/>
+    <polygon points="25,50 35,50 22.5,62.5" fill="white"/>
+    <!-- Data lines -->
+    <rect x="25" y="27.5" width="30" height="3.75" rx="1.875" fill="#6366f1"/>
+    <rect x="25" y="36.25" width="20" height="3.75" rx="1.875" fill="#6366f1" opacity="0.5"/>
+    <!-- Sparkle -->
+    <g transform="translate(65, 15)">
+      <path d="M0-7.5 L2-2 L7.5 0 L2 2 L0 7.5 L-2 2 L-7.5 0 L-2-2Z" fill="white" opacity="0.9"/>
+    </g>
+  </g>
+
+  <!-- ChatSQL text -->
+  <text x="556" y="200" font-family="'Space Grotesk', 'Inter', system-ui, sans-serif" font-size="52" font-weight="700" fill="url(#titleGrad)" letter-spacing="-1">
+    ChatSQL
+  </text>
+
+  <!-- Tagline -->
+  <text x="600" y="310" font-family="'Space Grotesk', 'Inter', system-ui, sans-serif" font-size="36" font-weight="600" fill="white" text-anchor="middle">
+    Talk to Your Database
+  </text>
+  <text x="600" y="360" font-family="'Space Grotesk', 'Inter', system-ui, sans-serif" font-size="36" font-weight="600" fill="white" text-anchor="middle">
+    Like a Human
+  </text>
+
+  <!-- Subtitle -->
+  <text x="600" y="420" font-family="'Space Grotesk', 'Inter', system-ui, sans-serif" font-size="18" font-weight="400" fill="#94a3b8" text-anchor="middle">
+    AI-Powered Database Querying • Natural Language to SQL
+  </text>
+
+  <!-- URL -->
+  <text x="600" y="570" font-family="'IBM Plex Mono', monospace" font-size="16" font-weight="500" fill="#6366f1" text-anchor="middle">
+    sql.bizer.dev
+  </text>
+</svg>

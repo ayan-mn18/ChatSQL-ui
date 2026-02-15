@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { NavLink, useNavigate, Link } from 'react-router-dom';
-import { Database, Users, Zap, LogOut, User as UserIcon, ChevronUp, Sparkles, CreditCard, Crown } from 'lucide-react';
+import { Database, Users, Zap, LogOut, User as UserIcon, ChevronUp, CreditCard, Crown } from 'lucide-react';
+import { ChatSQLLogo } from '@/components/ChatSQLLogo';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrentUserRoleQuery } from '@/hooks/useQueries';
@@ -71,9 +72,7 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
     >
       {/* Logo Section */}
       <div className={cn("h-20 flex items-center border-b border-white/5 transition-all duration-300", isExpanded ? "px-6" : "px-0 justify-center")}>
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0 group-hover:scale-105 transition-transform duration-300">
-          <Sparkles className="w-5 h-5 text-white" />
-        </div>
+        <ChatSQLLogo size="md" glow />
         <div className={cn("ml-3 flex flex-col justify-center transition-all duration-300 overflow-hidden whitespace-nowrap", isExpanded ? "opacity-100 w-auto" : "opacity-0 w-0")}>
           <span className="text-lg font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
             ChatSQL

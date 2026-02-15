@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { MessageSquare, Users, ArrowRight, Github, Twitter, Linkedin, Database } from 'lucide-react';
 import { ContactForm, Navbar } from '../components';
+import { ChatSQLLogo } from '@/components/ChatSQLLogo';
 import Globe from '../components/ui/Globe';
 
 export default function LandingPage() {
@@ -211,7 +212,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-2">
-              <Database className="w-5 h-5 text-blue-500" />
+              <ChatSQLLogo size="sm" />
               <span className="font-semibold text-white">ChatSQL</span>
             </div>
             <div className="text-sm text-gray-500">
